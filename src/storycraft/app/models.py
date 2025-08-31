@@ -38,6 +38,17 @@ class MemoryState(BaseModel):
     facts: List[MemoryItem] = []
 
 
+class ContextItem(BaseModel):
+    label: str
+    detail: str
+
+
+class ContextState(BaseModel):
+    summary: str = ""
+    npcs: List[ContextItem] = []
+    objects: List[ContextItem] = []
+
+
 class ContinueRequest(BaseModel):
     draft_text: str
     instruction: str = ""
@@ -45,6 +56,9 @@ class ContinueRequest(BaseModel):
     model: Optional[str] = None
     use_memory: bool = True
     temperature: float = 0.7
+    # Optional user/LLM-provided context to enrich the prompt.
+    context: Optional[ContextState] = None
+    use_context: bool = True
 
 
 class ContinueResponse(BaseModel):
@@ -61,3 +75,21 @@ class ExtractMemoryRequest(BaseModel):
 class HealthResponse(BaseModel):
     status: str = "ok"
 
+
+class SuggestContextRequest(BaseModel):
+    current_text: str
+    model: Optional[str] = None
+    max_npcs: int = 6
+    max_objects: int = 8
+
+
+class AppPersistedState(BaseModel):
+    draft_text: str = ""
+    instruction: str = ""
+    model: Optional[str] = None
+    temperature: float = 0.7
+    max_tokens: int = 512
+    include_context: bool = True
+    context: Optional[ContextState] = None
+    generations: List[str] = []
+    gen_index: int = -1

@@ -5,8 +5,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .lorebook_store import LorebookStore
-from .memory import continue_story, extract_memory_from_text
+from .memory import continue_story, extract_memory_from_text, suggest_context_from_text
 from .models import (
+    AppPersistedState,
     ContinueRequest,
     ContinueResponse,
     ExtractMemoryRequest,
@@ -15,7 +16,9 @@ from .models import (
     LoreEntryCreate,
     LoreEntryUpdate,
     MemoryState,
+    SuggestContextRequest,
 )
+from .state_store import StateStore
 
 
 settings = get_settings()
@@ -30,6 +33,7 @@ app.add_middleware(
 )
 
 store = LorebookStore()
+state_store = StateStore()
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -78,9 +82,35 @@ async def continue_endpoint(req: ContinueRequest) -> ContinueResponse:
         draft_text=req.draft_text,
         instruction=req.instruction,
         mem=mem,
+        context=(req.context if req.use_context else None),
         model=req.model,
         max_tokens=req.max_tokens,
         temperature=req.temperature,
     )
     return ContinueResponse(**result)
 
+
+@app.post("/api/suggest-context")
+async def suggest_context(req: SuggestContextRequest):
+    ctx = await suggest_context_from_text(
+        text=req.current_text,
+        model=req.model,
+        max_npcs=req.max_npcs,
+        max_objects=req.max_objects,
+    )
+    return ctx
+
+
+@app.get("/api/state", response_model=AppPersistedState)
+async def get_state() -> AppPersistedState:
+    data = state_store.get()
+    try:
+        return AppPersistedState(**data)
+    except Exception:
+        return AppPersistedState()
+
+
+@app.put("/api/state", response_model=dict)
+async def put_state(payload: AppPersistedState) -> dict:
+    state_store.set(payload.model_dump())
+    return {"ok": True}

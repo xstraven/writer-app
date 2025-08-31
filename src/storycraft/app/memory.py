@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from .models import MemoryItem, MemoryState
+from .models import ContextState, MemoryItem, MemoryState
 from .openrouter import OpenRouterClient
 
 
@@ -88,13 +88,23 @@ def _memory_block(mem: Optional[MemoryState]) -> str:
 
 
 async def continue_story(
-    *, draft_text: str, instruction: str = "", mem: Optional[MemoryState] = None, model: Optional[str] = None, max_tokens: int = 512, temperature: float = 0.7
+    *,
+    draft_text: str,
+    instruction: str = "",
+    mem: Optional[MemoryState] = None,
+    context: Optional[ContextState] = None,
+    model: Optional[str] = None,
+    max_tokens: int = 512,
+    temperature: float = 0.7,
 ) -> Dict[str, str]:
     client = OpenRouterClient()
     memory = _memory_block(mem)
+    ctx = _context_block(context)
     sys = CONTINUE_SYSTEM
     if memory:
         sys += "\nUse the provided Memory to maintain continuity."
+    if ctx:
+        sys += "\nIncorporate the Context details when plausible."
     messages = [
         {"role": "system", "content": sys},
         {
@@ -102,6 +112,7 @@ async def continue_story(
             "content": (
                 (f"Instructions: {instruction}\n\n" if instruction else "")
                 + (memory + "\n\n" if memory else "")
+                + (ctx + "\n\n" if ctx else "")
                 + "[Draft]\n"
                 + draft_text
             ),
@@ -117,3 +128,68 @@ async def continue_story(
     used_model = resp.get("model", model or client.default_model)
     return {"continuation": content, "model": used_model}
 
+
+def _context_block(ctx: Optional[ContextState]) -> str:
+    if not ctx:
+        return ""
+    lines: List[str] = ["[Context]"]
+    if ctx.summary:
+        lines.append("Summary:")
+        lines.append(ctx.summary.strip())
+    if ctx.npcs:
+        lines.append("NPCs:")
+        for it in ctx.npcs:
+            lines.append(f"- {it.label}: {it.detail}")
+    if ctx.objects:
+        lines.append("Objects:")
+        for it in ctx.objects:
+            lines.append(f"- {it.label}: {it.detail}")
+    return "\n".join(lines)
+
+
+CONTEXT_SUGGEST_SYSTEM = (
+    "You are a scene analyst. Given story text, produce a concise current-scene summary,"
+    " and list contextually relevant NPCs and physical objects that could influence the next scene."
+    " Avoid inventing canon-breaking details; prefer what's implied or stated."
+)
+
+
+async def suggest_context_from_text(
+    *, text: str, model: Optional[str] = None, max_npcs: int = 6, max_objects: int = 8
+) -> ContextState:
+    client = OpenRouterClient()
+    schema = ContextState.model_json_schema()
+    messages = [
+        {"role": "system", "content": CONTEXT_SUGGEST_SYSTEM},
+        {
+            "role": "user",
+            "content": (
+                "Analyze the following draft and respond with a JSON matching the schema.\n"
+                f"Limit NPCs to about {max_npcs} and Objects to about {max_objects}.\n\n"
+                + text
+            ),
+        },
+    ]
+    response = await client.chat(
+        messages=messages,
+        model=model,
+        temperature=0.2,
+        response_format={
+            "type": "json_schema",
+            "json_schema": {
+                "name": "context_state",
+                "schema": schema,
+                "strict": False,
+            },
+        },
+    )
+    try:
+        content = response["choices"][0]["message"]["content"]
+        data = content if isinstance(content, dict) else None
+        if data is None:
+            import json as _json
+
+            data = _json.loads(content)
+        return ContextState(**data)
+    except Exception:
+        return ContextState()

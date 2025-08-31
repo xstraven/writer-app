@@ -49,6 +49,85 @@ def memory_panel() -> rx.Component:
     )
 
 
+def context_panel() -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.heading("Context", size="5"),
+            rx.spacer(),
+            rx.switch(
+                checked=AppState.include_context,
+                on_change=AppState.set_include_context,
+                label="Include",
+            ),
+        ),
+        rx.divider(),
+        rx.vstack(
+            rx.box(
+                rx.text("Scene Summary", weight="bold"),
+                rx.text_area(
+                    placeholder="Short summary of the current scene...",
+                    value=AppState.context.summary,
+                    on_change=AppState.set_context_summary,
+                    rows="4",
+                ),
+                mb=3,
+            ),
+            rx.hstack(
+                rx.button("Auto-generate from draft", on_click=AppState.suggest_context, size="2"),
+                rx.button("Clear", on_click=AppState.clear_context, size="2", color_scheme="gray"),
+                justify="start",
+            ),
+            rx.box(
+                rx.text("NPCs", weight="bold"),
+                rx.unordered_list(
+                    rx.foreach(
+                        AppState.context.npcs,
+                        lambda it: rx.list_item(
+                            rx.hstack(
+                                rx.text(f"{it.label}: {it.detail}"),
+                                rx.spacer(),
+                                rx.button("Remove", size="1", on_click=lambda: AppState.remove_npc(it.label)),
+                            )
+                        ),
+                    )
+                ),
+                rx.hstack(
+                    rx.input(placeholder="Name", value=AppState.new_npc_label, on_change=AppState.set_new_npc_label),
+                    rx.input(placeholder="Detail", value=AppState.new_npc_detail, on_change=AppState.set_new_npc_detail),
+                    rx.button("Add", size="1", on_click=AppState.add_npc_from_inputs),
+                ),
+                mb=3,
+            ),
+            rx.box(
+                rx.text("Objects", weight="bold"),
+                rx.unordered_list(
+                    rx.foreach(
+                        AppState.context.objects,
+                        lambda it: rx.list_item(
+                            rx.hstack(
+                                rx.text(f"{it.label}: {it.detail}"),
+                                rx.spacer(),
+                                rx.button("Remove", size="1", on_click=lambda: AppState.remove_object(it.label)),
+                            )
+                        ),
+                    )
+                ),
+                rx.hstack(
+                    rx.input(placeholder="Name", value=AppState.new_object_label, on_change=AppState.set_new_object_label),
+                    rx.input(placeholder="Detail", value=AppState.new_object_detail, on_change=AppState.set_new_object_detail),
+                    rx.button("Add", size="1", on_click=AppState.add_object_from_inputs),
+                ),
+            ),
+            spacing="2",
+            align_items="stretch",
+        ),
+        p=3,
+        border="1px solid",
+        border_color="gray.200",
+        border_radius="8px",
+    )
+
+
 def lorebook_panel() -> rx.Component:
     return rx.box(
         rx.hstack(
@@ -143,6 +222,16 @@ def index() -> rx.Component:
                             on_click=AppState.do_continue,
                             loading=AppState.status == "thinking",
                         ),
+                        rx.button(
+                            "Back",
+                            on_click=AppState.undo_generation,
+                            disabled=rx.cond(AppState.can_undo, False, True),
+                        ),
+                        rx.button(
+                            "Forward",
+                            on_click=AppState.redo_generation,
+                            disabled=rx.cond(AppState.can_redo, False, True),
+                        ),
                         rx.badge(AppState.status),
                         rx.spacer(),
                         rx.input(value=AppState.model, on_change=AppState.set_model, width="220px"),
@@ -188,6 +277,7 @@ def index() -> rx.Component:
                         border_color="gray.200",
                         border_radius="8px",
                     ),
+                    context_panel(),
                     memory_panel(),
                     lorebook_panel(),
                     spacing="3",
@@ -200,7 +290,6 @@ def index() -> rx.Component:
             wrap="wrap",
             gap="6",
         ),
-        on_mount=AppState.load_lore,
+        on_mount=[AppState.load_state, AppState.load_lore],
         py=6,
     )
-
