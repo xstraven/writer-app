@@ -7,5 +7,6 @@ class AppConfig(rx.Config):
 
 config = AppConfig(
     app_name="storycraft_frontend",
+    # Silence sitemap plugin warnings by disabling it explicitly.
+    disable_plugins=["reflex.plugins.sitemap.SitemapPlugin"],
 )
-

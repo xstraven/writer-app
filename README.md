@@ -14,7 +14,11 @@ Quick Start
 1) Install dependencies (managed by uv):
 
    - Install uv: https://docs.astral.sh/uv/
+   - Ensure Python 3.13 is available. With uv you can install it via:
+     - `uv python install 3.13`
+     - Optionally set as default for this project: `uv python pin 3.13`
    - Then in this folder run: `uv sync`
+   - Install the package (editable): `uv pip install -e .`
 
 2) Configure environment:
 
@@ -22,7 +26,7 @@ Quick Start
 
 3) Run the FastAPI backend:
 
-   - `uv run uvicorn app.main:app --reload --port 8000`
+   - `uv run uvicorn storycraft.app.main:app --reload --port 8000`
    - Check health: `http://127.0.0.1:8000/health`
 
 4) Run the Reflex frontend (separate terminal):
@@ -60,14 +64,14 @@ Notes
 Project Layout
 --------------
 
-- `app/` — FastAPI backend
+- `src/storycraft/app/` — FastAPI backend
   - `main.py` — API routes and CORS
   - `models.py` — Pydantic models and schemas
   - `memory.py` — LLM-powered memory extraction and continuation
   - `openrouter.py` — OpenRouter client wrapper
   - `lorebook_store.py` — simple JSON file store for lore entries
   - `config.py` — settings via pydantic-settings
-- `storycraft_frontend/` — Reflex UI
+- `src/storycraft_frontend/` — Reflex UI
   - `pages/index.py` — main UI page
   - `state.py` — Reflex state, API calls to backend
 - `rxconfig.py` — Reflex configuration
@@ -77,7 +81,7 @@ Troubleshooting
 ---------------
 
 - CORS: The API allows localhost ports 3000 and 8000. Adjust in `app/config.py` if needed.
-- Ports: Frontend on 3000, Backend on 8000. Update `API_BASE` in `storycraft_frontend/state.py` if you change them.
+- Ports: Frontend on 3000, Backend on 8000. Update `API_BASE` in `src/storycraft_frontend/state.py` if you change them.
 - Models: Update `AppState.model` or set `STORYCRAFT_OPENROUTER_DEFAULT_MODEL`.
 
 Next Steps
@@ -87,4 +91,3 @@ Next Steps
 - Add scene/chapters with autosave.
 - Add export to Markdown/EPUB.
 - Add tool for style calibration from sample chapters.
-

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import List, Optional
-
 import reflex as rx
 import httpx
 
@@ -40,6 +38,24 @@ class AppState(rx.State):
 
     lore: list[LoreEntry] = []
     memory: MemoryState = MemoryState()
+
+    # Controlled inputs for new lore entry (avoid deprecated refs API).
+    new_lore_name: str = ""
+    new_lore_kind: str = ""
+    new_lore_summary: str = ""
+
+    # UI event helpers for numeric inputs coming in as strings from the browser.
+    def update_temperature(self, value: str):
+        try:
+            self.temperature = float(value)
+        except Exception:
+            pass
+
+    def update_max_tokens(self, value: str):
+        try:
+            self.max_tokens = int(float(value))
+        except Exception:
+            pass
 
     async def load_lore(self):
         async with httpx.AsyncClient() as client:
@@ -95,4 +111,15 @@ class AppState(rx.State):
             self.status = "done"
         except Exception as e:
             self.status = f"error: {e}"
+
+    async def submit_new_lore(self):
+        name = (self.new_lore_name or "").strip()
+        kind = (self.new_lore_kind or "").strip()
+        summary = (self.new_lore_summary or "").strip()
+        if not name or not kind or not summary:
+            return
+        await self.add_lore(name, kind, summary)
+        self.new_lore_name = ""
+        self.new_lore_kind = ""
+        self.new_lore_summary = ""
 
