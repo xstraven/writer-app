@@ -52,6 +52,14 @@ class AppState(rx.State):
     context: ContextState = ContextState()
     include_context: bool = True
 
+    # UI: story switching (ephemeral, not persisted to backend)
+    story_options: list[str] = ["Story One", "Story Two"]
+    current_story: str = "Story One"
+    stories: dict[str, dict] = {}
+
+    # UI: modal visibility
+    show_lorebook: bool = False
+
     # Generation history for undo/redo
     generations: list[str] = []
     gen_index: int = -1  # -1 means no generations applied
@@ -82,12 +90,75 @@ class AppState(rx.State):
         except Exception:
             pass
 
+    # --- Story switching helpers (local only) ---
+    def _snapshot_state(self) -> dict:
+        return {
+            "draft_text": self.draft_text,
+            "instruction": self.instruction,
+            "model": self.model,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "include_context": self.include_context,
+            "context": self._context_payload(),
+            "generations": list(self.generations),
+            "gen_index": int(self.gen_index),
+        }
+
+    def _apply_snapshot(self, data: dict):
+        self.draft_text = data.get("draft_text", "")
+        self.instruction = data.get("instruction", "")
+        self.model = data.get("model", self.model)
+        self.temperature = float(data.get("temperature", self.temperature))
+        self.max_tokens = int(data.get("max_tokens", self.max_tokens))
+        self.include_context = bool(data.get("include_context", self.include_context))
+        ctx = data.get("context") or {}
+        self.context = ContextState(
+            summary=ctx.get("summary", ""),
+            npcs=[ContextItem(**x) for x in ctx.get("npcs", [])],
+            objects=[ContextItem(**x) for x in ctx.get("objects", [])],
+        )
+        self.generations = [str(x) for x in data.get("generations", [])]
+        self.gen_index = int(data.get("gen_index", -1))
+        self._update_undo_redo_flags()
+
+    def switch_story(self, value: str):
+        # Save current under existing key
+        self.stories[self.current_story] = self._snapshot_state()
+        self.current_story = value
+        if value in self.stories:
+            self._apply_snapshot(self.stories[value])
+        else:
+            # New story: clear to defaults
+            self.draft_text = ""
+            self.instruction = ""
+            self.continuation = ""
+            self.generations = []
+            self.gen_index = -1
+            self._update_undo_redo_flags()
+
+    def create_story(self):
+        base = "Untitled"
+        i = 1
+        existing = set(self.story_options)
+        name = f"{base} {i}"
+        while name in existing:
+            i += 1
+            name = f"{base} {i}"
+        self.story_options = list(self.story_options) + [name]
+        self.switch_story(name)
+
     async def load_lore(self):
         async with httpx.AsyncClient() as client:
             r = await client.get(f"{API_BASE}/api/lorebook")
             r.raise_for_status()
             data = r.json()
         self.lore = [LoreEntry(**x) for x in data]
+
+    def open_lorebook(self):
+        self.show_lorebook = True
+
+    def close_lorebook(self):
+        self.show_lorebook = False
 
     async def load_state(self):
         async with httpx.AsyncClient() as client:

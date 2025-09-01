@@ -191,15 +191,137 @@ def lorebook_panel() -> rx.Component:
     )
 
 
+def top_menu() -> rx.Component:
+    return rx.hstack(
+        rx.heading("Storycraft", size="7"),
+        rx.spacer(),
+        rx.text("Story:"),
+        rx.select(
+            AppState.story_options,
+            value=AppState.current_story,
+            on_change=AppState.switch_story,
+            width="220px",
+        ),
+        rx.button("New Story", on_click=AppState.create_story, size="2"),
+        align="center",
+        py=3,
+    )
+
+
+def sidebar() -> rx.Component:
+    return rx.vstack(
+        rx.box(
+            rx.hstack(rx.heading("Generation Settings", size="5")),
+            rx.divider(),
+            rx.vstack(
+                rx.hstack(
+                    rx.text("Model"),
+                    rx.input(value=AppState.model, on_change=AppState.set_model, width="220px"),
+                ),
+                rx.hstack(
+                    rx.text("Temperature"),
+                    rx.input(type="number", value=AppState.temperature, on_change=AppState.update_temperature, step=0.1, width="110px"),
+                ),
+                rx.hstack(
+                    rx.text("Max tokens"),
+                    rx.input(type="number", value=AppState.max_tokens, on_change=AppState.update_max_tokens, step=64, width="110px"),
+                ),
+                rx.hstack(
+                    rx.switch(checked=AppState.include_context, on_change=AppState.set_include_context, label="Include context"),
+                ),
+                spacing="2",
+                align_items="stretch",
+            ),
+            p=3,
+            border="1px solid",
+            border_color="gray.200",
+            border_radius="8px",
+        ),
+
+        rx.box(
+            rx.hstack(rx.heading("Meta", size="5")),
+            rx.divider(),
+            rx.text("Story Description"),
+            rx.text_area(
+                placeholder="What is this story about?",
+                value=AppState.context.summary,
+                on_change=AppState.set_context_summary,
+                rows="6",
+            ),
+            rx.hstack(
+                rx.button("Suggest from draft", size="2", on_click=AppState.suggest_context),
+                rx.button("Clear", size="2", color_scheme="gray", on_click=AppState.clear_context),
+                justify="start",
+            ),
+            p=3,
+            border="1px solid",
+            border_color="gray.200",
+            border_radius="8px",
+        ),
+
+        rx.box(
+            rx.hstack(
+                rx.heading("Lorebook", size="5"),
+                rx.spacer(),
+                rx.button("Manage", on_click=AppState.open_lorebook, size="2"),
+            ),
+            rx.text("Manage entries in the pop-out"),
+            p=3,
+            border="1px solid",
+            border_color="gray.200",
+            border_radius="8px",
+        ),
+
+        spacing="4",
+        align_items="stretch",
+        width="360px",
+        min_width="300px",
+    )
+
+
+def lorebook_overlay() -> rx.Component:
+    return rx.cond(
+        AppState.show_lorebook,
+        rx.box(
+            rx.center(
+                rx.box(
+                    rx.hstack(
+                        rx.heading("Lorebook", size="6"),
+                        rx.spacer(),
+                        rx.button("Close", on_click=AppState.close_lorebook, size="2", color_scheme="gray"),
+                        mb=2,
+                    ),
+                    rx.scroll_area(
+                        lorebook_panel(),
+                        type="always",
+                        scrollbars="vertical",
+                        style={"height": "70vh"},
+                    ),
+                    p=4,
+                    bg="white",
+                    width=["95vw", "90vw", "900px"],
+                    border_radius="10px",
+                    box_shadow="lg",
+                )
+            ),
+            # Backdrop
+            position="fixed",
+            top="0",
+            left="0",
+            right="0",
+            bottom="0",
+            bg="rgba(0,0,0,0.35)",
+            z_index=1000,
+        ),
+        None,
+    )
+
+
 def index() -> rx.Component:
     return rx.container(
-        rx.vstack(
-            rx.heading("Storycraft", size="8"),
-            rx.text("AI-assisted novel writing with memory & lore."),
-            spacing="3",
-            align_items="stretch",
-        ),
-        rx.flex(
+        top_menu(),
+        rx.hstack(
+            # Main editor column
             rx.box(
                 rx.vstack(
                     rx.text("Draft"),
@@ -207,7 +329,7 @@ def index() -> rx.Component:
                         placeholder="Paste or write your story here...",
                         value=AppState.draft_text,
                         on_change=AppState.set_draft_text,
-                        rows="20",
+                        rows="22",
                     ),
                     rx.text("Instruction (optional)"),
                     rx.text_area(
@@ -233,63 +355,24 @@ def index() -> rx.Component:
                             disabled=rx.cond(AppState.can_redo, False, True),
                         ),
                         rx.badge(AppState.status),
-                        rx.spacer(),
-                        rx.input(value=AppState.model, on_change=AppState.set_model, width="220px"),
-                        rx.text("Temp"),
-                        rx.input(
-                            type="number",
-                            value=AppState.temperature,
-                            on_change=AppState.update_temperature,
-                            step=0.1,
-                            width="90px",
-                        ),
-                        rx.text("Tokens"),
-                        rx.input(
-                            type="number",
-                            value=AppState.max_tokens,
-                            on_change=AppState.update_max_tokens,
-                            step=64,
-                            width="100px",
-                        ),
+                        justify="start",
+                        gap="2",
                     ),
                     spacing="2",
                     align_items="stretch",
                 ),
-                flex="1 1 520px",
-                min_width="320px",
+                flex="1 1 auto",
+                min_width="420px",
             ),
 
-            rx.box(
-                rx.vstack(
-                    rx.box(
-                        rx.heading("Continuation", size="5", mb=2),
-                        rx.divider(),
-                        rx.text(
-                            rx.cond(
-                                AppState.continuation != "",
-                                AppState.continuation,
-                                "Output will appear here...",
-                            ),
-                            white_space="pre-wrap",
-                        ),
-                        p=3,
-                        border="1px solid",
-                        border_color="gray.200",
-                        border_radius="8px",
-                    ),
-                    context_panel(),
-                    memory_panel(),
-                    lorebook_panel(),
-                    spacing="3",
-                ),
-                flex="1 1 520px",
-                min_width="320px",
-            ),
+            # Sidebar column
+            sidebar(),
 
-            direction="row",
-            wrap="wrap",
+            align="start",
             gap="6",
+            wrap="wrap",
         ),
+        lorebook_overlay(),
         on_mount=[AppState.load_state, AppState.load_lore],
-        py=6,
+        py=4,
     )
