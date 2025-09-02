@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
-from .models import ContextState, MemoryItem, MemoryState
+from .models import ContextState, MemoryState
 from .openrouter import OpenRouterClient
 
 

@@ -24,10 +24,10 @@ Quick Start
 
    - Copy `.env.example` to `.env` and set your OpenRouter key
 
-3) Run the FastAPI backend:
+3) Run the FastAPI backend (use 8001 to avoid Reflex dev backend on 8000):
 
-   - `uv run uvicorn storycraft.app.main:app --reload --port 8000`
-   - Check health: `http://127.0.0.1:8000/health`
+   - `uv run uvicorn storycraft.app.main:app --reload --port 8001`
+   - Check health: `http://127.0.0.1:8001/health`
 
 4) Run the Reflex frontend (separate terminal):
 
@@ -81,7 +81,8 @@ Troubleshooting
 ---------------
 
 - CORS: The API allows localhost ports 3000 and 8000. Adjust in `app/config.py` if needed.
-- Ports: Frontend on 3000, Backend on 8000. Update `API_BASE` in `src/storycraft_frontend/state.py` if you change them.
+- Ports: Frontend on 3000, Reflex event backend on 8000, FastAPI API on 8001.
+  - The frontend reads the API base from `STORYCRAFT_API_BASE`. Default is `http://127.0.0.1:8001`.
 - Models: Update `AppState.model` or set `STORYCRAFT_OPENROUTER_DEFAULT_MODEL`.
 
 Next Steps

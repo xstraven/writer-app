@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import os
+from typing import Optional
+
 import reflex as rx
 import httpx
 
 
-API_BASE = "http://127.0.0.1:8000"
+# Configurable API base; default to 8001 to avoid Reflex dev backend (8000).
+API_BASE = os.environ.get("STORYCRAFT_API_BASE", "http://127.0.0.1:8001")
 
 
 class MemoryItem(rx.Base):
@@ -38,6 +42,34 @@ class ContextState(rx.Base):
     objects: list[ContextItem] = []
 
 
+class Snippet(rx.Base):
+    id: str
+    story: str
+    parent_id: Optional[str] = None
+    child_id: Optional[str] = None
+    kind: str
+    content: str
+    created_at: str
+
+
+class EditableChunk(rx.Base):
+    id: str
+    kind: str
+    content: str
+
+
+class TreeNode(rx.Base):
+    parent: Snippet
+    children: list[Snippet] = []
+
+
+class BranchInfo(rx.Base):
+    story: str
+    name: str
+    head_id: str
+    created_at: str
+
+
 class AppState(rx.State):
     draft_text: str = ""
     instruction: str = ""
@@ -59,12 +91,25 @@ class AppState(rx.State):
 
     # UI: modal visibility
     show_lorebook: bool = False
+    backend_ok: bool = False
+    backend_msg: str = ""
 
-    # Generation history for undo/redo
-    generations: list[str] = []
-    gen_index: int = -1  # -1 means no generations applied
-    can_undo: bool = False
-    can_redo: bool = False
+    # Branching state (server-backed)
+    branch_path: list[Snippet] = []
+    head_id: Optional[str] = None
+    last_parent_id: Optional[str] = None
+    last_parent_active_child_id: Optional[str] = None
+    last_parent_children: list[Snippet] = []
+
+    chunk_edit_list: list[EditableChunk] = []
+
+    # Tree and branches
+    tree_rows: list[TreeNode] = []
+    branches: list[BranchInfo] = []
+    branch_name_input: str = ""
+
+    # Confirm dialog state
+    show_confirm_flatten: bool = False
 
     # Controlled inputs for new lore entry (avoid deprecated refs API).
     new_lore_name: str = ""
@@ -117,9 +162,7 @@ class AppState(rx.State):
             npcs=[ContextItem(**x) for x in ctx.get("npcs", [])],
             objects=[ContextItem(**x) for x in ctx.get("objects", [])],
         )
-        self.generations = [str(x) for x in data.get("generations", [])]
-        self.gen_index = int(data.get("gen_index", -1))
-        self._update_undo_redo_flags()
+        # Branch state is reloaded from server separately.
 
     def switch_story(self, value: str):
         # Save current under existing key
@@ -132,9 +175,6 @@ class AppState(rx.State):
             self.draft_text = ""
             self.instruction = ""
             self.continuation = ""
-            self.generations = []
-            self.gen_index = -1
-            self._update_undo_redo_flags()
 
     def create_story(self):
         base = "Untitled"
@@ -153,6 +193,18 @@ class AppState(rx.State):
             r.raise_for_status()
             data = r.json()
         self.lore = [LoreEntry(**x) for x in data]
+
+    async def probe_backend(self):
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                r = await client.get(f"{API_BASE}/health")
+                r.raise_for_status()
+                data = r.json()
+            self.backend_ok = data.get("status") == "ok"
+            self.backend_msg = "ok" if self.backend_ok else "not ok"
+        except Exception as e:
+            self.backend_ok = False
+            self.backend_msg = f"error: {e}"
 
     def open_lorebook(self):
         self.show_lorebook = True
@@ -178,9 +230,7 @@ class AppState(rx.State):
             npcs=[ContextItem(**x) for x in ctx.get("npcs", [])],
             objects=[ContextItem(**x) for x in ctx.get("objects", [])],
         )
-        self.generations = [str(x) for x in data.get("generations", [])]
-        self.gen_index = int(data.get("gen_index", -1))
-        self._update_undo_redo_flags()
+        # Branch state is reloaded from server separately.
 
     async def save_state(self):
         payload = {
@@ -191,16 +241,271 @@ class AppState(rx.State):
             "max_tokens": self.max_tokens,
             "include_context": self.include_context,
             "context": self._context_payload(),
-            "generations": self.generations,
-            "gen_index": self.gen_index,
+            # generations/gen_index are deprecated in favor of server-backed branches
         }
         async with httpx.AsyncClient() as client:
             r = await client.put(f"{API_BASE}/api/state", json=payload)
             r.raise_for_status()
 
-    def _update_undo_redo_flags(self):
-        self.can_undo = self.gen_index >= 0
-        self.can_redo = self.gen_index < len(self.generations) - 1
+    # --- Branching helpers ---
+
+    async def reload_branch(self):
+        story = self.current_story
+        async with httpx.AsyncClient() as client:
+            r = await client.get(f"{API_BASE}/api/snippets/path", params={"story": story})
+            r.raise_for_status()
+            data = r.json()
+        # Map path and text
+        self.branch_path = [Snippet(**x) for x in data.get("path", [])]
+        self.head_id = data.get("head_id")
+        self.draft_text = data.get("text", self.draft_text)
+        # Initialize editable list mirror of current path
+        self.chunk_edit_list = [EditableChunk(id=s.id, kind=s.kind, content=s.content) for s in self.branch_path]
+        # Determine last parent (the node whose children we can switch among)
+        if len(self.branch_path) >= 2:
+            parent = self.branch_path[-2]
+            self.last_parent_id = parent.id
+            self.last_parent_active_child_id = parent.child_id
+            await self.load_children_for_last_parent()
+        else:
+            self.last_parent_id = None
+            self.last_parent_active_child_id = None
+            self.last_parent_children = []
+        await self.load_tree()
+        await self.load_branches()
+
+    async def load_children_for_last_parent(self):
+        if not self.last_parent_id:
+            self.last_parent_children = []
+            return
+        story = self.current_story
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                f"{API_BASE}/api/snippets/children/{self.last_parent_id}",
+                params={"story": story},
+            )
+            r.raise_for_status()
+            data = r.json()
+        self.last_parent_children = [Snippet(**x) for x in data]
+
+    async def choose_active_child(self, child_id: str):
+        if not self.last_parent_id:
+            return
+        story = self.current_story
+        payload = {"story": story, "parent_id": self.last_parent_id, "child_id": child_id}
+        async with httpx.AsyncClient() as client:
+            r = await client.post(f"{API_BASE}/api/snippets/choose-active", json=payload)
+            r.raise_for_status()
+        await self.reload_branch()
+
+    async def regenerate_latest(self):
+        if not self.branch_path:
+            return
+        target = self.branch_path[-1]
+        story = self.current_story
+        payload = {
+            "story": story,
+            "target_snippet_id": target.id,
+            "instruction": self.instruction,
+            "max_tokens": self.max_tokens,
+            "model": self.model,
+            "use_memory": True,
+            "temperature": self.temperature,
+            "use_context": self.include_context,
+        }
+        if self.include_context:
+            payload["context"] = self._context_payload()
+        async with httpx.AsyncClient(timeout=120) as client:
+            r = await client.post(f"{API_BASE}/api/snippets/regenerate-ai", json=payload)
+            r.raise_for_status()
+        await self.reload_branch()
+
+    async def commit_user_chunk(self):
+        story = self.current_story
+        # Build base text from current branch to validate that user added content at the end.
+        base_text = "\n\n".join([s.content for s in self.branch_path])
+        draft = self.draft_text or ""
+        # Determine new chunk to commit.
+        if base_text:
+            if not draft.startswith(base_text):
+                # Diverged edits; avoid duplicating content. Ask user to refresh.
+                self.status = "error: draft diverged; refresh branch first"
+                return
+            chunk = draft[len(base_text):].lstrip("\n")
+        else:
+            chunk = draft.strip()
+        if not chunk.strip():
+            return
+        parent_id = self.head_id
+        payload = {
+            "story": story,
+            "content": chunk,
+            "kind": "user",
+            "parent_id": parent_id,
+            "set_active": True,
+        }
+        async with httpx.AsyncClient() as client:
+            r = await client.post(f"{API_BASE}/api/snippets/append", json=payload)
+            r.raise_for_status()
+        await self.reload_branch()
+        await self.save_state()
+
+    def set_chunk_edit(self, sid: str, value: str):
+        # Update content for the editable chunk with the given id.
+        items = []
+        for it in self.chunk_edit_list:
+            if it.id == sid:
+                it = EditableChunk(id=it.id, kind=it.kind, content=value)
+            items.append(it)
+        self.chunk_edit_list = items
+
+    async def save_chunk(self, sid: str):
+        # Find snippet; fall back to existing content if no edit.
+        snippet = next((s for s in self.branch_path if s.id == sid), None)
+        if not snippet:
+            return
+        # Find edited version if any
+        edit = next((e for e in self.chunk_edit_list if e.id == sid), None)
+        content = edit.content if edit else snippet.content
+        payload = {"content": content}
+        async with httpx.AsyncClient() as client:
+            r = await client.put(f"{API_BASE}/api/snippets/{sid}", json=payload)
+            r.raise_for_status()
+        # Reload branch and state
+        await self.reload_branch()
+        await self.save_state()
+
+    async def commit_entire_draft_as_root(self):
+        content = (self.draft_text or "").strip()
+        if not content:
+            return
+        payload = {"story": self.current_story, "content": content, "kind": "user", "parent_id": None}
+        async with httpx.AsyncClient() as client:
+            r = await client.post(f"{API_BASE}/api/snippets/append", json=payload)
+            r.raise_for_status()
+        await self.reload_branch()
+        await self.save_state()
+
+    # Insert / Delete
+    async def insert_above(self, target_id: str, content: str):
+        content = (content or "").strip()
+        if not content:
+            return
+        payload = {
+            "story": self.current_story,
+            "target_snippet_id": target_id,
+            "content": content,
+            "kind": "user",
+            "set_active": True,
+        }
+        async with httpx.AsyncClient() as client:
+            r = await client.post(f"{API_BASE}/api/snippets/insert-above", json=payload)
+            r.raise_for_status()
+        await self.reload_branch()
+
+    async def insert_below(self, parent_id: str, content: str):
+        content = (content or "").strip()
+        if not content:
+            return
+        payload = {
+            "story": self.current_story,
+            "parent_snippet_id": parent_id,
+            "content": content,
+            "kind": "user",
+            "set_active": True,
+        }
+        async with httpx.AsyncClient() as client:
+            r = await client.post(f"{API_BASE}/api/snippets/insert-below", json=payload)
+            r.raise_for_status()
+        await self.reload_branch()
+
+    async def delete_snippet(self, snippet_id: str):
+        async with httpx.AsyncClient() as client:
+            r = await client.delete(f"{API_BASE}/api/snippets/{snippet_id}", params={"story": self.current_story})
+        if r.status_code == 200:
+            await self.reload_branch()
+        else:
+            self.status = f"error: {r.text}"
+
+    # Tree & Branches
+    async def load_tree(self):
+        async with httpx.AsyncClient() as client:
+            r = await client.get(f"{API_BASE}/api/snippets/tree-main", params={"story": self.current_story})
+            r.raise_for_status()
+            data = r.json()
+        # Build rows; active child shown by comparing parent.child_id
+        rows: list[TreeNode] = []
+        for row in data.get("rows", []):
+            parent = Snippet(**row["parent"])  # type: ignore
+            children = [Snippet(**c) for c in row.get("children", [])]
+            rows.append(TreeNode(parent=parent, children=children))
+        self.tree_rows = rows
+
+    async def load_branches(self):
+        async with httpx.AsyncClient() as client:
+            r = await client.get(f"{API_BASE}/api/branches", params={"story": self.current_story})
+            r.raise_for_status()
+            data = r.json()
+        self.branches = [BranchInfo(**b) for b in data]
+
+    def set_branch_name_input(self, value: str):
+        self.branch_name_input = value
+
+    async def save_branch(self):
+        name = (self.branch_name_input or "").strip()
+        if not name or not self.head_id:
+            return
+        payload = {"story": self.current_story, "name": name, "head_id": self.head_id}
+        async with httpx.AsyncClient() as client:
+            r = await client.post(f"{API_BASE}/api/branches", json=payload)
+            r.raise_for_status()
+        self.branch_name_input = ""
+        await self.load_branches()
+
+    async def switch_to_head(self, head_id: str):
+        # Reconstruct path to head by walking parents upward
+        chain: list[Snippet] = []
+        current_id = head_id
+        async with httpx.AsyncClient() as client:
+            while True:
+                r = await client.get(f"{API_BASE}/api/snippets/{current_id}", params={"story": self.current_story})
+                if r.status_code != 200:
+                    break
+                node = Snippet(**r.json())
+                chain.append(node)
+                if not node.parent_id:
+                    break
+                current_id = node.parent_id
+        chain.reverse()
+        # Select the path by setting each parent's active child
+        for i in range(len(chain) - 1):
+            child = chain[i + 1]
+            await self.choose_active_child(child.id)
+        await self.reload_branch()
+
+    async def switch_branch(self, name: str):
+        # Find branch head and switch
+        br = next((b for b in self.branches if b.name == name), None)
+        if not br:
+            return
+        await self.switch_to_head(br.head_id)
+
+    async def delete_branch(self, name: str):
+        async with httpx.AsyncClient() as client:
+            r = await client.delete(f"{API_BASE}/api/branches/{name}", params={"story": self.current_story})
+            r.raise_for_status()
+        await self.load_branches()
+
+    # Confirm flatten dialog
+    def open_confirm_flatten(self):
+        self.show_confirm_flatten = True
+
+    def close_confirm_flatten(self):
+        self.show_confirm_flatten = False
+
+    async def confirm_flatten_and_commit(self):
+        await self.commit_entire_draft_as_root()
+        self.show_confirm_flatten = False
 
     async def add_lore(self, name: str, kind: str, summary: str):
         payload = {"name": name, "kind": kind, "summary": summary, "tags": []}
@@ -299,6 +604,7 @@ class AppState(rx.State):
             "model": self.model,
             "use_memory": True,
             "use_context": self.include_context,
+            "story": self.current_story,
         }
         if self.include_context:
             payload["context"] = self._context_payload()
@@ -306,57 +612,13 @@ class AppState(rx.State):
             async with httpx.AsyncClient(timeout=120) as client:
                 r = await client.post(f"{API_BASE}/api/continue", json=payload)
                 r.raise_for_status()
-                data = r.json()
-            self.continuation = data.get("continuation", "")
-            # Apply continuation to draft and push to history
-            self._push_generation(self.continuation)
+                _ = r.json()
+            # Refresh from server branch path
+            await self.reload_branch()
             self.status = "done"
             await self.save_state()
         except Exception as e:
             self.status = f"error: {e}"
-
-    def _append_to_draft(self, text: str):
-        if not text:
-            return
-        if not self.draft_text:
-            self.draft_text = text
-            return
-        # Ensure a separating newline if needed
-        sep = "\n\n" if not self.draft_text.endswith("\n") and not text.startswith("\n") else ""
-        self.draft_text = f"{self.draft_text}{sep}{text}"
-
-    def _push_generation(self, text: str):
-        # Truncate redo tail if any
-        if self.gen_index < len(self.generations) - 1:
-            self.generations = self.generations[: self.gen_index + 1]
-        self.generations.append(text)
-        self.gen_index += 1
-        self._append_to_draft(text)
-        self._update_undo_redo_flags()
-
-    async def undo_generation(self):
-        if self.gen_index < 0:
-            return
-        seg = self.generations[self.gen_index]
-        if seg and self.draft_text.endswith(seg):
-            self.draft_text = self.draft_text[: -len(seg)]
-        else:
-            # Best-effort: try trimming if segment exactly at end
-            pos = self.draft_text.rfind(seg)
-            if pos != -1 and pos + len(seg) == len(self.draft_text):
-                self.draft_text = self.draft_text[:pos]
-        self.gen_index -= 1
-        self._update_undo_redo_flags()
-        await self.save_state()
-
-    async def redo_generation(self):
-        if self.gen_index >= len(self.generations) - 1:
-            return
-        self.gen_index += 1
-        seg = self.generations[self.gen_index]
-        self._append_to_draft(seg)
-        self._update_undo_redo_flags()
-        await self.save_state()
 
     async def submit_new_lore(self):
         name = (self.new_lore_name or "").strip()

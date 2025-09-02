@@ -4,7 +4,7 @@ import json
 import sqlite3
 import threading
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 
 class StateStore:
@@ -48,4 +48,3 @@ class StateStore:
                 (key, payload),
             )
             conn.commit()
-

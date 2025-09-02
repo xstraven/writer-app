@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import List, Optional
+from datetime import datetime
 from pydantic import BaseModel, Field
 
 
@@ -9,14 +10,14 @@ class LoreEntry(BaseModel):
     name: str
     kind: str = Field(description="e.g., character, location, item, faction")
     summary: str
-    tags: List[str] = []
+    tags: List[str] = Field(default_factory=list)
 
 
 class LoreEntryCreate(BaseModel):
     name: str
     kind: str
     summary: str
-    tags: List[str] = []
+    tags: List[str] = Field(default_factory=list)
 
 
 class LoreEntryUpdate(BaseModel):
@@ -33,9 +34,9 @@ class MemoryItem(BaseModel):
 
 
 class MemoryState(BaseModel):
-    characters: List[MemoryItem] = []
-    subplots: List[MemoryItem] = []
-    facts: List[MemoryItem] = []
+    characters: List[MemoryItem] = Field(default_factory=list)
+    subplots: List[MemoryItem] = Field(default_factory=list)
+    facts: List[MemoryItem] = Field(default_factory=list)
 
 
 class ContextItem(BaseModel):
@@ -45,8 +46,8 @@ class ContextItem(BaseModel):
 
 class ContextState(BaseModel):
     summary: str = ""
-    npcs: List[ContextItem] = []
-    objects: List[ContextItem] = []
+    npcs: List[ContextItem] = Field(default_factory=list)
+    objects: List[ContextItem] = Field(default_factory=list)
 
 
 class ContinueRequest(BaseModel):
@@ -59,6 +60,8 @@ class ContinueRequest(BaseModel):
     # Optional user/LLM-provided context to enrich the prompt.
     context: Optional[ContextState] = None
     use_context: bool = True
+    # Optional story id for persistence/branching.
+    story: Optional[str] = None
 
 
 class ContinueResponse(BaseModel):
@@ -91,5 +94,108 @@ class AppPersistedState(BaseModel):
     max_tokens: int = 512
     include_context: bool = True
     context: Optional[ContextState] = None
-    generations: List[str] = []
+    generations: List[str] = Field(default_factory=list)
     gen_index: int = -1
+
+
+# --- Snippets & Branching ---
+
+class Snippet(BaseModel):
+    id: str
+    story: str
+    parent_id: Optional[str] = None
+    child_id: Optional[str] = None
+    kind: str = Field(description="e.g., user, ai")
+    content: str
+    created_at: datetime
+
+
+class AppendSnippetRequest(BaseModel):
+    story: str
+    content: str
+    kind: str = "ai"
+    parent_id: Optional[str] = None
+    # If None and parent has no active child, becomes active. If False, never active.
+    set_active: Optional[bool] = None
+
+
+class RegenerateSnippetRequest(BaseModel):
+    story: str
+    target_snippet_id: str
+    content: str
+    kind: str = "ai"
+    set_active: bool = True
+
+
+class ChooseActiveChildRequest(BaseModel):
+    story: str
+    parent_id: str
+    child_id: str
+
+
+class BranchPathResponse(BaseModel):
+    story: str
+    head_id: Optional[str]
+    path: List[Snippet] = Field(default_factory=list)
+    text: str = ""
+
+
+class RegenerateAIRequest(BaseModel):
+    story: str
+    target_snippet_id: str
+    instruction: str = ""
+    max_tokens: int = 512
+    model: Optional[str] = None
+    use_memory: bool = True
+    temperature: float = 0.7
+    context: Optional[ContextState] = None
+    use_context: bool = True
+    set_active: bool = True
+
+
+class UpdateSnippetRequest(BaseModel):
+    content: Optional[str] = None
+    kind: Optional[str] = None
+
+
+class InsertAboveRequest(BaseModel):
+    story: str
+    target_snippet_id: str
+    content: str
+    kind: str = "user"
+    set_active: bool = True
+
+
+class InsertBelowRequest(BaseModel):
+    story: str
+    parent_snippet_id: str
+    content: str
+    kind: str = "user"
+    set_active: bool = True
+
+
+class DeleteSnippetResponse(BaseModel):
+    ok: bool = True
+
+
+class TreeRow(BaseModel):
+    parent: Snippet
+    children: list[Snippet] = Field(default_factory=list)
+
+
+class TreeResponse(BaseModel):
+    story: str
+    rows: list[TreeRow] = Field(default_factory=list)
+
+
+class BranchInfo(BaseModel):
+    story: str
+    name: str
+    head_id: str
+    created_at: datetime
+
+
+class UpsertBranchRequest(BaseModel):
+    story: str
+    name: str
+    head_id: str

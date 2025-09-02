@@ -1,6 +1,4 @@
 from __future__ import annotations
-
-import json
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -53,4 +51,3 @@ class OpenRouterClient:
             resp = await client.post(url, headers=self._headers(), json=payload)
             resp.raise_for_status()
             return resp.json()
-

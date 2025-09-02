@@ -1,6 +1,7 @@
 def test_reflex_app_import_and_compile():
     # Ensure rxconfig is loaded (from file) and app module exists, then dry-run compile.
-    import importlib.util, os
+    import importlib.util
+    import os
     rx_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "rxconfig.py")
     if os.path.exists(rx_path):
         spec = importlib.util.spec_from_file_location("rxconfig", rx_path)
