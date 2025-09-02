@@ -152,7 +152,7 @@ class AppState(rx.State):
     def _apply_snapshot(self, data: dict):
         self.draft_text = data.get("draft_text", "")
         self.instruction = data.get("instruction", "")
-        self.model = data.get("model", self.model)
+        self.model = data.get("model") or self.model
         self.temperature = float(data.get("temperature", self.temperature))
         self.max_tokens = int(data.get("max_tokens", self.max_tokens))
         self.include_context = bool(data.get("include_context", self.include_context))
@@ -220,7 +220,7 @@ class AppState(rx.State):
         # Map to current state (with defaults)
         self.draft_text = data.get("draft_text", self.draft_text)
         self.instruction = data.get("instruction", self.instruction)
-        self.model = data.get("model", self.model)
+        self.model = data.get("model") or self.model
         self.temperature = float(data.get("temperature", self.temperature))
         self.max_tokens = int(data.get("max_tokens", self.max_tokens))
         self.include_context = bool(data.get("include_context", self.include_context))
