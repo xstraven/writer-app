@@ -57,7 +57,7 @@ Endpoints
 Notes
 -----
 
-- If `OPENROUTER_API_KEY` is not set, the backend returns stubbed responses for development.
+- If `STORYCRAFT_OPENROUTER_API_KEY` is not set, the backend returns stubbed responses for development.
 - Lorebook is persisted to `data/lorebook.json`. This is a simple JSON store; switch to a DB if needed.
 - The memory extractor uses Pydantic JSON schema as `response_format` for structured output.
 
@@ -92,3 +92,8 @@ Next Steps
 - Add scene/chapters with autosave.
 - Add export to Markdown/EPUB.
 - Add tool for style calibration from sample chapters.
+
+Contributing
+------------
+
+See AGENTS.md for contributor guidelines, project structure, and commands. Before opening a PR, run: `uv run pytest -q`, `uv run ruff check .`, and `uv run ruff format .`.

@@ -12,6 +12,7 @@ OPENROUTER_CHAT_COMPLETIONS = "/chat/completions"
 class OpenRouterClient:
     def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None) -> None:
         settings = get_settings()
+        # Prefer explicit arg, fallback to STORYCRAFT_ env via settings only.
         self.api_key = api_key or settings.openrouter_api_key
         self.base_url = (base_url or settings.openrouter_base_url).rstrip("/")
         self.default_model = settings.openrouter_default_model

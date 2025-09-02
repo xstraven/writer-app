@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-from .models import ContextState, MemoryState
+from .models import ContextState, LoreEntry, MemoryState
 from .openrouter import OpenRouterClient
+from .prompt_builder import PromptBuilder
 
 
 MEMORY_EXTRACTION_SYSTEM = (
@@ -96,28 +97,27 @@ async def continue_story(
     model: Optional[str] = None,
     max_tokens: int = 512,
     temperature: float = 0.7,
+    # New optional fields for future enrichment
+    history_text: str = "",
+    lore_items: Optional[List[LoreEntry]] = None,
 ) -> Dict[str, str]:
     client = OpenRouterClient()
-    memory = _memory_block(mem)
-    ctx = _context_block(context)
     sys = CONTINUE_SYSTEM
-    if memory:
+    if mem:
         sys += "\nUse the provided Memory to maintain continuity."
-    if ctx:
+    if context:
         sys += "\nIncorporate the Context details when plausible."
-    messages = [
-        {"role": "system", "content": sys},
-        {
-            "role": "user",
-            "content": (
-                (f"Instructions: {instruction}\n\n" if instruction else "")
-                + (memory + "\n\n" if memory else "")
-                + (ctx + "\n\n" if ctx else "")
-                + "[Draft]\n"
-                + draft_text
-            ),
-        },
-    ]
+    messages = (
+        PromptBuilder()
+        .with_system(sys)
+        .with_instruction(instruction)
+        .with_lore(lore_items)
+        .with_memory(mem)
+        .with_context(context)
+        .with_history_text(history_text)
+        .with_draft_text(draft_text)
+        .build_messages()
+    )
     resp = await client.chat(
         messages=messages,
         model=model,

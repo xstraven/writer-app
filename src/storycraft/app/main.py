@@ -93,6 +93,23 @@ async def continue_endpoint(req: ContinueRequest) -> ContinueResponse:
     mem: MemoryState | None = None
     if req.use_memory and req.draft_text.strip():
         mem = await extract_memory_from_text(text=req.draft_text, model=req.model)
+    # Include optional lorebook entries if provided.
+    lore_items = None
+    if getattr(req, "lore_ids", None):
+        lore_items = []
+        for _id in req.lore_ids or []:
+            entry = store.get(_id)
+            if entry:
+                lore_items.append(entry)
+
+    # If a story id is provided, pass the active branch text as history to the prompt.
+    history_text = ""
+    if req.story:
+        try:
+            path = snippet_store.main_path(req.story)
+            history_text = snippet_store.build_text(path)
+        except Exception:
+            history_text = ""
 
     result = await continue_story(
         draft_text=req.draft_text,
@@ -102,6 +119,8 @@ async def continue_endpoint(req: ContinueRequest) -> ContinueResponse:
         model=req.model,
         max_tokens=req.max_tokens,
         temperature=req.temperature,
+        history_text=history_text,
+        lore_items=lore_items,
     )
     # Optional persistence into DuckDB if a story is provided.
     try:
@@ -226,6 +245,15 @@ async def regenerate_ai(req: RegenerateAIRequest) -> Snippet:
     if req.use_memory and base_text.strip():
         mem = await extract_memory_from_text(text=base_text, model=req.model)
 
+    # Optional lorebook entries
+    lore_items = None
+    if getattr(req, "lore_ids", None):
+        lore_items = []
+        for _id in req.lore_ids or []:
+            entry = store.get(_id)
+            if entry:
+                lore_items.append(entry)
+
     result = await continue_story(
         draft_text=base_text,
         instruction=req.instruction,
@@ -234,6 +262,7 @@ async def regenerate_ai(req: RegenerateAIRequest) -> Snippet:
         model=req.model,
         max_tokens=req.max_tokens,
         temperature=req.temperature,
+        lore_items=lore_items,
     )
     # Persist as an alternative child of the same parent as target
     row = snippet_store.regenerate_snippet(

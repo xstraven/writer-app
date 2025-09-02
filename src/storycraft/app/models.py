@@ -62,6 +62,8 @@ class ContinueRequest(BaseModel):
     use_context: bool = True
     # Optional story id for persistence/branching.
     story: Optional[str] = None
+    # Optional lorebook items to include (IDs from lorebook)
+    lore_ids: Optional[List[str]] = None
 
 
 class ContinueResponse(BaseModel):
@@ -151,6 +153,8 @@ class RegenerateAIRequest(BaseModel):
     context: Optional[ContextState] = None
     use_context: bool = True
     set_active: bool = True
+    # Optional lorebook items to include (IDs from lorebook)
+    lore_ids: Optional[List[str]] = None
 
 
 class UpdateSnippetRequest(BaseModel):
