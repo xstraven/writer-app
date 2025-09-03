@@ -161,6 +161,17 @@ def lorebook_panel() -> rx.Component:
                     rx.hstack(
                         rx.text(f"{e.name} · {e.kind}", weight="bold"),
                         rx.spacer(),
+                        rx.switch(
+                            checked=e.always_on,
+                            on_change=lambda v, eid=e.id: AppState.set_lore_always_on(eid, v),
+                            label="Always",
+                            size="1",
+                        ),
+                        rx.button(
+                            "Use",
+                            size="1",
+                            on_click=lambda _=None, eid=e.id: AppState.toggle_lore_selection(eid),
+                        ),
                         rx.button(
                             "Delete",
                             color_scheme="red",
@@ -168,10 +179,24 @@ def lorebook_panel() -> rx.Component:
                             on_click=lambda: AppState.delete_lore(e.id),
                         ),
                     ),
+                    rx.hstack(
+                        rx.input(
+                            placeholder="keys (comma-separated)",
+                            value=AppState.lore_keys_input[e.id],
+                            on_change=lambda v, eid=e.id: AppState.set_lore_keys_input(eid, v),
+                            width="60%",
+                        ),
+                        rx.button(
+                            "Save Keys",
+                            size="1",
+                            on_click=lambda _=None, eid=e.id: AppState.save_lore_keys(eid),
+                        ),
+                        justify="end",
+                    ),
                     rx.text(e.summary),
                     p=2,
                     border="1px solid",
-                    border_color="gray.100",
+                    border_color="#2a2f3a",
                     border_radius="6px",
                 ),
             ),
@@ -203,35 +228,39 @@ def lorebook_panel() -> rx.Component:
         ),
         p=3,
         border="1px solid",
-        border_color="gray.200",
+        border_color="#374151",
         border_radius="8px",
     )
 
 
 def top_menu() -> rx.Component:
-    return rx.hstack(
-        rx.heading("Storycraft", size="7"),
-        rx.spacer(),
-        rx.text("Story:"),
-        rx.select(
-            AppState.story_options,
-            value=AppState.current_story,
-            on_change=AppState.switch_story,
-            width="220px",
+    return rx.box(
+        rx.hstack(
+            rx.heading("Storycraft", size="7"),
+            rx.spacer(),
+            rx.text("Story:"),
+            rx.select(
+                AppState.story_options,
+                value=AppState.current_story,
+                on_change=AppState.switch_story,
+                width="220px",
+            ),
+            rx.button("New Story", on_click=AppState.create_story, size="2", color_scheme="purple", variant="soft"),
+            rx.divider(orientation="vertical", mx=2),
+            rx.button("Story & Lore", variant="soft", color_scheme="purple", on_click=AppState.open_meta_panel, size="2"),
+            rx.button("Branches", variant="soft", color_scheme="purple", on_click=AppState.open_branches, size="2"),
+            rx.button("Settings", variant="soft", color_scheme="purple", on_click=AppState.open_settings, size="2"),
+            rx.spacer(),
+            rx.badge(
+                rx.cond(AppState.backend_ok, "API: OK", "API: ERR"),
+                color_scheme=rx.cond(AppState.backend_ok, "green", "red"),
+            ),
+            rx.tooltip(rx.icon("info"), content=AppState.backend_msg),
+            align="center",
+            py=3,
         ),
-        rx.button("New Story", on_click=AppState.create_story, size="2"),
-        rx.divider(orientation="vertical", mx=2),
-        rx.button("Story & Lore", variant="soft", on_click=AppState.open_meta_panel, size="2"),
-        rx.button("Branches", variant="soft", on_click=AppState.open_branches, size="2"),
-        rx.button("Settings", variant="soft", on_click=AppState.open_settings, size="2"),
-        rx.spacer(),
-        rx.badge(
-            rx.cond(AppState.backend_ok, "API: OK", "API: ERR"),
-            color_scheme=rx.cond(AppState.backend_ok, "green", "red"),
-        ),
-        rx.tooltip(rx.icon("info"), content=AppState.backend_msg),
-        align="center",
-        py=3,
+        class_name="app-topbar",
+        px=4,
     )
 
 
@@ -252,6 +281,15 @@ def generation_settings_panel() -> rx.Component:
                 rx.text("Max tokens"),
                 rx.input(type="number", value=AppState.max_tokens, on_change=AppState.update_max_tokens, step=64, width="110px"),
             ),
+            rx.box(
+                rx.text("System Prompt", weight="bold"),
+                rx.text_area(
+                    value=AppState.system_prompt,
+                    on_change=AppState.set_system_prompt,
+                    rows="6",
+                    placeholder="Guide the model's style, voice, and constraints...",
+                ),
+            ),
             rx.hstack(
                 rx.switch(checked=AppState.include_context, on_change=AppState.set_include_context, label="Include context"),
             ),
@@ -260,7 +298,7 @@ def generation_settings_panel() -> rx.Component:
         ),
         p=3,
         border="1px solid",
-        border_color="gray.200",
+        border_color="#374151",
         border_radius="8px",
     )
 
@@ -314,7 +352,7 @@ def branches_panel() -> rx.Component:
                         ),
                         p=2,
                         border="1px solid",
-                        border_color="gray.100",
+                        border_color="#2a2f3a",
                         border_radius="6px",
                     ),
                 ),
@@ -356,7 +394,7 @@ def branches_panel() -> rx.Component:
                         ),
                         p=2,
                         border="1px solid",
-                        border_color="gray.100",
+                        border_color="#2a2f3a",
                         border_radius="6px",
                     ),
                 ),
@@ -365,7 +403,7 @@ def branches_panel() -> rx.Component:
             ),
             p=2,
             border="1px solid",
-            border_color="gray.200",
+            border_color="#374151",
             border_radius="8px",
             mt=3,
         ),
@@ -393,7 +431,7 @@ def branches_panel() -> rx.Component:
                         ),
                         p=2,
                         border="1px solid",
-                        border_color="gray.100",
+                        border_color="#2a2f3a",
                         border_radius="6px",
                     ),
                 ),
@@ -402,7 +440,7 @@ def branches_panel() -> rx.Component:
             ),
             p=2,
             border="1px solid",
-            border_color="gray.200",
+            border_color="#374151",
             border_radius="8px",
             mt=3,
         ),
@@ -429,10 +467,14 @@ def lorebook_overlay() -> rx.Component:
                         style={"height": "70vh"},
                     ),
                     p=4,
-                    bg="white",
+                    class_name="panel-dark",
+                    bg="#0f131a",
+                    color="#e5e7eb",
                     width=["95vw", "90vw", "900px"],
                     border_radius="10px",
                     box_shadow="lg",
+                    border="1px solid",
+                    border_color="#1f2937",
                 )
             ),
             # Backdrop
@@ -441,7 +483,7 @@ def lorebook_overlay() -> rx.Component:
             left="0",
             right="0",
             bottom="0",
-            bg="rgba(0,0,0,0.35)",
+            bg="rgba(0,0,0,0.6)",
             z_index=1000,
         ),
         None,
@@ -498,11 +540,15 @@ def branches_overlay() -> rx.Component:
                     style={"height": "75vh"},
                 ),
                 p=4,
-                bg="white",
+                class_name="panel-dark",
+                bg="#0f131a",
+                color="#e5e7eb",
                 width=["95vw", "90vw", "900px"],
                 max_width="900px",
                 border_radius="10px 0 0 10px",
                 box_shadow="lg",
+                border="1px solid",
+                border_color="#1f2937",
                 position="fixed",
                 top="0",
                 right="0",
@@ -515,7 +561,7 @@ def branches_overlay() -> rx.Component:
             left="0",
             right="0",
             bottom="0",
-            bg="rgba(0,0,0,0.35)",
+            bg="rgba(0,0,0,0.6)",
             z_index=1000,
         ),
         None,
@@ -535,10 +581,14 @@ def settings_overlay() -> rx.Component:
                 ),
                 generation_settings_panel(),
                 p=4,
-                bg="white",
+                class_name="panel-dark",
+                bg="#0f131a",
+                color="#e5e7eb",
                 width=["90vw", "560px"],
                 border_radius="10px 0 0 10px",
                 box_shadow="lg",
+                border="1px solid",
+                border_color="#1f2937",
                 position="fixed",
                 top="0",
                 right="0",
@@ -550,7 +600,7 @@ def settings_overlay() -> rx.Component:
             left="0",
             right="0",
             bottom="0",
-            bg="rgba(0,0,0,0.35)",
+            bg="rgba(0,0,0,0.6)",
             z_index=1000,
         ),
         None,
@@ -574,11 +624,15 @@ def meta_overlay() -> rx.Component:
                     style={"height": "75vh"},
                 ),
                 p=4,
-                bg="white",
+                class_name="panel-dark",
+                bg="#0f131a",
+                color="#e5e7eb",
                 width=["95vw", "90vw", "900px"],
                 max_width="900px",
                 border_radius="10px 0 0 10px",
                 box_shadow="lg",
+                border="1px solid",
+                border_color="#1f2937",
                 position="fixed",
                 top="0",
                 right="0",
@@ -590,7 +644,7 @@ def meta_overlay() -> rx.Component:
             left="0",
             right="0",
             bottom="0",
-            bg="rgba(0,0,0,0.35)",
+            bg="rgba(0,0,0,0.6)",
             z_index=1000,
         ),
         None,
@@ -628,14 +682,15 @@ def index() -> rx.Component:
     )
 
     return rx.container(
+        base_styles(),
         top_menu(),
         rx.hstack(
             # Main editor column
             rx.box(
                 rx.vstack(
                     rx.text("Draft"),
-                    # Integrated chunk editors inside the main draft area
-                    rx.scroll_area(
+                    # Integrated chunk editors; no inner scroll, let page scroll
+                    rx.box(
                         rx.vstack(
                             rx.foreach(
                                 AppState.chunk_edit_list,
@@ -644,11 +699,23 @@ def index() -> rx.Component:
                                     rx.text_area(
                                         value=it.content,
                                         on_change=lambda v, sid=it.id: AppState.set_chunk_edit(sid, v),
-                                        rows="5",
+                                        rows="1",
+                                        auto_height=True,
+                                        min_rows=1,
+                                        max_rows=1000,
                                         on_blur=lambda sid=it.id: AppState.save_chunk(sid),
                                         id=f"chunk-{it.id}",
                                         data_chunk_id=it.id,
                                         width="100%",
+                                        wrap="soft",
+                                        style={
+                                            "overflow": "hidden",
+                                            "overflowY": "hidden",
+                                            "maxHeight": "none",
+                                            "resize": "none",
+                                            "whiteSpace": "pre-wrap",
+                                            "wordWrap": "break-word",
+                                        },
                                     ),
                                     # Top-right overlay actions
                                     rx.hstack(
@@ -699,9 +766,6 @@ def index() -> rx.Component:
                             align_items="stretch",
                             id="draft-chunks",
                         ),
-                        type="always",
-                        scrollbars="vertical",
-                        style={"height": "44vh"},
                     ),
                     # New user chunk composer at the end of the draft
                     rx.hstack(
@@ -711,7 +775,19 @@ def index() -> rx.Component:
                                 placeholder="Write the next part here…",
                                 value=AppState.new_chunk_text,
                                 on_change=AppState.set_new_chunk_text,
-                                rows="5",
+                                rows="1",
+                                auto_height=True,
+                                min_rows=1,
+                                max_rows=1000,
+                                wrap="soft",
+                                style={
+                                    "overflow": "hidden",
+                                    "overflowY": "hidden",
+                                    "maxHeight": "none",
+                                    "resize": "none",
+                                    "whiteSpace": "pre-wrap",
+                                    "wordWrap": "break-word",
+                                },
                             ),
                             width="84%",
                         ),
@@ -731,8 +807,11 @@ def index() -> rx.Component:
                         align="start",
                         mb=2,
                         style={"boxShadow": "inset 3px 0 0 #4ADE80"},
+                        id="composer",
                         data_row_id="composer",
                     ),
+                    # Hidden trigger to signal content changes for auto-expansion
+                    rx.box(id="expand-trigger", data_version=AppState.joined_chunks_text, display="none"),
                     rx.text("Instruction (optional)"),
                     rx.text_area(
                         placeholder="e.g., continue with a tense cliffhanger...",
@@ -837,16 +916,20 @@ def index() -> rx.Component:
                 const start = ta.selectionStart, end = ta.selectionEnd;
                 const t = setTimeout(()=>{
                   try {
+                    // Ensure auto size before blur
+                    try { ta.style.maxHeight = 'none'; ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight)+'px'; } catch(_){ }
                     ta.dataset.autosaving = '1';
                     ta.blur();
                     setTimeout(()=>{
                       if(document.body.contains(ta)){
                         try { ta.focus(); ta.setSelectionRange(start,end); } catch(_){ try { ta.focus(); } catch(_){} }
+                        // Ensure auto size after refocus
+                        try { ta.style.maxHeight = 'none'; ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight)+'px'; } catch(_){ }
                       }
                       delete ta.dataset.autosaving;
                     }, 40);
                   } catch(_){ }
-                }, 800);
+                }, 450);
                 timers.set(ta, t);
               }
               document.addEventListener('input', function(e){
@@ -856,10 +939,109 @@ def index() -> rx.Component:
                 if(!container || !container.contains(ta)) return;
                 schedule(ta);
               }, true);
+              // Flush pending edits on unload/visibility change by forcing blur
+              function flush(){
+                try {
+                  const container = document.getElementById('draft-chunks');
+                  if(!container) return;
+                  container.querySelectorAll('textarea').forEach(function(ta){
+                    try { ta.blur(); } catch(_){ }
+                  });
+                } catch(_){ }
+              }
+              window.addEventListener('beforeunload', flush, {capture: true});
+              window.addEventListener('pagehide', flush, {capture: true});
+              document.addEventListener('visibilitychange', function(){ if(document.hidden){ flush(); } }, true);
             })();
             """
         ),
+        rx.script(
+            """
+            (function(){
+              function autoExpand(ta){
+                if(!ta) return;
+                try {
+                  ta.style.overflow = 'hidden';
+                  ta.style.resize = 'none';
+                  ta.style.maxHeight = 'none';
+                  ta.style.height = 'auto';
+                  ta.style.height = (ta.scrollHeight) + 'px';
+                } catch(_){ }
+              }
+              function expandAll(){
+                try {
+                  document.querySelectorAll('#draft-chunks textarea, #composer textarea').forEach(function(ta){
+                    autoExpand(ta);
+                    try { ta.dispatchEvent(new Event('input', { bubbles: true })); } catch(_){ }
+                  });
+                } catch(_){ }
+              }
+              function scheduleBurst(){
+                expandAll();
+                try { requestAnimationFrame(expandAll); } catch(_){ }
+                setTimeout(expandAll, 50);
+                setTimeout(expandAll, 200);
+                setTimeout(expandAll, 600);
+                setTimeout(expandAll, 1200);
+              }
+              document.addEventListener('input', function(e){
+                const ta = e.target;
+                if(!ta || ta.tagName !== 'TEXTAREA') return;
+                autoExpand(ta);
+              }, true);
+              document.addEventListener('focus', function(e){
+                const ta = e.target;
+                if(!ta || ta.tagName !== 'TEXTAREA') return;
+                autoExpand(ta);
+              }, true);
+              const observer = new MutationObserver(function(){
+                scheduleBurst();
+              });
+              observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+              const trig = document.getElementById('expand-trigger');
+              if(trig){
+                const attrObserver = new MutationObserver(function(){
+                  scheduleBurst();
+                });
+                attrObserver.observe(trig, { attributes: true, attributeFilter: ['data-version'] });
+              }
+              window.addEventListener('load', scheduleBurst);
+              document.addEventListener('DOMContentLoaded', scheduleBurst);
+              window.addEventListener('resize', scheduleBurst);
+              document.addEventListener('visibilitychange', function(){ if(!document.hidden){ scheduleBurst(); } });
+            })();
+            """
+        ),
+        rx.html("""
+            <style>
+            .rt-TextAreaRoot textarea { max-height: none !important; overflow-y: hidden !important; }
+            textarea { overflow-y: hidden !important; }
+            .panel-dark { background-color: #0f131a; color: #e5e7eb; }
+            .panel-dark h1, .panel-dark h2, .panel-dark h3, .panel-dark h4, .panel-dark h5, .panel-dark h6 { color: #f3f4f6; }
+            .panel-dark input, .panel-dark textarea, .panel-dark select { background-color: #111827 !important; color: #e5e7eb !important; border-color: #374151 !important; }
+            .panel-dark .rt-TextAreaRoot textarea { background-color: #111827 !important; color: #e5e7eb !important; border-color: #374151 !important; }
+            .panel-dark .rt-SelectTrigger, .panel-dark .rt-InputRoot { background-color: #111827 !important; color: #e5e7eb !important; border-color: #374151 !important; }
+            .panel-dark .rt-BadgeRoot { background-color: #1f2937 !important; color: #e5e7eb !important; }
+            .panel-dark .rt-ButtonRoot[data-variant="soft"] { background-color: #1f2937; color: #e5e7eb; }
+            .panel-dark .rt-ButtonRoot:hover { filter: brightness(1.1); }
+            </style>
+        """),
         # Icons are always visible now; no reveal script needed
         on_mount=[AppState.load_state, AppState.load_lore, AppState.reload_branch, AppState.probe_backend],
         py=4,
+    )
+def base_styles() -> rx.Component:
+    return rx.html(
+        """
+        <style>
+          html, body { background-color: #0f131a; color: #e5e7eb; }
+          a { color: #a78bfa; }
+          .app-topbar { background-color: #111827; border-bottom: 1px solid #1f2937; position: sticky; top: 0; z-index: 20; }
+          .app-topbar .rt-ButtonRoot[data-variant="soft"] { background-color: rgba(147, 51, 234, 0.15); color: #c4b5fd; }
+          .app-topbar .rt-ButtonRoot[data-variant="soft"]:hover { background-color: rgba(147, 51, 234, 0.25); }
+          /* Inputs general dark */
+          input, textarea, select { background-color: #111827; color: #e5e7eb; border-color: #374151; }
+          .rt-InputRoot, .rt-SelectTrigger, .rt-TextAreaRoot textarea { background-color: #111827; color: #e5e7eb; border-color: #374151; }
+        </style>
+        """
     )

@@ -1,1 +1,15 @@
-{}
+{
+  "6c6a8b27afa14e67963589e95c3737ea": {
+    "id": "6c6a8b27afa14e67963589e95c3737ea",
+    "name": "Laura",
+    "kind": "Character",
+    "summary": "Laura is a red haired woman",
+    "tags": [],
+    "keys": [
+      "laura",
+      "red",
+      "woman"
+    ],
+    "always_on": true
+  }
+}

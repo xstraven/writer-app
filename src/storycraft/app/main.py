@@ -58,8 +58,8 @@ async def health() -> HealthResponse:
 
 
 @app.get("/api/lorebook", response_model=list[LoreEntry])
-async def list_lore() -> list[LoreEntry]:
-    return store.list()
+async def list_lore(story: str) -> list[LoreEntry]:
+    return store.list(story)
 
 
 @app.post("/api/lorebook", response_model=LoreEntry)
@@ -93,14 +93,14 @@ async def continue_endpoint(req: ContinueRequest) -> ContinueResponse:
     mem: MemoryState | None = None
     if req.use_memory and req.draft_text.strip():
         mem = await extract_memory_from_text(text=req.draft_text, model=req.model)
-    # Include optional lorebook entries if provided.
-    lore_items = None
-    if getattr(req, "lore_ids", None):
-        lore_items = []
-        for _id in req.lore_ids or []:
-            entry = store.get(_id)
-            if entry:
-                lore_items.append(entry)
+    # Select lorebook entries: union of explicit IDs + auto by keys + always_on.
+    lore_items = []
+    explicit_ids = set(req.lore_ids or [])
+    # Build selection text from draft or history (prefer draft).
+    selection_text = (req.draft_text or "").strip() or ""
+    if not selection_text:
+        # Fallback to history gathered below if draft empty; else leave blank.
+        selection_text = ""
 
     # If a story id is provided, pass the active branch text as history to the prompt.
     history_text = ""
@@ -110,6 +110,30 @@ async def continue_endpoint(req: ContinueRequest) -> ContinueResponse:
             history_text = snippet_store.build_text(path)
         except Exception:
             history_text = ""
+        if not selection_text:
+            selection_text = history_text or ""
+    # Auto-select lore: include any entry with always_on or key match (scoped to story).
+    try:
+        text_lower = selection_text.lower()[-4000:]
+        # Only consider lore for the current story when provided
+        lore_source = store.list(req.story) if req.story else []
+        for entry in lore_source:
+            if entry.id in explicit_ids:
+                lore_items.append(entry)
+                continue
+            if getattr(entry, "always_on", False):
+                lore_items.append(entry)
+                continue
+            keys = [k.strip().lower() for k in getattr(entry, "keys", []) if k and k.strip()]
+            if keys and any(k in text_lower for k in keys):
+                lore_items.append(entry)
+    except Exception:
+        # On any failure, fall back to explicit-only
+        if not lore_items and explicit_ids:
+            for _id in explicit_ids:
+                entry = store.get(_id)
+                if entry:
+                    lore_items.append(entry)
 
     result = await continue_story(
         draft_text=req.draft_text,
@@ -121,6 +145,7 @@ async def continue_endpoint(req: ContinueRequest) -> ContinueResponse:
         temperature=req.temperature,
         history_text=history_text,
         lore_items=lore_items,
+        system_prompt=req.system_prompt,
     )
     # Optional persistence into DuckDB if a story is provided.
     try:

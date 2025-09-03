@@ -54,35 +54,42 @@ class PromptBuilder:
         return self
 
     def build_messages(self) -> List[dict]:
-        """Return OpenRouter-compatible chat messages list."""
-        user_parts: List[str] = []
-        if self._instruction:
-            user_parts.append(f"Instructions: {self._instruction}")
+        """Return OpenRouter-compatible chat messages list.
 
+        Three-part structure:
+        1) system: app/user-configurable system prompt
+        2) user: current story context (prefer draft if provided, else history)
+        3) user: meta section with story description, generation prompt, selected lore, and optional memory
+        """
+        # Part 2: story context
+        story_text = (self._draft_text or self._history_text).strip()
+        story_msg = "[Story]\n" + story_text if story_text else ""
+
+        # Part 3: meta + prompt + lore (+ optional memory)
+        meta_parts: List[str] = []
+        # Story description from context summary
+        if self._context and getattr(self._context, "summary", "").strip():
+            meta_parts.append("[Story Description]\n" + self._context.summary.strip())
+        # Prompt for generation
+        if self._instruction:
+            meta_parts.append("[Prompt]\n" + self._instruction)
+        # Selected lorebook entries
         lore_block = _format_lore(self._lore)
         if lore_block:
-            user_parts.append(lore_block)
-
+            meta_parts.append(lore_block)
+        # Optional memory extraction to aid continuity
         mem_block = _format_memory(self._memory)
         if mem_block:
-            user_parts.append(mem_block)
+            meta_parts.append(mem_block)
 
-        ctx_block = _format_context(self._context)
-        if ctx_block:
-            user_parts.append(ctx_block)
+        meta_msg = "\n\n".join(meta_parts).strip()
 
-        if self._history_text:
-            user_parts.append("[History]\n" + self._history_text)
-
-        # The draft section is what the model should explicitly continue from.
-        if self._draft_text:
-            user_parts.append("[Draft]\n" + self._draft_text)
-
-        user_content = "\n\n".join(user_parts).strip()
-        return [
-            {"role": "system", "content": self._system},
-            {"role": "user", "content": user_content},
-        ]
+        messages: List[dict] = [{"role": "system", "content": self._system}]
+        if story_msg:
+            messages.append({"role": "user", "content": story_msg})
+        if meta_msg:
+            messages.append({"role": "user", "content": meta_msg})
+        return messages
 
 
 def _format_memory(mem: Optional[MemoryState]) -> str:
@@ -130,4 +137,3 @@ def _format_lore(items: Optional[List[LoreEntry]]) -> str:
         tag_text = f" ({', '.join(it.tags)})" if it.tags else ""
         lines.append(f"- {it.name} [{it.kind}{tag_text}]: {it.summary}")
     return "\n".join(lines)
-

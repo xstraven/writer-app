@@ -100,9 +100,10 @@ async def continue_story(
     # New optional fields for future enrichment
     history_text: str = "",
     lore_items: Optional[List[LoreEntry]] = None,
+    system_prompt: Optional[str] = None,
 ) -> Dict[str, str]:
     client = OpenRouterClient()
-    sys = CONTINUE_SYSTEM
+    sys = system_prompt.strip() if system_prompt else CONTINUE_SYSTEM
     if mem:
         sys += "\nUse the provided Memory to maintain continuity."
     if context:

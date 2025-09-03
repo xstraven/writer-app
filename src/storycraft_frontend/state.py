@@ -25,10 +25,13 @@ class MemoryState(rx.Base):
 
 class LoreEntry(rx.Base):
     id: str
+    story: str
     name: str
     kind: str
     summary: str
     tags: list[str] = []
+    keys: list[str] = []
+    always_on: bool = False
 
 
 class ContextItem(rx.Base):
@@ -78,8 +81,16 @@ class AppState(rx.State):
     model: str = "openrouter/auto"
     temperature: float = 0.7
     max_tokens: int = 512
+    # Advanced: system prompt override for LLM
+    system_prompt: str = (
+        "You are an expert creative writing assistant. Continue the user's story in the same voice,"
+        " tone, and perspective. Always preserve established canon, character continuity, and"
+        " world-building details. If given instructions, apply them elegantly."
+    )
 
     lore: list[LoreEntry] = []
+    selected_lore_ids: list[str] = []
+    lore_keys_input: dict[str, str] = {}
     memory: MemoryState = MemoryState()
     context: ContextState = ContextState()
     include_context: bool = True
@@ -155,8 +166,8 @@ class AppState(rx.State):
             "max_tokens": self.max_tokens,
             "include_context": self.include_context,
             "context": self._context_payload(),
-            "generations": list(self.generations),
-            "gen_index": int(self.gen_index),
+            "system_prompt": self.system_prompt,
+            "selected_lore_ids": list(self.selected_lore_ids),
         }
 
     def _apply_snapshot(self, data: dict):
@@ -165,6 +176,8 @@ class AppState(rx.State):
         self.model = data.get("model") or self.model
         self.temperature = float(data.get("temperature", self.temperature))
         self.max_tokens = int(data.get("max_tokens", self.max_tokens))
+        self.system_prompt = data.get("system_prompt") or self.system_prompt
+        self.selected_lore_ids = list(data.get("selected_lore_ids", []))
         self.include_context = bool(data.get("include_context", self.include_context))
         ctx = data.get("context") or {}
         self.context = ContextState(
@@ -174,7 +187,13 @@ class AppState(rx.State):
         )
         # Branch state is reloaded from server separately.
 
-    def switch_story(self, value: str):
+    async def switch_story(self, value: str):
+        # Best-effort: persist any unsaved chunk edits before switching stories.
+        try:
+            await self.save_all_chunks()
+        except Exception:
+            # Non-fatal; continue switching stories even if saves fail.
+            pass
         # Save current under existing key
         self.stories[self.current_story] = self._snapshot_state()
         self.current_story = value
@@ -185,8 +204,18 @@ class AppState(rx.State):
             self.draft_text = ""
             self.instruction = ""
             self.continuation = ""
+        # Clear branch-related UI and reload for the new story
+        self.branch_path = []
+        self.chunk_edit_list = []
+        self.joined_chunks_text = ""
+        self.head_id = None
+        self.last_parent_id = None
+        self.last_parent_active_child_id = None
+        self.last_parent_children = []
+        await self.reload_branch()
+        await self.load_lore()
 
-    def create_story(self):
+    async def create_story(self):
         base = "Untitled"
         i = 1
         existing = set(self.story_options)
@@ -195,14 +224,22 @@ class AppState(rx.State):
             i += 1
             name = f"{base} {i}"
         self.story_options = list(self.story_options) + [name]
-        self.switch_story(name)
+        await self.switch_story(name)
 
     async def load_lore(self):
         async with httpx.AsyncClient() as client:
-            r = await client.get(f"{API_BASE}/api/lorebook")
+            r = await client.get(f"{API_BASE}/api/lorebook", params={"story": self.current_story})
             r.raise_for_status()
             data = r.json()
         self.lore = [LoreEntry(**x) for x in data]
+        # Initialize keys editor mapping
+        mapping: dict[str, str] = {}
+        for it in self.lore:
+            try:
+                mapping[it.id] = ", ".join(list(it.keys)) if getattr(it, "keys", []) else ""
+            except Exception:
+                mapping[it.id] = ""
+        self.lore_keys_input = mapping
 
     async def probe_backend(self):
         try:
@@ -253,6 +290,7 @@ class AppState(rx.State):
         self.model = data.get("model") or self.model
         self.temperature = float(data.get("temperature", self.temperature))
         self.max_tokens = int(data.get("max_tokens", self.max_tokens))
+        self.system_prompt = data.get("system_prompt") or self.system_prompt
         self.include_context = bool(data.get("include_context", self.include_context))
         ctx = data.get("context") or {}
         self.context = ContextState(
@@ -269,6 +307,7 @@ class AppState(rx.State):
             "model": self.model,
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
+            "system_prompt": self.system_prompt,
             "include_context": self.include_context,
             "context": self._context_payload(),
             # generations/gen_index are deprecated in favor of server-backed branches
@@ -418,6 +457,32 @@ class AppState(rx.State):
         self.branch_path = updated_path
         # joined_chunks_text already tracks edits as you type; keep it in sync
         self.joined_chunks_text = "\n\n".join([e.content for e in self.chunk_edit_list])
+
+    async def save_all_chunks(self):
+        """Persist all edited chunks that differ from server path.
+
+        Called before potentially disruptive actions (e.g., switching stories)
+        to reduce the chance of losing recent edits if blur-based autosave
+        hasn't fired yet.
+        """
+        if not self.branch_path or not self.chunk_edit_list:
+            return
+        # Build lookup for current server path
+        path_map = {s.id: s for s in self.branch_path}
+        # For each edited chunk, save if content changed
+        async with httpx.AsyncClient() as client:
+            for e in self.chunk_edit_list:
+                s = path_map.get(e.id)
+                if not s:
+                    continue
+                if e.content != s.content:
+                    payload = {"content": e.content}
+                    try:
+                        r = await client.put(f"{API_BASE}/api/snippets/{e.id}", json=payload)
+                        r.raise_for_status()
+                    except Exception:
+                        # Continue best-effort; individual failures shouldn't block others
+                        pass
 
     async def commit_entire_draft_as_root(self):
         content = (self.draft_text or "").strip()
@@ -622,18 +687,68 @@ class AppState(rx.State):
         self.show_confirm_flatten = False
 
     async def add_lore(self, name: str, kind: str, summary: str):
-        payload = {"name": name, "kind": kind, "summary": summary, "tags": []}
+        payload = {"story": self.current_story, "name": name, "kind": kind, "summary": summary, "tags": []}
         async with httpx.AsyncClient() as client:
             r = await client.post(f"{API_BASE}/api/lorebook", json=payload)
             r.raise_for_status()
             data = r.json()
-        self.lore.append(LoreEntry(**data))
+        entry = LoreEntry(**data)
+        self.lore.append(entry)
+        self.lore_keys_input[entry.id] = ""
 
     async def delete_lore(self, entry_id: str):
         async with httpx.AsyncClient() as client:
             r = await client.delete(f"{API_BASE}/api/lorebook/{entry_id}")
             r.raise_for_status()
         self.lore = [x for x in self.lore if x.id != entry_id]
+        if entry_id in self.lore_keys_input:
+            m = dict(self.lore_keys_input)
+            m.pop(entry_id, None)
+            self.lore_keys_input = m
+
+    async def set_lore_always_on(self, entry_id: str, value: bool):
+        async with httpx.AsyncClient() as client:
+            r = await client.put(
+                f"{API_BASE}/api/lorebook/{entry_id}", json={"always_on": bool(value)}
+            )
+            r.raise_for_status()
+            data = r.json()
+        # Update local list
+        updated = LoreEntry(**data)
+        self.lore = [updated if x.id == entry_id else x for x in self.lore]
+
+    def _normalize_entry_id(self, entry_id) -> str:
+        try:
+            if isinstance(entry_id, dict):
+                for k in ("id", "value"):
+                    v = entry_id.get(k)
+                    if isinstance(v, str):
+                        return v
+                return str(entry_id)
+            return str(entry_id)
+        except Exception:
+            return str(entry_id)
+
+    def set_lore_keys_input(self, entry_id: str, value: str):
+        eid = self._normalize_entry_id(entry_id)
+        m = dict(self.lore_keys_input)
+        m[eid] = value
+        self.lore_keys_input = m
+
+    async def save_lore_keys(self, entry_id: str):
+        eid = self._normalize_entry_id(entry_id)
+        raw = self.lore_keys_input.get(eid, "")
+        keys: list[str] = []
+        for part in (raw or "").split(','):
+            k = part.strip()
+            if k:
+                keys.append(k)
+        async with httpx.AsyncClient() as client:
+            r = await client.put(f"{API_BASE}/api/lorebook/{eid}", json={"keys": keys})
+            r.raise_for_status()
+            data = r.json()
+        updated = LoreEntry(**data)
+        self.lore = [updated if x.id == eid else x for x in self.lore]
 
     async def extract_memory(self):
         if not self.draft_text.strip():
@@ -725,6 +840,8 @@ class AppState(rx.State):
             "use_memory": True,
             "use_context": self.include_context,
             "story": self.current_story,
+            "system_prompt": self.system_prompt,
+            "lore_ids": list(self.selected_lore_ids),
         }
         if self.include_context:
             payload["context"] = self._context_payload()
@@ -750,3 +867,15 @@ class AppState(rx.State):
         self.new_lore_name = ""
         self.new_lore_kind = ""
         self.new_lore_summary = ""
+
+    # Lore selection for generation
+    def toggle_lore_selection(self, entry_id: str):
+        s = set(self.selected_lore_ids)
+        if entry_id in s:
+            s.remove(entry_id)
+        else:
+            s.add(entry_id)
+        self.selected_lore_ids = list(s)
+
+    def set_system_prompt(self, value: str):
+        self.system_prompt = value

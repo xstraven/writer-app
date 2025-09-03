@@ -3,11 +3,12 @@ from __future__ import annotations
 import reflex as rx
 
 from ..state import AppState
-from .index import branches_panel, generation_settings_panel
+from .index import branches_panel, generation_settings_panel, base_styles
 
 
 def configure() -> rx.Component:
     return rx.container(
+        base_styles(),
         rx.hstack(
             rx.heading("Configure", size="7"),
             rx.spacer(),
@@ -27,8 +28,11 @@ def configure() -> rx.Component:
                     style={"height": "60vh"},
                 ),
                 p=2,
+                class_name="panel-dark",
+                bg="#0f131a",
+                color="#e5e7eb",
                 border="1px solid",
-                border_color="gray.200",
+                border_color="#1f2937",
                 border_radius="8px",
             ),
             rx.box(
@@ -37,8 +41,11 @@ def configure() -> rx.Component:
                 rx.divider(),
                 generation_settings_panel(),
                 p=2,
+                class_name="panel-dark",
+                bg="#0f131a",
+                color="#e5e7eb",
                 border="1px solid",
-                border_color="gray.200",
+                border_color="#1f2937",
                 border_radius="8px",
             ),
             spacing="4",

@@ -7,24 +7,35 @@ from pydantic import BaseModel, Field
 
 class LoreEntry(BaseModel):
     id: str
+    story: str
     name: str
     kind: str = Field(description="e.g., character, location, item, faction")
     summary: str
     tags: List[str] = Field(default_factory=list)
+    # New: keyword triggers for auto-inclusion; case-insensitive substring match.
+    keys: List[str] = Field(default_factory=list)
+    # New: always include this entry in prompts when true.
+    always_on: bool = False
 
 
 class LoreEntryCreate(BaseModel):
+    story: str
     name: str
     kind: str
     summary: str
     tags: List[str] = Field(default_factory=list)
+    keys: List[str] = Field(default_factory=list)
+    always_on: bool = False
 
 
 class LoreEntryUpdate(BaseModel):
+    # story is immutable once created; do not allow update to move entries across stories
     name: Optional[str] = None
     kind: Optional[str] = None
     summary: Optional[str] = None
     tags: Optional[List[str]] = None
+    keys: Optional[List[str]] = None
+    always_on: Optional[bool] = None
 
 
 class MemoryItem(BaseModel):
@@ -57,6 +68,8 @@ class ContinueRequest(BaseModel):
     model: Optional[str] = None
     use_memory: bool = True
     temperature: float = 0.7
+    # Optional override of the system prompt used for generation.
+    system_prompt: Optional[str] = None
     # Optional user/LLM-provided context to enrich the prompt.
     context: Optional[ContextState] = None
     use_context: bool = True
@@ -94,6 +107,7 @@ class AppPersistedState(BaseModel):
     model: Optional[str] = None
     temperature: float = 0.7
     max_tokens: int = 512
+    system_prompt: Optional[str] = None
     include_context: bool = True
     context: Optional[ContextState] = None
     generations: List[str] = Field(default_factory=list)
