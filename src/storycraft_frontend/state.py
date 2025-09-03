@@ -89,8 +89,11 @@ class AppState(rx.State):
     current_story: str = "Story One"
     stories: dict[str, dict] = {}
 
-    # UI: modal visibility
+    # UI: modal/drawer visibility
     show_lorebook: bool = False
+    show_branches: bool = False
+    show_settings: bool = False
+    show_meta_panel: bool = False
     backend_ok: bool = False
     backend_msg: str = ""
 
@@ -218,6 +221,26 @@ class AppState(rx.State):
 
     def close_lorebook(self):
         self.show_lorebook = False
+
+    # Drawers: branches & settings
+    def open_branches(self):
+        self.show_branches = True
+
+    def close_branches(self):
+        self.show_branches = False
+
+    def open_settings(self):
+        self.show_settings = True
+
+    def close_settings(self):
+        self.show_settings = False
+
+    # Panel: story/meta + lorebook
+    def open_meta_panel(self):
+        self.show_meta_panel = True
+
+    def close_meta_panel(self):
+        self.show_meta_panel = False
 
     async def load_state(self):
         async with httpx.AsyncClient() as client:

@@ -220,6 +220,10 @@ def top_menu() -> rx.Component:
             width="220px",
         ),
         rx.button("New Story", on_click=AppState.create_story, size="2"),
+        rx.divider(orientation="vertical", mx=2),
+        rx.button("Story & Lore", variant="soft", on_click=AppState.open_meta_panel, size="2"),
+        rx.button("Branches", variant="soft", on_click=AppState.open_branches, size="2"),
+        rx.button("Settings", variant="soft", on_click=AppState.open_settings, size="2"),
         rx.spacer(),
         rx.badge(
             rx.cond(AppState.backend_ok, "API: OK", "API: ERR"),
@@ -231,74 +235,178 @@ def top_menu() -> rx.Component:
     )
 
 
+def generation_settings_panel() -> rx.Component:
+    return rx.box(
+        rx.hstack(rx.heading("Generation Settings", size="5")),
+        rx.divider(),
+        rx.vstack(
+            rx.hstack(
+                rx.text("Model"),
+                rx.input(value=AppState.model, on_change=AppState.set_model, width="220px"),
+            ),
+            rx.hstack(
+                rx.text("Temperature"),
+                rx.input(type="number", value=AppState.temperature, on_change=AppState.update_temperature, step=0.1, width="110px"),
+            ),
+            rx.hstack(
+                rx.text("Max tokens"),
+                rx.input(type="number", value=AppState.max_tokens, on_change=AppState.update_max_tokens, step=64, width="110px"),
+            ),
+            rx.hstack(
+                rx.switch(checked=AppState.include_context, on_change=AppState.set_include_context, label="Include context"),
+            ),
+            spacing="2",
+            align_items="stretch",
+        ),
+        p=3,
+        border="1px solid",
+        border_color="gray.200",
+        border_radius="8px",
+    )
+
+
 def sidebar() -> rx.Component:
     return rx.vstack(
-        rx.box(
-            rx.hstack(rx.heading("Generation Settings", size="5")),
-            rx.divider(),
-            rx.vstack(
-                rx.hstack(
-                    rx.text("Model"),
-                    rx.input(value=AppState.model, on_change=AppState.set_model, width="220px"),
-                ),
-                rx.hstack(
-                    rx.text("Temperature"),
-                    rx.input(type="number", value=AppState.temperature, on_change=AppState.update_temperature, step=0.1, width="110px"),
-                ),
-                rx.hstack(
-                    rx.text("Max tokens"),
-                    rx.input(type="number", value=AppState.max_tokens, on_change=AppState.update_max_tokens, step=64, width="110px"),
-                ),
-                rx.hstack(
-                    rx.switch(checked=AppState.include_context, on_change=AppState.set_include_context, label="Include context"),
-                ),
-                spacing="2",
-                align_items="stretch",
-            ),
-            p=3,
-            border="1px solid",
-            border_color="gray.200",
-            border_radius="8px",
-        ),
+        # Generation settings moved to drawer; keep sidebar lean
 
-        rx.box(
-            rx.hstack(rx.heading("Meta", size="5")),
-            rx.divider(),
-            rx.text("Story Description"),
-            rx.text_area(
-                placeholder="What is this story about?",
-                value=AppState.context.summary,
-                on_change=AppState.set_context_summary,
-                rows="6",
-            ),
-            rx.hstack(
-                rx.button("Suggest from draft", size="2", on_click=AppState.suggest_context),
-                rx.button("Clear", size="2", color_scheme="gray", on_click=AppState.clear_context),
-                justify="start",
-            ),
-            p=3,
-            border="1px solid",
-            border_color="gray.200",
-            border_radius="8px",
-        ),
-
-        rx.box(
-            rx.hstack(
-                rx.heading("Lorebook", size="5"),
-                rx.spacer(),
-                rx.button("Manage", on_click=AppState.open_lorebook, size="2"),
-            ),
-            rx.text("Manage entries in the pop-out"),
-            p=3,
-            border="1px solid",
-            border_color="gray.200",
-            border_radius="8px",
-        ),
+        # Meta & Lore moved to panel; keep sidebar minimal
 
         spacing="4",
         align_items="stretch",
         width="360px",
         min_width="300px",
+    )
+
+
+def branches_panel() -> rx.Component:
+    return rx.box(
+        rx.hstack(rx.heading("Branch Choices", size="5")),
+        rx.text(
+            rx.cond(
+                AppState.last_parent_id.is_none(),
+                "No branching available yet",
+                "Alternatives for latest parent",
+            )
+        ),
+        rx.cond(
+            AppState.last_parent_id.is_none(),
+            rx.box(),
+            rx.vstack(
+                rx.foreach(
+                    AppState.last_parent_children,
+                    lambda it: rx.box(
+                        rx.hstack(
+                            rx.text(
+                                rx.cond(
+                                    it.id == AppState.last_parent_active_child_id,
+                                    "•",
+                                    "○",
+                                ),
+                                width="12px",
+                            ),
+                            rx.text(f"{it.kind}: {it.content[:80]}"),
+                            rx.spacer(),
+                            rx.button(
+                                "Activate",
+                                size="1",
+                                on_click=lambda it=it: AppState.choose_active_child(it.id),
+                            ),
+                        ),
+                        p=2,
+                        border="1px solid",
+                        border_color="gray.100",
+                        border_radius="6px",
+                    ),
+                ),
+                spacing="2",
+                align_items="stretch",
+            ),
+        ),
+        rx.box(
+            rx.hstack(rx.heading("Main Path Tree", size="5")),
+            rx.text("Parents with all children; activate any branch."),
+            rx.vstack(
+                rx.foreach(
+                    AppState.tree_rows,
+                    lambda row: rx.box(
+                        rx.text(f"Parent: {row.parent.kind.upper()} • {row.parent.id[:8]}"),
+                        rx.unordered_list(
+                            rx.foreach(
+                                row.children,
+                                lambda c: rx.list_item(
+                                    rx.hstack(
+                                        rx.text(
+                                            rx.cond(
+                                                row.parent.child_id == c.id,
+                                                "•",
+                                                "○",
+                                            ),
+                                            width="12px",
+                                        ),
+                                        rx.text(f"{c.kind}: {c.content[:80]}"),
+                                        rx.spacer(),
+                                        rx.button(
+                                            "Activate",
+                                            size="1",
+                                            on_click=lambda cid=c.id: AppState.choose_active_child(cid),
+                                        ),
+                                    )
+                                ),
+                            )
+                        ),
+                        p=2,
+                        border="1px solid",
+                        border_color="gray.100",
+                        border_radius="6px",
+                    ),
+                ),
+                spacing="3",
+                align_items="stretch",
+            ),
+            p=2,
+            border="1px solid",
+            border_color="gray.200",
+            border_radius="8px",
+            mt=3,
+        ),
+        rx.box(
+            rx.hstack(rx.heading("Branches", size="5")),
+            rx.hstack(
+                rx.input(
+                    placeholder="Branch name",
+                    value=AppState.branch_name_input,
+                    on_change=AppState.set_branch_name_input,
+                    width="240px",
+                ),
+                rx.button("Save current head", size="2", on_click=AppState.save_branch),
+            ),
+            rx.vstack(
+                rx.foreach(
+                    AppState.branches,
+                    lambda b: rx.box(
+                        rx.hstack(
+                            rx.text(b.name),
+                            rx.text(f"{b.head_id[:8]}", color="gray"),
+                            rx.spacer(),
+                            rx.button("Switch", size="1", on_click=lambda name=b.name: AppState.switch_branch(name)),
+                            rx.button("Delete", size="1", color_scheme="red", on_click=lambda name=b.name: AppState.delete_branch(name)),
+                        ),
+                        p=2,
+                        border="1px solid",
+                        border_color="gray.100",
+                        border_radius="6px",
+                    ),
+                ),
+                spacing="2",
+                align_items="stretch",
+            ),
+            p=2,
+            border="1px solid",
+            border_color="gray.200",
+            border_radius="8px",
+            mt=3,
+        ),
+        p=2,
     )
 
 
@@ -328,6 +436,155 @@ def lorebook_overlay() -> rx.Component:
                 )
             ),
             # Backdrop
+            position="fixed",
+            top="0",
+            left="0",
+            right="0",
+            bottom="0",
+            bg="rgba(0,0,0,0.35)",
+            z_index=1000,
+        ),
+        None,
+    )
+
+def meta_lore_panel() -> rx.Component:
+    return rx.box(
+        rx.box(
+            rx.hstack(rx.heading("Story Meta", size="5")),
+            rx.divider(),
+            rx.text("Story Description"),
+            rx.text_area(
+                placeholder="What is this story about?",
+                value=AppState.context.summary,
+                on_change=AppState.set_context_summary,
+                rows="6",
+            ),
+            rx.hstack(
+                rx.button("Suggest from draft", size="2", on_click=AppState.suggest_context),
+                rx.button("Clear", size="2", color_scheme="gray", on_click=AppState.clear_context),
+                justify="start",
+            ),
+            p=3,
+            border="1px solid",
+            border_color="gray.200",
+            border_radius="8px",
+            mb=3,
+        ),
+        rx.box(
+            rx.hstack(rx.heading("Lorebook", size="5"), justify="between"),
+            rx.divider(),
+            lorebook_panel(),
+            p=0,
+            border="none",
+        ),
+    )
+
+def branches_overlay() -> rx.Component:
+    return rx.cond(
+        AppState.show_branches,
+        rx.box(
+            # Drawer panel
+            rx.box(
+                rx.hstack(
+                    rx.heading("Branches", size="6"),
+                    rx.spacer(),
+                    rx.button("Close", on_click=AppState.close_branches, size="2", variant="soft"),
+                    mb=2,
+                ),
+                rx.scroll_area(
+                    branches_panel(),
+                    type="always",
+                    scrollbars="vertical",
+                    style={"height": "75vh"},
+                ),
+                p=4,
+                bg="white",
+                width=["95vw", "90vw", "900px"],
+                max_width="900px",
+                border_radius="10px 0 0 10px",
+                box_shadow="lg",
+                position="fixed",
+                top="0",
+                right="0",
+                bottom="0",
+                overflow="hidden",
+            ),
+            # Backdrop
+            position="fixed",
+            top="0",
+            left="0",
+            right="0",
+            bottom="0",
+            bg="rgba(0,0,0,0.35)",
+            z_index=1000,
+        ),
+        None,
+    )
+
+def settings_overlay() -> rx.Component:
+    return rx.cond(
+        AppState.show_settings,
+        rx.box(
+            # Drawer panel
+            rx.box(
+                rx.hstack(
+                    rx.heading("Generation Settings", size="6"),
+                    rx.spacer(),
+                    rx.button("Close", on_click=AppState.close_settings, size="2", variant="soft"),
+                    mb=2,
+                ),
+                generation_settings_panel(),
+                p=4,
+                bg="white",
+                width=["90vw", "560px"],
+                border_radius="10px 0 0 10px",
+                box_shadow="lg",
+                position="fixed",
+                top="0",
+                right="0",
+                bottom="0",
+            ),
+            # Backdrop
+            position="fixed",
+            top="0",
+            left="0",
+            right="0",
+            bottom="0",
+            bg="rgba(0,0,0,0.35)",
+            z_index=1000,
+        ),
+        None,
+    )
+
+def meta_overlay() -> rx.Component:
+    return rx.cond(
+        AppState.show_meta_panel,
+        rx.box(
+            rx.box(
+                rx.hstack(
+                    rx.heading("Story & Lore", size="6"),
+                    rx.spacer(),
+                    rx.button("Close", on_click=AppState.close_meta_panel, size="2", variant="soft"),
+                    mb=2,
+                ),
+                rx.scroll_area(
+                    meta_lore_panel(),
+                    type="always",
+                    scrollbars="vertical",
+                    style={"height": "75vh"},
+                ),
+                p=4,
+                bg="white",
+                width=["95vw", "90vw", "900px"],
+                max_width="900px",
+                border_radius="10px 0 0 10px",
+                box_shadow="lg",
+                position="fixed",
+                top="0",
+                right="0",
+                bottom="0",
+                overflow="hidden",
+            ),
             position="fixed",
             top="0",
             left="0",
@@ -515,137 +772,7 @@ def index() -> rx.Component:
                         justify="start",
                         gap="2",
                     ),
-                    rx.box(
-                        rx.hstack(rx.heading("Branch Choices", size="4")),
-                        rx.text(
-                            rx.cond(
-                                AppState.last_parent_id.is_none(),
-                                "No branching available yet",
-                                "Alternatives for latest parent",
-                            )
-                        ),
-                        rx.cond(
-                            AppState.last_parent_id.is_none(),
-                            rx.box(),
-                            rx.vstack(
-                                rx.foreach(
-                                    AppState.last_parent_children,
-                                    lambda it: rx.box(
-                                        rx.hstack(
-                                            rx.text(
-                                                rx.cond(
-                                                    it.id == AppState.last_parent_active_child_id,
-                                                    "•",
-                                                    "○",
-                                                ),
-                                                width="12px",
-                                            ),
-                                            rx.text(f"{it.kind}: {it.content[:80]}"),
-                                            rx.spacer(),
-                                            rx.button(
-                                                "Activate",
-                                                size="1",
-                                                on_click=lambda it=it: AppState.choose_active_child(it.id),
-                                            ),
-                                        ),
-                                        p=2,
-                                        border="1px solid",
-                                        border_color="gray.100",
-                                        border_radius="6px",
-                                    ),
-                                ),
-                                spacing="2",
-                                align_items="stretch",
-                            ),
-                        ),
-                        p=2,
-                        border="1px solid",
-                        border_color="gray.200",
-                        border_radius="8px",
-                    ),
-                    # Integrated chunks above replace the separate Chunks section
-                    rx.box(
-                        rx.hstack(rx.heading("Main Path Tree", size="4")),
-                        rx.text("Parents with all children; activate any branch."),
-                        rx.vstack(
-                            rx.foreach(
-                                AppState.tree_rows,
-                                lambda row: rx.box(
-                                    rx.text(f"Parent: {row.parent.kind.upper()} • {row.parent.id[:8]}"),
-                                    rx.unordered_list(
-                                        rx.foreach(
-                                            row.children,
-                                            lambda c: rx.list_item(
-                                                rx.hstack(
-                                                    rx.text(
-                                                        rx.cond(
-                                                            row.parent.child_id == c.id,
-                                                            "•",
-                                                            "○",
-                                                        ),
-                                                        width="12px",
-                                                    ),
-                                                    rx.text(f"{c.kind}: {c.content[:80]}"),
-                                                    rx.spacer(),
-                                                    rx.button(
-                                                        "Activate",
-                                                        size="1",
-                                                        on_click=lambda cid=c.id: AppState.choose_active_child(cid),
-                                                    ),
-                                                )
-                                            ),
-                                        )
-                                    ),
-                                    p=2,
-                                    border="1px solid",
-                                    border_color="gray.100",
-                                    border_radius="6px",
-                                ),
-                            ),
-                            spacing="3",
-                            align_items="stretch",
-                        ),
-                        p=2,
-                        border="1px solid",
-                        border_color="gray.200",
-                        border_radius="8px",
-                    ),
-                    rx.box(
-                        rx.hstack(rx.heading("Branches", size="4")),
-                        rx.hstack(
-                            rx.input(
-                                placeholder="Branch name",
-                                value=AppState.branch_name_input,
-                                on_change=AppState.set_branch_name_input,
-                                width="240px",
-                            ),
-                            rx.button("Save current head", size="2", on_click=AppState.save_branch),
-                        ),
-                        rx.vstack(
-                            rx.foreach(
-                                AppState.branches,
-                                lambda b: rx.box(
-                                    rx.hstack(
-                                        rx.text(b.name),
-                                        rx.text(f"{b.head_id[:8]}", color="gray"),
-                                        rx.spacer(),
-                                        rx.button("Switch", size="1", on_click=lambda name=b.name: AppState.switch_branch(name)),
-                                        rx.button("Delete", size="1", color_scheme="red", on_click=lambda name=b.name: AppState.delete_branch(name)),
-                                    ),
-                                    p=2,
-                                    border="1px solid",
-                                    border_color="gray.100",
-                                    border_radius="6px",
-                                ),
-                            ),
-                            spacing="2",
-                            align_items="stretch",
-                        ),
-                        p=2,
-                        border="1px solid",
-                        border_color="gray.200",
-                        border_radius="8px",
-                    ),
+                    # Branch panel link removed as requested
                     spacing="2",
                     align_items="stretch",
                 ),
@@ -661,6 +788,9 @@ def index() -> rx.Component:
             wrap="wrap",
         ),
         lorebook_overlay(),
+        branches_overlay(),
+        settings_overlay(),
+        meta_overlay(),
         confirm_overlay,
         rx.script(
             """
