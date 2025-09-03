@@ -377,11 +377,104 @@ def index() -> rx.Component:
             rx.box(
                 rx.vstack(
                     rx.text("Draft"),
-                    rx.text_area(
-                        placeholder="Paste or write your story here...",
-                        value=AppState.draft_text,
-                        on_change=AppState.set_draft_text,
-                        rows="22",
+                    # Integrated chunk editors inside the main draft area
+                    rx.scroll_area(
+                        rx.vstack(
+                            rx.foreach(
+                                AppState.chunk_edit_list,
+                                lambda it: rx.box(
+                                    # Text area editor
+                                    rx.text_area(
+                                        value=it.content,
+                                        on_change=lambda v, sid=it.id: AppState.set_chunk_edit(sid, v),
+                                        rows="5",
+                                        on_blur=lambda sid=it.id: AppState.save_chunk(sid),
+                                        id=f"chunk-{it.id}",
+                                        data_chunk_id=it.id,
+                                        width="100%",
+                                    ),
+                                    # Top-right overlay actions
+                                    rx.hstack(
+                                        rx.tooltip(
+                                            rx.button("↑", size="1", variant="ghost",
+                                                title="Insert above",
+                                                on_click=lambda sid=it.id: AppState.insert_above(sid, "(write here)")
+                                            ),
+                                            content="Insert above",
+                                        ),
+                                        rx.tooltip(
+                                            rx.button("↓", size="1", variant="ghost",
+                                                title="Insert below",
+                                                on_click=lambda sid=it.id: AppState.insert_below(sid, "(write here)")
+                                            ),
+                                            content="Insert below",
+                                        ),
+                                        rx.tooltip(
+                                            rx.button("🗑️", size="1", color_scheme="red", variant="ghost",
+                                                title="Delete chunk",
+                                                on_click=lambda sid=it.id: AppState.delete_snippet(sid)
+                                            ),
+                                            content="Delete chunk",
+                                        ),
+                                        spacing="1",
+                                        justify="end",
+                                        class_name="chunk-actions",
+                                        style={
+                                            "position": "absolute",
+                                            "top": "4px",
+                                            "right": "6px",
+                                        },
+                                    ),
+                                    # Row container styling
+                                    position="relative",
+                                    mb=2,
+                                    style={
+                                        "boxShadow": rx.cond(
+                                            it.kind == "ai",
+                                            "inset 3px 0 0 #60A5FA",  # blue-400
+                                            "inset 3px 0 0 #4ADE80",  # green-400
+                                        )
+                                    },
+                                    class_name="chunk-row",
+                                ),
+                            ),
+                            spacing="2",
+                            align_items="stretch",
+                            id="draft-chunks",
+                        ),
+                        type="always",
+                        scrollbars="vertical",
+                        style={"height": "44vh"},
+                    ),
+                    # New user chunk composer at the end of the draft
+                    rx.hstack(
+                        # Left: composer input (84%)
+                        rx.box(
+                            rx.text_area(
+                                placeholder="Write the next part here…",
+                                value=AppState.new_chunk_text,
+                                on_change=AppState.set_new_chunk_text,
+                                rows="5",
+                            ),
+                            width="84%",
+                        ),
+                        # Right: meta/actions (16%)
+                        rx.box(
+                            rx.vstack(
+                                rx.tooltip(
+                                    rx.button("Add Chunk", size="2", on_click=AppState.commit_user_chunk),
+                                    content="Append as user chunk",
+                                ),
+                                spacing="1",
+                                align_items="end",
+                            ),
+                            width="16%",
+                            align_self="start",
+                        ),
+                        align="start",
+                        mb=2,
+                        style={"boxShadow": "inset 3px 0 0 #4ADE80"},
+                        data_row_id="composer",
                     ),
                     rx.text("Instruction (optional)"),
                     rx.text_area(
@@ -399,6 +492,11 @@ def index() -> rx.Component:
                         rx.button(
                             "Commit User Chunk",
                             on_click=AppState.commit_user_chunk,
+                        ),
+                        rx.button(
+                            "Revert Head",
+                            on_click=AppState.revert_head,
+                            disabled=AppState.last_parent_id.is_none(),
                         ),
                         rx.button(
                             "Commit Entire Draft as New Root",
@@ -465,79 +563,7 @@ def index() -> rx.Component:
                         border_color="gray.200",
                         border_radius="8px",
                     ),
-                    rx.box(
-                        rx.hstack(rx.heading("Chunks", size="4")),
-                        rx.hstack(
-                            rx.switch(
-                                checked=AppState.seamless_chunks,
-                                on_change=AppState.set_seamless_chunks,
-                                label="Seamless",
-                            ),
-                            rx.switch(
-                                checked=AppState.show_chunk_editors,
-                                on_change=AppState.set_show_chunk_editors,
-                                label="Show editors",
-                            ),
-                            justify="start",
-                            gap="4",
-                        ),
-                        rx.cond(
-                            AppState.seamless_chunks,
-                            seamless_chunks_view(),
-                            None,
-                        ),
-                        rx.cond(
-                            AppState.show_chunk_editors,
-                            rx.vstack(
-                                rx.foreach(
-                                    AppState.chunk_edit_list,
-                                    lambda it: rx.box(
-                                        rx.text_area(
-                                            value=it.content,
-                                            on_change=lambda v, sid=it.id: AppState.set_chunk_edit(sid, v),
-                                            rows="6",
-                                        ),
-                                        rx.hstack(
-                                            rx.text(f"{it.kind.upper()} • {it.id[:8]}", color="gray"),
-                                            rx.spacer(),
-                                            rx.button(
-                                                "Save",
-                                                size="1",
-                                                on_click=lambda sid=it.id: AppState.save_chunk(sid),
-                                            ),
-                                            rx.button(
-                                                "Above",
-                                                size="1",
-                                                on_click=lambda sid=it.id: AppState.insert_above(sid, "(write here)")
-                                            ),
-                                            rx.button(
-                                                "Below",
-                                                size="1",
-                                                on_click=lambda sid=it.id: AppState.insert_below(sid, "(write here)")
-                                            ),
-                                            rx.button(
-                                                "Delete",
-                                                size="1",
-                                                color_scheme="red",
-                                                on_click=lambda sid=it.id: AppState.delete_snippet(sid),
-                                            ),
-                                        ),
-                                        p=2,
-                                        border="1px solid",
-                                        border_color="gray.100",
-                                        border_radius="6px",
-                                    ),
-                                ),
-                                spacing="3",
-                                align_items="stretch",
-                            ),
-                            None,
-                        ),
-                        p=2,
-                        border="1px solid",
-                        border_color="gray.200",
-                        border_radius="8px",
-                    ),
+                    # Integrated chunks above replace the separate Chunks section
                     rx.box(
                         rx.hstack(rx.heading("Main Path Tree", size="4")),
                         rx.text("Parents with all children; activate any branch."),
@@ -636,6 +662,74 @@ def index() -> rx.Component:
         ),
         lorebook_overlay(),
         confirm_overlay,
+        rx.script(
+            """
+            (function(){
+              const handler = function(e){
+                const ta = e.target;
+                if(!ta || ta.tagName !== 'TEXTAREA') return;
+                const container = document.getElementById('draft-chunks');
+                if(!container || !container.contains(ta)) return;
+                const list = Array.from(container.querySelectorAll('textarea'));
+                const idx = list.indexOf(ta);
+                if(idx === -1) return;
+                const atStart = ta.selectionStart === 0 && ta.selectionEnd === 0;
+                const atEnd = ta.selectionStart === ta.value.length && ta.selectionEnd === ta.value.length;
+                const plain = !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey;
+                if(e.key === 'ArrowDown' && atEnd && idx < list.length - 1 && plain){
+                  e.preventDefault();
+                  try { ta.blur(); } catch(_){}
+                  const next = list[idx+1];
+                  if(next){
+                    try { next.focus(); next.setSelectionRange(0,0); } catch(_){ try { next.focus(); } catch(_){} }
+                  }
+                }
+                if(e.key === 'ArrowUp' && atStart && idx > 0 && plain){
+                  e.preventDefault();
+                  try { ta.blur(); } catch(_){}
+                  const prev = list[idx-1];
+                  if(prev){
+                    try { const len = prev.value.length; prev.focus(); prev.setSelectionRange(len,len); } catch(_){ try { prev.focus(); } catch(_){} }
+                  }
+                }
+              };
+              document.addEventListener('keydown', handler, true);
+            })();
+            """
+        ),
+        rx.script(
+            """
+            (function(){
+              const timers = new WeakMap();
+              function schedule(ta){
+                const prev = timers.get(ta);
+                if(prev) clearTimeout(prev);
+                const start = ta.selectionStart, end = ta.selectionEnd;
+                const t = setTimeout(()=>{
+                  try {
+                    ta.dataset.autosaving = '1';
+                    ta.blur();
+                    setTimeout(()=>{
+                      if(document.body.contains(ta)){
+                        try { ta.focus(); ta.setSelectionRange(start,end); } catch(_){ try { ta.focus(); } catch(_){} }
+                      }
+                      delete ta.dataset.autosaving;
+                    }, 40);
+                  } catch(_){ }
+                }, 800);
+                timers.set(ta, t);
+              }
+              document.addEventListener('input', function(e){
+                const ta = e.target;
+                if(!ta || ta.tagName !== 'TEXTAREA') return;
+                const container = document.getElementById('draft-chunks');
+                if(!container || !container.contains(ta)) return;
+                schedule(ta);
+              }, true);
+            })();
+            """
+        ),
+        # Icons are always visible now; no reveal script needed
         on_mount=[AppState.load_state, AppState.load_lore, AppState.reload_branch, AppState.probe_backend],
         py=4,
     )

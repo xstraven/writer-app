@@ -115,6 +115,8 @@ class AppState(rx.State):
     seamless_chunks: bool = True
     show_chunk_editors: bool = False
     joined_chunks_text: str = ""
+    # Inline composer for a new user chunk appended at the end of the draft.
+    new_chunk_text: str = ""
 
     # Controlled inputs for new lore entry (avoid deprecated refs API).
     new_lore_name: str = ""
@@ -329,20 +331,21 @@ class AppState(rx.State):
 
     async def commit_user_chunk(self):
         story = self.current_story
-        # Build base text from current branch to validate that user added content at the end.
-        base_text = "\n\n".join([s.content for s in self.branch_path])
-        draft = self.draft_text or ""
-        # Determine new chunk to commit.
-        if base_text:
-            if not draft.startswith(base_text):
-                # Diverged edits; avoid duplicating content. Ask user to refresh.
-                self.status = "error: draft diverged; refresh branch first"
+        # Prefer the dedicated composer input if provided, else fall back to diffing draft_text.
+        chunk = (self.new_chunk_text or "").strip()
+        if not chunk:
+            # Build base text from current branch and infer tail from draft_text.
+            base_text = "\n\n".join([s.content for s in self.branch_path])
+            draft = self.draft_text or ""
+            if base_text:
+                if not draft.startswith(base_text):
+                    self.status = "error: draft diverged; refresh branch first"
+                    return
+                chunk = draft[len(base_text):].lstrip("\n")
+            else:
+                chunk = draft.strip()
+            if not chunk.strip():
                 return
-            chunk = draft[len(base_text):].lstrip("\n")
-        else:
-            chunk = draft.strip()
-        if not chunk.strip():
-            return
         parent_id = self.head_id
         payload = {
             "story": story,
@@ -356,6 +359,7 @@ class AppState(rx.State):
             r.raise_for_status()
         await self.reload_branch()
         await self.save_state()
+        self.new_chunk_text = ""
 
     def set_chunk_edit(self, sid: str, value: str):
         # Update content for the editable chunk with the given id.
@@ -377,12 +381,20 @@ class AppState(rx.State):
         edit = next((e for e in self.chunk_edit_list if e.id == sid), None)
         content = edit.content if edit else snippet.content
         payload = {"content": content}
+        # Persist to backend
         async with httpx.AsyncClient() as client:
             r = await client.put(f"{API_BASE}/api/snippets/{sid}", json=payload)
             r.raise_for_status()
-        # Reload branch and state
-        await self.reload_branch()
-        await self.save_state()
+        # Update local snapshot inline to avoid a full reload flicker
+        updated_path: list[Snippet] = []
+        for s in self.branch_path:
+            if s.id == sid:
+                updated_path.append(Snippet(id=s.id, story=s.story, parent_id=s.parent_id, child_id=s.child_id, kind=s.kind, content=content, created_at=s.created_at))
+            else:
+                updated_path.append(s)
+        self.branch_path = updated_path
+        # joined_chunks_text already tracks edits as you type; keep it in sync
+        self.joined_chunks_text = "\n\n".join([e.content for e in self.chunk_edit_list])
 
     async def commit_entire_draft_as_root(self):
         content = (self.draft_text or "").strip()
@@ -435,6 +447,76 @@ class AppState(rx.State):
             await self.reload_branch()
         else:
             self.status = f"error: {r.text}"
+
+    async def revert_head(self):
+        """Revert the latest head snippet.
+
+        Strategy:
+        - If there is a parent (path length >= 2), pick an alternative child for the parent
+          if one exists (the most recent other child), set it active, then delete the head.
+        - If no alternative child exists, just delete the head to move the head back to the parent.
+        - If path has fewer than 2 nodes (no parent), do nothing to avoid deleting the only root.
+        """
+        if not self.branch_path or len(self.branch_path) < 2:
+            return
+        head = self.branch_path[-1]
+        parent = self.branch_path[-2]
+        # Try to find an alternate child for the parent (excluding current head)
+        alt_child_id: str | None = None
+        try:
+            async with httpx.AsyncClient() as client:
+                r = await client.get(
+                    f"{API_BASE}/api/snippets/children/{parent.id}",
+                    params={"story": self.current_story},
+                )
+                r.raise_for_status()
+                data = r.json()
+            # Sort by created_at and pick the most recent alternative child
+            # created_at is ISO string from Pydantic; rely on server order if parsing is tricky
+            children = [Snippet(**x) for x in data if x.get("id") != head.id]
+            if children:
+                # Pick the last item (they are ordered ASC by created_at in store)
+                alt_child_id = children[-1].id
+        except Exception:
+            alt_child_id = None
+
+        # If we found an alternate, switch to it
+        if alt_child_id:
+            payload = {"story": self.current_story, "parent_id": parent.id, "child_id": alt_child_id}
+            async with httpx.AsyncClient() as client:
+                r = await client.post(f"{API_BASE}/api/snippets/choose-active", json=payload)
+                r.raise_for_status()
+
+        # Now delete the current head (must be a leaf to succeed)
+        async with httpx.AsyncClient() as client:
+            r = await client.delete(
+                f"{API_BASE}/api/snippets/{head.id}", params={"story": self.current_story}
+            )
+            # Ignore failure here; caller can inspect status if needed
+        await self.reload_branch()
+        await self.save_state()
+
+    async def perform_chunk_action(self, sid: str, action: str):
+        """Perform a contextual action for a chunk from a compact menu.
+
+        Supported actions: 'edit', 'insert_above', 'insert_below', 'delete'
+        """
+        a = (action or "").strip().lower()
+        if not a:
+            return
+        if a == "edit":
+            # Reveal editors to allow inline editing of the chosen chunk
+            self.show_chunk_editors = True
+            return
+        if a == "insert_above":
+            await self.insert_above(sid, "(write here)")
+            return
+        if a == "insert_below":
+            await self.insert_below(sid, "(write here)")
+            return
+        if a == "delete":
+            await self.delete_snippet(sid)
+            return
 
     # Tree & Branches
     async def load_tree(self):
@@ -601,12 +683,18 @@ class AppState(rx.State):
         await self.save_state()
 
     async def do_continue(self):
-        if not self.draft_text.strip():
+        # Compose draft text from current branch + pending new chunk text.
+        base_text = self.joined_chunks_text or "\n\n".join([s.content for s in self.branch_path])
+        extra = (self.new_chunk_text or "").strip()
+        draft_text = base_text if not extra else (base_text + ("\n\n" if base_text else "") + extra)
+        if not draft_text.strip():
             return
         self.status = "thinking"
+        # Update local snapshot and extract memory on composed draft text.
+        self.draft_text = draft_text
         await self.extract_memory()
         payload = {
-            "draft_text": self.draft_text,
+            "draft_text": draft_text,
             "instruction": self.instruction,
             "max_tokens": self.max_tokens,
             "temperature": self.temperature,
