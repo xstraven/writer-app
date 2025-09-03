@@ -5,6 +5,23 @@ import reflex as rx
 from ..state import AppState
 
 
+def seamless_chunks_view() -> rx.Component:
+    # Display the current branch as a single continuous text block.
+    return rx.box(
+        rx.text(
+            rx.cond(
+                (AppState.joined_chunks_text == ""),
+                AppState.draft_text,
+                AppState.joined_chunks_text,
+            ),
+            style={
+                "whiteSpace": "pre-wrap",
+                "lineHeight": "1.7",
+            },
+        ),
+        p=0,
+    )
+
 def memory_panel() -> rx.Component:
     return rx.box(
         rx.heading("Memory", size="5", mb=2),
@@ -450,48 +467,71 @@ def index() -> rx.Component:
                     ),
                     rx.box(
                         rx.hstack(rx.heading("Chunks", size="4")),
-                        rx.text("Edit and save any chunk in the current path."),
-                        rx.vstack(
-                            rx.foreach(
-                                AppState.chunk_edit_list,
-                                lambda it: rx.box(
-                                    rx.text(f"{it.kind.upper()} • {it.id[:8]}"),
-                                    rx.text_area(
-                                        value=it.content,
-                                        on_change=lambda v, sid=it.id: AppState.set_chunk_edit(sid, v),
-                                        rows="6",
-                                    ),
-                                    rx.hstack(
-                                        rx.button(
-                                            "Save Chunk",
-                                            size="2",
-                                            on_click=lambda sid=it.id: AppState.save_chunk(sid),
-                                        ),
-                                        rx.button(
-                                            "Insert Above",
-                                            size="2",
-                                            on_click=lambda sid=it.id: AppState.insert_above(sid, "(write here)")
-                                        ),
-                                        rx.button(
-                                            "Insert Below",
-                                            size="2",
-                                            on_click=lambda sid=it.id: AppState.insert_below(sid, "(write here)")
-                                        ),
-                                        rx.button(
-                                            "Delete",
-                                            size="2",
-                                            color_scheme="red",
-                                            on_click=lambda sid=it.id: AppState.delete_snippet(sid),
-                                        ),
-                                    ),
-                                    p=2,
-                                    border="1px solid",
-                                    border_color="gray.100",
-                                    border_radius="6px",
-                                ),
+                        rx.hstack(
+                            rx.switch(
+                                checked=AppState.seamless_chunks,
+                                on_change=AppState.set_seamless_chunks,
+                                label="Seamless",
                             ),
-                            spacing="3",
-                            align_items="stretch",
+                            rx.switch(
+                                checked=AppState.show_chunk_editors,
+                                on_change=AppState.set_show_chunk_editors,
+                                label="Show editors",
+                            ),
+                            justify="start",
+                            gap="4",
+                        ),
+                        rx.cond(
+                            AppState.seamless_chunks,
+                            seamless_chunks_view(),
+                            None,
+                        ),
+                        rx.cond(
+                            AppState.show_chunk_editors,
+                            rx.vstack(
+                                rx.foreach(
+                                    AppState.chunk_edit_list,
+                                    lambda it: rx.box(
+                                        rx.text_area(
+                                            value=it.content,
+                                            on_change=lambda v, sid=it.id: AppState.set_chunk_edit(sid, v),
+                                            rows="6",
+                                        ),
+                                        rx.hstack(
+                                            rx.text(f"{it.kind.upper()} • {it.id[:8]}", color="gray"),
+                                            rx.spacer(),
+                                            rx.button(
+                                                "Save",
+                                                size="1",
+                                                on_click=lambda sid=it.id: AppState.save_chunk(sid),
+                                            ),
+                                            rx.button(
+                                                "Above",
+                                                size="1",
+                                                on_click=lambda sid=it.id: AppState.insert_above(sid, "(write here)")
+                                            ),
+                                            rx.button(
+                                                "Below",
+                                                size="1",
+                                                on_click=lambda sid=it.id: AppState.insert_below(sid, "(write here)")
+                                            ),
+                                            rx.button(
+                                                "Delete",
+                                                size="1",
+                                                color_scheme="red",
+                                                on_click=lambda sid=it.id: AppState.delete_snippet(sid),
+                                            ),
+                                        ),
+                                        p=2,
+                                        border="1px solid",
+                                        border_color="gray.100",
+                                        border_radius="6px",
+                                    ),
+                                ),
+                                spacing="3",
+                                align_items="stretch",
+                            ),
+                            None,
                         ),
                         p=2,
                         border="1px solid",

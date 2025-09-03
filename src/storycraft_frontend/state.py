@@ -111,6 +111,11 @@ class AppState(rx.State):
     # Confirm dialog state
     show_confirm_flatten: bool = False
 
+    # UI: chunks display preferences
+    seamless_chunks: bool = True
+    show_chunk_editors: bool = False
+    joined_chunks_text: str = ""
+
     # Controlled inputs for new lore entry (avoid deprecated refs API).
     new_lore_name: str = ""
     new_lore_kind: str = ""
@@ -261,6 +266,8 @@ class AppState(rx.State):
         self.draft_text = data.get("text", self.draft_text)
         # Initialize editable list mirror of current path
         self.chunk_edit_list = [EditableChunk(id=s.id, kind=s.kind, content=s.content) for s in self.branch_path]
+        # Build joined text for seamless display (kept in sync with edits)
+        self.joined_chunks_text = "\n\n".join([e.content for e in self.chunk_edit_list])
         # Determine last parent (the node whose children we can switch among)
         if len(self.branch_path) >= 2:
             parent = self.branch_path[-2]
@@ -358,6 +365,8 @@ class AppState(rx.State):
                 it = EditableChunk(id=it.id, kind=it.kind, content=value)
             items.append(it)
         self.chunk_edit_list = items
+        # Update seamless joined text live as edits happen
+        self.joined_chunks_text = "\n\n".join([e.content for e in items])
 
     async def save_chunk(self, sid: str):
         # Find snippet; fall back to existing content if no edit.

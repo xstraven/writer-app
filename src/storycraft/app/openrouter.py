@@ -48,7 +48,22 @@ class OpenRouterClient:
                 ],
                 "model": payload["model"],
             }
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(url, headers=self._headers(), json=payload)
-            resp.raise_for_status()
-            return resp.json()
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                resp = await client.post(url, headers=self._headers(), json=payload)
+                resp.raise_for_status()
+                return resp.json()
+        except Exception as e:
+            # Graceful fallback to a stubbed response on network/API errors to avoid 500s in dev.
+            return {
+                "id": "dev-mock-error",
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": f"[DEV MODE] OpenRouter request failed: {e}. Returning stub.",
+                        }
+                    }
+                ],
+                "model": payload.get("model", self.default_model),
+            }
