@@ -14,6 +14,7 @@ config = AppConfig(
         "@tiptap/react@^2",
         "@tiptap/starter-kit@^2",
         "@tiptap/extension-placeholder@^2",
-        "file:frontend/tiptap-reflex-wrapper",
+        # Use a path relative to .web (npm runs from .web)
+        "file:../frontend/tiptap-reflex-wrapper",
     ],
 )
