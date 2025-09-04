@@ -14,7 +14,7 @@ config = AppConfig(
         "@tiptap/react@^2",
         "@tiptap/starter-kit@^2",
         "@tiptap/extension-placeholder@^2",
-        # Use a path relative to .web (npm runs from .web)
-        "file:../frontend/tiptap-reflex-wrapper",
+        # Use packed tarball to avoid symlink resolution issues with Vite
+        "file:../frontend/tiptap-reflex-wrapper/tiptap-reflex-wrapper-0.0.1.tgz",
     ],
 )
