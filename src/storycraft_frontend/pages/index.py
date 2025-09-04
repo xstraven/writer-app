@@ -789,7 +789,7 @@ def index() -> rx.Component:
                                         auto_height=True,
                                         min_rows=1,
                                         max_rows=1000,
-                                        on_blur=lambda sid=it.id: AppState.save_chunk(sid),
+                                        on_blur=lambda _=None, sid=it.id: AppState.save_chunk(sid),
                                         id=f"chunk-{it.id}",
                                         data_chunk_id=it.id,
                                         width="100%",
@@ -808,21 +808,21 @@ def index() -> rx.Component:
                                         rx.tooltip(
                                             rx.button("↑", size="1", variant="ghost",
                                                 title="Insert above",
-                                                on_click=lambda sid=it.id: AppState.insert_above(sid, "(write here)")
+                                                on_click=lambda _=None, sid=it.id: AppState.insert_above(sid, "(write here)")
                                             ),
                                             content="Insert above",
                                         ),
                                         rx.tooltip(
                                             rx.button("↓", size="1", variant="ghost",
                                                 title="Insert below",
-                                                on_click=lambda sid=it.id: AppState.insert_below(sid, "(write here)")
+                                                on_click=lambda _=None, sid=it.id: AppState.insert_below(sid, "(write here)")
                                             ),
                                             content="Insert below",
                                         ),
                                         rx.tooltip(
                                             rx.button("🗑️", size="1", color_scheme="red", variant="ghost",
                                                 title="Delete chunk",
-                                                on_click=lambda sid=it.id: AppState.delete_snippet(sid)
+                                                on_click=lambda _=None, sid=it.id: AppState.delete_snippet(sid)
                                             ),
                                             content="Delete chunk",
                                         ),
