@@ -291,7 +291,16 @@ def generation_settings_panel() -> rx.Component:
                 ),
             ),
             rx.hstack(
-                rx.switch(checked=AppState.include_context, on_change=AppState.set_include_context, label="Include context"),
+                rx.text("Include memory"),
+                rx.switch(checked=AppState.include_memory, on_change=AppState.set_include_memory),
+                width="100%",
+                justify="between",
+            ),
+            rx.hstack(
+                rx.text("Include context"),
+                rx.switch(checked=AppState.include_context, on_change=AppState.set_include_context),
+                width="100%",
+                justify="between",
             ),
             spacing="2",
             align_items="stretch",
@@ -580,6 +589,15 @@ def settings_overlay() -> rx.Component:
                     mb=2,
                 ),
                 generation_settings_panel(),
+                rx.hstack(
+                    rx.button(
+                        "View Generation Prompt",
+                        size="2",
+                        on_click=AppState.open_prompt_preview,
+                    ),
+                    justify="start",
+                    mt=2,
+                ),
                 p=4,
                 class_name="panel-dark",
                 bg="#0f131a",
@@ -595,6 +613,74 @@ def settings_overlay() -> rx.Component:
                 bottom="0",
             ),
             # Backdrop
+            position="fixed",
+            top="0",
+            left="0",
+            right="0",
+            bottom="0",
+            bg="rgba(0,0,0,0.6)",
+            z_index=1000,
+        ),
+        None,
+    )
+
+def prompt_overlay() -> rx.Component:
+    return rx.cond(
+        AppState.show_prompt_preview,
+        rx.box(
+            rx.box(
+                rx.hstack(
+                    rx.heading("Generation Prompt", size="6"),
+                    rx.spacer(),
+                    rx.button("Close", on_click=AppState.close_prompt_preview, size="2", variant="soft"),
+                    mb=2,
+                ),
+                rx.scroll_area(
+                    rx.vstack(
+                        rx.foreach(
+                            AppState.prompt_messages,
+                            lambda m: rx.box(
+                                rx.hstack(
+                                    rx.badge(m.role.upper(), color_scheme=rx.cond(m.role == "system", "purple", rx.cond(m.role == "user", "blue", "gray"))),
+                                    rx.spacer(),
+                                ),
+                                rx.box(
+                                    rx.text(m.content, style={"whiteSpace": "pre-wrap", "fontFamily": "monospace", "lineHeight": "1.6"}),
+                                    p=2,
+                                    border="1px solid",
+                                    border_color="#2a2f3a",
+                                    border_radius="6px",
+                                    bg="#0b0f15",
+                                ),
+                                p=2,
+                                border="1px solid",
+                                border_color="#1f2937",
+                                border_radius="8px",
+                            ),
+                        ),
+                        spacing="2",
+                        align_items="stretch",
+                    ),
+                    type="always",
+                    scrollbars="vertical",
+                    style={"height": "75vh"},
+                ),
+                p=4,
+                class_name="panel-dark",
+                bg="#0f131a",
+                color="#e5e7eb",
+                width=["95vw", "90vw", "900px"],
+                max_width="900px",
+                border_radius="10px 0 0 10px",
+                box_shadow="lg",
+                border="1px solid",
+                border_color="#1f2937",
+                position="fixed",
+                top="0",
+                right="0",
+                bottom="0",
+                overflow="hidden",
+            ),
             position="fixed",
             top="0",
             left="0",
@@ -869,6 +955,7 @@ def index() -> rx.Component:
         lorebook_overlay(),
         branches_overlay(),
         settings_overlay(),
+        prompt_overlay(),
         meta_overlay(),
         confirm_overlay,
         rx.script(
@@ -1027,7 +1114,7 @@ def index() -> rx.Component:
             </style>
         """),
         # Icons are always visible now; no reveal script needed
-        on_mount=[AppState.load_state, AppState.load_lore, AppState.reload_branch, AppState.probe_backend],
+        on_mount=[AppState.load_stories, AppState.load_state, AppState.load_lore, AppState.reload_branch, AppState.probe_backend],
         py=4,
     )
 def base_styles() -> rx.Component:

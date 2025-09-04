@@ -320,6 +320,23 @@ class SnippetStore:
             con.execute("DELETE FROM snippets WHERE id = ?", [snippet_id])
         return True
 
+    def delete_story(self, story: str) -> None:
+        """Delete all snippets and branches for a story."""
+        with self._lock, self._conn() as con:
+            con.execute("DELETE FROM branches WHERE story = ?", [story])
+            con.execute("DELETE FROM snippets WHERE story = ?", [story])
+
+    def list_stories(self) -> list[str]:
+        with self._lock, self._conn() as con:
+            cur = con.execute("SELECT DISTINCT story FROM snippets ORDER BY story ASC")
+            return [r[0] for r in cur.fetchall()]
+
+    def delete_all(self) -> None:
+        """Delete all snippets and branches across all stories."""
+        with self._lock, self._conn() as con:
+            con.execute("DELETE FROM branches")
+            con.execute("DELETE FROM snippets")
+
     # Branch name helpers
     def upsert_branch(self, *, story: str, name: str, head_id: str) -> None:
         with self._lock, self._conn() as con:

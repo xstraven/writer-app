@@ -59,7 +59,7 @@ class PromptBuilder:
         Three-part structure:
         1) system: app/user-configurable system prompt
         2) user: current story context (prefer draft if provided, else history)
-        3) user: meta section with story description, generation prompt, selected lore, and optional memory
+        3) user: meta section with story description, selected lore, optional memory, and PROMPT LAST
         """
         # Part 2: story context
         story_text = (self._draft_text or self._history_text).strip()
@@ -70,9 +70,6 @@ class PromptBuilder:
         # Story description from context summary
         if self._context and getattr(self._context, "summary", "").strip():
             meta_parts.append("[Story Description]\n" + self._context.summary.strip())
-        # Prompt for generation
-        if self._instruction:
-            meta_parts.append("[Prompt]\n" + self._instruction)
         # Selected lorebook entries
         lore_block = _format_lore(self._lore)
         if lore_block:
@@ -81,6 +78,14 @@ class PromptBuilder:
         mem_block = _format_memory(self._memory)
         if mem_block:
             meta_parts.append(mem_block)
+        # Prompt for generation (ALWAYS LAST). If not set, include a sensible default.
+        prompt_text = (self._instruction or "").strip()
+        if not prompt_text:
+            prompt_text = (
+                "Continue the story, matching established voice, tone, and point of view. "
+                "Maintain continuity with prior events and details."
+            )
+        meta_parts.append("[Prompt]\n" + prompt_text)
 
         meta_msg = "\n\n".join(meta_parts).strip()
 

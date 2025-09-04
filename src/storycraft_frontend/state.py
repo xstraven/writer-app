@@ -73,6 +73,11 @@ class BranchInfo(rx.Base):
     created_at: str
 
 
+class PromptMessage(rx.Base):
+    role: str
+    content: str
+
+
 class AppState(rx.State):
     draft_text: str = ""
     instruction: str = ""
@@ -94,6 +99,7 @@ class AppState(rx.State):
     memory: MemoryState = MemoryState()
     context: ContextState = ContextState()
     include_context: bool = True
+    include_memory: bool = True
 
     # UI: story switching (ephemeral, not persisted to backend)
     story_options: list[str] = ["Story One", "Story Two"]
@@ -143,6 +149,10 @@ class AppState(rx.State):
     new_object_label: str = ""
     new_object_detail: str = ""
 
+    # Prompt preview
+    show_prompt_preview: bool = False
+    prompt_messages: list[PromptMessage] = []
+
     # UI event helpers for numeric inputs coming in as strings from the browser.
     def update_temperature(self, value: str):
         try:
@@ -165,6 +175,7 @@ class AppState(rx.State):
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
             "include_context": self.include_context,
+            "include_memory": self.include_memory,
             "context": self._context_payload(),
             "system_prompt": self.system_prompt,
             "selected_lore_ids": list(self.selected_lore_ids),
@@ -179,6 +190,7 @@ class AppState(rx.State):
         self.system_prompt = data.get("system_prompt") or self.system_prompt
         self.selected_lore_ids = list(data.get("selected_lore_ids", []))
         self.include_context = bool(data.get("include_context", self.include_context))
+        self.include_memory = bool(data.get("include_memory", self.include_memory))
         ctx = data.get("context") or {}
         self.context = ContextState(
             summary=ctx.get("summary", ""),
@@ -272,12 +284,56 @@ class AppState(rx.State):
     def close_settings(self):
         self.show_settings = False
 
+    # Prompt preview panel
+    async def open_prompt_preview(self):
+        # Build draft similar to do_continue composition
+        base_text = self.joined_chunks_text or "\n\n".join([s.content for s in self.branch_path])
+        extra = (self.new_chunk_text or "").strip()
+        draft_text = base_text if not extra else (base_text + ("\n\n" if base_text else "") + extra)
+        payload = {
+            "draft_text": draft_text,
+            "instruction": self.instruction,
+            "model": self.model,
+            "use_memory": self.include_memory,
+            "use_context": self.include_context,
+            "story": self.current_story,
+            "lore_ids": list(self.selected_lore_ids),
+            "system_prompt": self.system_prompt,
+        }
+        if self.include_context:
+            payload["context"] = self._context_payload()
+        async with httpx.AsyncClient(timeout=60) as client:
+            r = await client.post(f"{API_BASE}/api/prompt-preview", json=payload)
+            r.raise_for_status()
+            data = r.json()
+        msgs = [PromptMessage(**m) for m in data.get("messages", [])]
+        self.prompt_messages = msgs
+        self.show_prompt_preview = True
+
+    def close_prompt_preview(self):
+        self.show_prompt_preview = False
+
     # Panel: story/meta + lorebook
     def open_meta_panel(self):
         self.show_meta_panel = True
 
     def close_meta_panel(self):
         self.show_meta_panel = False
+
+    async def load_stories(self):
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.get(f"{API_BASE}/api/stories")
+                r.raise_for_status()
+                data = r.json()
+            options = [str(x) for x in (data or [])]
+            # Ensure current story is present
+            if self.current_story not in options and self.current_story:
+                options = options + [self.current_story]
+            self.story_options = options
+        except Exception:
+            # Keep existing defaults on error
+            pass
 
     async def load_state(self):
         async with httpx.AsyncClient() as client:
@@ -292,6 +348,7 @@ class AppState(rx.State):
         self.max_tokens = int(data.get("max_tokens", self.max_tokens))
         self.system_prompt = data.get("system_prompt") or self.system_prompt
         self.include_context = bool(data.get("include_context", self.include_context))
+        self.include_memory = bool(data.get("include_memory", self.include_memory))
         ctx = data.get("context") or {}
         self.context = ContextState(
             summary=ctx.get("summary", ""),
@@ -309,6 +366,7 @@ class AppState(rx.State):
             "max_tokens": self.max_tokens,
             "system_prompt": self.system_prompt,
             "include_context": self.include_context,
+            "include_memory": self.include_memory,
             "context": self._context_payload(),
             # generations/gen_index are deprecated in favor of server-backed branches
         }
@@ -828,16 +886,17 @@ class AppState(rx.State):
         if not draft_text.strip():
             return
         self.status = "thinking"
-        # Update local snapshot and extract memory on composed draft text.
+        # Update local snapshot and (optionally) extract memory on composed draft text.
         self.draft_text = draft_text
-        await self.extract_memory()
+        if self.include_memory:
+            await self.extract_memory()
         payload = {
             "draft_text": draft_text,
             "instruction": self.instruction,
             "max_tokens": self.max_tokens,
             "temperature": self.temperature,
             "model": self.model,
-            "use_memory": True,
+            "use_memory": self.include_memory,
             "use_context": self.include_context,
             "story": self.current_story,
             "system_prompt": self.system_prompt,

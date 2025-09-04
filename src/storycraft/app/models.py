@@ -108,6 +108,7 @@ class AppPersistedState(BaseModel):
     temperature: float = 0.7
     max_tokens: int = 512
     system_prompt: Optional[str] = None
+    include_memory: bool = True
     include_context: bool = True
     context: Optional[ContextState] = None
     generations: List[str] = Field(default_factory=list)
@@ -217,3 +218,42 @@ class UpsertBranchRequest(BaseModel):
     story: str
     name: str
     head_id: str
+
+
+# --- Prompt Preview ---
+
+class PromptMessage(BaseModel):
+    role: str
+    content: str
+
+
+class PromptPreviewRequest(BaseModel):
+    draft_text: str = ""
+    instruction: str = ""
+    model: Optional[str] = None
+    use_memory: bool = True
+    use_context: bool = True
+    story: Optional[str] = None
+    lore_ids: Optional[List[str]] = None
+    system_prompt: Optional[str] = None
+    context: Optional[ContextState] = None
+
+
+class PromptPreviewResponse(BaseModel):
+    messages: List[PromptMessage] = Field(default_factory=list)
+
+
+# --- Samples / Import ---
+class DevSeedRequest(BaseModel):
+    story: str
+    chunks_filename: Optional[str] = None  # e.g., test_story_1.txt; defaults to <slug>.txt
+    lore_filename: Optional[str] = None    # e.g., test_story_1_lore.json; optional
+    split_paragraphs: bool = True
+    clear_existing: bool = True
+    purge: bool = False
+
+
+class DevSeedResponse(BaseModel):
+    story: str
+    chunks_imported: int = 0
+    lore_imported: int = 0

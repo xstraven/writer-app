@@ -59,6 +59,17 @@ class LorebookStore:
             return items
         return [e for e in items if getattr(e, "story", None) == story]
 
+    def list_stories(self) -> list[str]:
+        stories: set[str] = set()
+        for e in self._read().values():
+            try:
+                s = getattr(e, "story", None)
+                if s:
+                    stories.add(s)
+            except Exception:
+                continue
+        return sorted(stories)
+
     def get(self, entry_id: str) -> Optional[LoreEntry]:
         return self._read().get(entry_id)
 
@@ -92,3 +103,18 @@ class LorebookStore:
             self._write(data)
             return True
         return False
+
+    def delete_all(self, story: str) -> None:
+        data = self._read_raw()
+        kept: Dict[str, dict] = {}
+        for k, v in data.items():
+            try:
+                if v.get("story") != story:
+                    kept[k] = v
+            except Exception:
+                kept[k] = v
+        self._write(kept)
+
+    def delete_all_global(self) -> None:
+        """Remove all lore entries for all stories."""
+        self._write({})
