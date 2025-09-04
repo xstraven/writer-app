@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import os
 import reflex as rx
 
 from ..state import AppState
+from ..components.tiptap_editor import tiptap_editor
+
+USE_TIPTAP = os.getenv("STORYCRAFT_USE_TIPTAP", "0").lower() in ("1", "true", "yes", "on")
 
 
 def seamless_chunks_view() -> rx.Component:
@@ -781,27 +785,37 @@ def index() -> rx.Component:
                             rx.foreach(
                                 AppState.chunk_edit_list,
                                 lambda it: rx.box(
-                                    # Text area editor
-                                    rx.text_area(
-                                        value=it.content,
-                                        on_change=lambda v, sid=it.id: AppState.set_chunk_edit(sid, v),
-                                        rows="1",
-                                        auto_height=True,
-                                        min_rows=1,
-                                        max_rows=1000,
-                                        on_blur=lambda _=None, sid=it.id: AppState.save_chunk(sid),
-                                        id=f"chunk-{it.id}",
-                                        data_chunk_id=it.id,
-                                        width="100%",
-                                        wrap="soft",
-                                        style={
-                                            "overflow": "hidden",
-                                            "overflowY": "hidden",
-                                            "maxHeight": "none",
-                                            "resize": "none",
-                                            "whiteSpace": "pre-wrap",
-                                            "wordWrap": "break-word",
-                                        },
+                                    # Text editor (TipTap if enabled, else textarea)
+                                    (
+                                        tiptap_editor(
+                                            value=it.content,  # type: ignore[arg-type]
+                                            placeholder="Write here…",
+                                            min_height="120px",
+                                            on_change=(lambda v, sid=it.id: AppState.set_chunk_edit(sid, v)),
+                                            on_blur=(lambda _=None, sid=it.id: AppState.save_chunk(sid)),
+                                        )
+                                        if USE_TIPTAP
+                                        else rx.text_area(
+                                            value=it.content,
+                                            on_change=lambda v, sid=it.id: AppState.set_chunk_edit(sid, v),
+                                            rows="1",
+                                            auto_height=True,
+                                            min_rows=1,
+                                            max_rows=1000,
+                                            on_blur=lambda _=None, sid=it.id: AppState.save_chunk(sid),
+                                            id=f"chunk-{it.id}",
+                                            data_chunk_id=it.id,
+                                            width="100%",
+                                            wrap="soft",
+                                            style={
+                                                "overflow": "hidden",
+                                                "overflowY": "hidden",
+                                                "maxHeight": "none",
+                                                "resize": "none",
+                                                "whiteSpace": "pre-wrap",
+                                                "wordWrap": "break-word",
+                                            },
+                                        )
                                     ),
                                     # Top-right overlay actions
                                     rx.hstack(
@@ -857,23 +871,33 @@ def index() -> rx.Component:
                     rx.hstack(
                         # Left: composer input (84%)
                         rx.box(
-                            rx.text_area(
-                                placeholder="Write the next part here…",
-                                value=AppState.new_chunk_text,
-                                on_change=AppState.set_new_chunk_text,
-                                rows="1",
-                                auto_height=True,
-                                min_rows=1,
-                                max_rows=1000,
-                                wrap="soft",
-                                style={
-                                    "overflow": "hidden",
-                                    "overflowY": "hidden",
-                                    "maxHeight": "none",
-                                    "resize": "none",
-                                    "whiteSpace": "pre-wrap",
-                                    "wordWrap": "break-word",
-                                },
+                            (
+                                tiptap_editor(
+                                    value=AppState.new_chunk_text,  # type: ignore[arg-type]
+                                    placeholder="Write the next part here…",
+                                    min_height="140px",
+                                    on_change=AppState.set_new_chunk_text,
+                                    on_blur=lambda: None,
+                                )
+                                if USE_TIPTAP
+                                else rx.text_area(
+                                    placeholder="Write the next part here…",
+                                    value=AppState.new_chunk_text,
+                                    on_change=AppState.set_new_chunk_text,
+                                    rows="1",
+                                    auto_height=True,
+                                    min_rows=1,
+                                    max_rows=1000,
+                                    wrap="soft",
+                                    style={
+                                        "overflow": "hidden",
+                                        "overflowY": "hidden",
+                                        "maxHeight": "none",
+                                        "resize": "none",
+                                        "whiteSpace": "pre-wrap",
+                                        "wordWrap": "break-word",
+                                    },
+                                )
                             ),
                             width="84%",
                         ),
