@@ -13,5 +13,6 @@ config = AppConfig(
     frontend_packages=[
         "@tiptap/react@^2",
         "@tiptap/starter-kit@^2",
+        "@tiptap/extension-placeholder@^2",
     ],
 )
