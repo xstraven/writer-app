@@ -38,6 +38,7 @@ from .models import (
     DevSeedResponse,
 )
 from .state_store import StateStore
+from .base_settings_store import BaseSettingsStore
 from .snippet_store import SnippetStore
 
 
@@ -55,6 +56,7 @@ app.add_middleware(
 store = LorebookStore()
 state_store = StateStore()
 snippet_store = SnippetStore()
+base_settings_store = BaseSettingsStore()
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -345,9 +347,16 @@ async def dev_seed(req: DevSeedRequest) -> DevSeedResponse:
 async def get_state() -> AppPersistedState:
     data = state_store.get()
     try:
-        return AppPersistedState(**data)
+        # Fallback/merge with base settings file for defaults
+        base_defaults = base_settings_store.get()
+        merged = dict(base_defaults)
+        merged.update(data or {})
+        return AppPersistedState(**merged)
     except Exception:
-        return AppPersistedState()
+        try:
+            return AppPersistedState(**base_settings_store.get())
+        except Exception:
+            return AppPersistedState()
 
 
 @app.put("/api/state", response_model=dict)
