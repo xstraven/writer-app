@@ -877,7 +877,6 @@ def index() -> rx.Component:
                                     placeholder="Write the next part here…",
                                     min_height="140px",
                                     on_change=AppState.set_new_chunk_text,
-                                    on_blur=lambda: None,
                                 )
                                 if USE_TIPTAP
                                 else rx.text_area(

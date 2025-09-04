@@ -25,9 +25,9 @@ class TipTapEditor(rx.Component):
     min_height: Var[str]
     disabled: Var[bool]
 
-    # Events
-    on_change: rx.EventHandler[lambda value: [value]]  # receives the new string value
-    on_blur: rx.EventHandler[lambda: []]
+    # Events (optional)
+    on_change: rx.EventHandler | None  # receives the new string value
+    on_blur: rx.EventHandler | None
 
 
 def tiptap_editor(
@@ -39,14 +39,16 @@ def tiptap_editor(
     on_change: rx.EventHandler | None = None,
     on_blur: rx.EventHandler | None = None,
 ) -> rx.Component:
-    return TipTapEditor.create(
-        value=value,
-        placeholder=placeholder,
-        min_height=min_height,
-        disabled=disabled,
-        on_change=on_change,
-        on_blur=on_blur,
+    props: dict = {
+        "value": value,
+        "placeholder": placeholder,
+        "min_height": min_height,
+        "disabled": disabled,
         # Basic styling to make it fill width similar to textarea
-        style={"width": "100%"},
-    )
-
+        "style": {"width": "100%"},
+    }
+    if on_change is not None:
+        props["on_change"] = on_change
+    if on_blur is not None:
+        props["on_blur"] = on_blur
+    return TipTapEditor.create(**props)
