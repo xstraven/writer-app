@@ -154,9 +154,9 @@ async def continue_endpoint(req: ContinueRequest) -> ContinueResponse:
         lore_items=lore_items,
         system_prompt=req.system_prompt,
     )
-    # Optional persistence into DuckDB if a story is provided.
+    # Optional persistence into DuckDB if a story is provided and not preview-only.
     try:
-        if req.story:
+        if req.story and not req.preview_only:
             story = req.story
             # If no root exists and user has draft text, persist it as initial user snippet.
             if not snippet_store.main_path(story) and req.draft_text.strip():

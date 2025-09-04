@@ -77,6 +77,8 @@ class ContinueRequest(BaseModel):
     story: Optional[str] = None
     # Optional lorebook items to include (IDs from lorebook)
     lore_ids: Optional[List[str]] = None
+    # When true, do not persist generated continuation even if story is provided.
+    preview_only: bool = False
 
 
 class ContinueResponse(BaseModel):

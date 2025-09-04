@@ -877,19 +877,8 @@ def index() -> rx.Component:
                             ),
                             width="84%",
                         ),
-                        # Right: meta/actions (16%)
-                        rx.box(
-                            rx.vstack(
-                                rx.tooltip(
-                                    rx.button("Add Chunk", size="2", on_click=AppState.commit_user_chunk),
-                                    content="Append as user chunk",
-                                ),
-                                spacing="1",
-                                align_items="end",
-                            ),
-                            width="16%",
-                            align_self="start",
-                        ),
+                        # Right: meta/actions (16%) — simplified (removed quick Add button)
+                        rx.box(width="16%", align_self="start"),
                         align="start",
                         mb=2,
                         style={"boxShadow": "inset 3px 0 0 #4ADE80"},
@@ -907,12 +896,12 @@ def index() -> rx.Component:
                     ),
                     rx.hstack(
                         rx.button(
-                            "Continue",
+                            "Generate",
                             on_click=AppState.do_continue,
                             loading=AppState.status == "thinking",
                         ),
                         rx.button(
-                            "Commit User Chunk",
+                            "Commit Chunk",
                             on_click=AppState.commit_user_chunk,
                         ),
                         rx.button(

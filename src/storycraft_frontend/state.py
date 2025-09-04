@@ -479,7 +479,9 @@ class AppState(rx.State):
             r.raise_for_status()
         await self.reload_branch()
         await self.save_state()
+        # Clear composer and instruction after committing
         self.new_chunk_text = ""
+        self.instruction = ""
 
     def set_chunk_edit(self, sid: str, value: str):
         # Update content for the editable chunk with the given id.
@@ -901,6 +903,8 @@ class AppState(rx.State):
             "story": self.current_story,
             "system_prompt": self.system_prompt,
             "lore_ids": list(self.selected_lore_ids),
+            # Generate without persisting; show result in composer
+            "preview_only": True,
         }
         if self.include_context:
             payload["context"] = self._context_payload()
@@ -908,9 +912,13 @@ class AppState(rx.State):
             async with httpx.AsyncClient(timeout=120) as client:
                 r = await client.post(f"{API_BASE}/api/continue", json=payload)
                 r.raise_for_status()
-                _ = r.json()
-            # Refresh from server branch path
-            await self.reload_branch()
+                data = r.json()
+            # Place the generated continuation into the composer area without persisting
+            cont = (data or {}).get("continuation", "")
+            if cont:
+                # Append with spacing if user already wrote something
+                existing = (self.new_chunk_text or "").rstrip()
+                self.new_chunk_text = (existing + ("\n\n" if existing else "") + cont).strip()
             self.status = "done"
             await self.save_state()
         except Exception as e:
