@@ -307,16 +307,49 @@ class SnippetStore:
         target = self.get(snippet_id)
         if not target or target.story != story:
             return False
-        # Only allow deleting leaf nodes to preserve graph integrity.
-        if self.has_children(story, snippet_id):
-            raise ValueError("cannot delete a snippet that has children")
+        # Root cannot be deleted
+        if target.parent_id is None:
+            raise ValueError("cannot delete the root snippet")
+
         with self._lock, self._conn() as con:
-            if target.parent_id:
-                # If parent points to this as active, clear pointer
-                cur = con.execute("SELECT child_id FROM snippets WHERE id = ?", [target.parent_id])
-                row = cur.fetchone()
-                if row and row[0] == target.id:
-                    con.execute("UPDATE snippets SET child_id = NULL WHERE id = ?", [target.parent_id])
+            # Fetch parent and children
+            parent_id = target.parent_id
+            # Determine children of target
+            cur = con.execute(
+                "SELECT id FROM snippets WHERE story = ? AND parent_id = ? ORDER BY created_at ASC",
+                [story, target.id],
+            )
+            children_ids = [row[0] for row in cur.fetchall()]
+
+            # If there are children, reparent them to target's parent.
+            if children_ids:
+                # Promote the active child on the mainline if parent currently points to target
+                # Choose active if target.child_id set; else pick the most recent child
+                active_child_id = target.child_id if target.child_id else children_ids[-1]
+
+                # Update each child to point to target's parent
+                for cid in children_ids:
+                    con.execute(
+                        "UPDATE snippets SET parent_id = ? WHERE id = ?",
+                        [parent_id, cid],
+                    )
+
+                # If parent currently selects target as active, switch to the chosen child
+                curp = con.execute("SELECT child_id FROM snippets WHERE id = ?", [parent_id])
+                prow = curp.fetchone()
+                if prow and prow[0] == target.id:
+                    con.execute(
+                        "UPDATE snippets SET child_id = ? WHERE id = ?",
+                        [active_child_id, parent_id],
+                    )
+            else:
+                # Leaf: if parent points to this as active, clear pointer
+                curp = con.execute("SELECT child_id FROM snippets WHERE id = ?", [parent_id])
+                prow = curp.fetchone()
+                if prow and prow[0] == target.id:
+                    con.execute("UPDATE snippets SET child_id = NULL WHERE id = ?", [parent_id])
+
+            # Finally, delete the target snippet
             con.execute("DELETE FROM snippets WHERE id = ?", [snippet_id])
         return True
 
