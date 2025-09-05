@@ -780,22 +780,26 @@ def index() -> rx.Component:
                 rx.vstack(
                     rx.text("Draft"),
                     # Integrated chunk editors; no inner scroll, let page scroll
-                    rx.box(
-                        rx.vstack(
-                            rx.foreach(
-                                AppState.chunk_edit_list,
-                                lambda it: rx.box(
-                                    # Text editor (TipTap if enabled, else textarea)
-                                    (
-                                        tiptap_editor(
-                                            value=it.content,  # type: ignore[arg-type]
-                                            placeholder="Write here…",
-                                            min_height="120px",
-                                            on_change=(lambda v, sid=it.id: AppState.set_chunk_edit(sid, v)),
-                                            on_blur=(lambda _=None, sid=it.id: AppState.save_chunk(sid)),
-                                        )
-                                        if USE_TIPTAP
-                                        else rx.text_area(
+                    (
+                        rx.box(
+                            tiptap_editor(
+                                chunks=AppState.chunk_edit_list,  # type: ignore[arg-type]
+                                placeholder="Draft your story…",
+                                min_height="240px",
+                                on_change=AppState.set_chunk_edits_bulk,
+                                on_blur=AppState.save_all_chunks,
+                                version=AppState.joined_chunks_text,
+                            ),
+                            id="draft-chunks",
+                        )
+                        if USE_TIPTAP
+                        else rx.box(
+                            rx.vstack(
+                                rx.foreach(
+                                    AppState.chunk_edit_list,
+                                    lambda it: rx.box(
+                                        # Text editor (fallback textarea per chunk)
+                                        rx.text_area(
                                             value=it.content,
                                             on_change=lambda v, sid=it.id: AppState.set_chunk_edit(sid, v),
                                             rows="1",
@@ -815,57 +819,25 @@ def index() -> rx.Component:
                                                 "whiteSpace": "pre-wrap",
                                                 "wordWrap": "break-word",
                                             },
-                                        )
-                                    ),
-                                    # Top-right overlay actions
-                                    rx.hstack(
-                                        rx.tooltip(
-                                            rx.button("↑", size="1", variant="ghost",
-                                                title="Insert above",
-                                                on_click=lambda _=None, sid=it.id: AppState.insert_above(sid, "(write here)")
-                                            ),
-                                            content="Insert above",
                                         ),
-                                        rx.tooltip(
-                                            rx.button("↓", size="1", variant="ghost",
-                                                title="Insert below",
-                                                on_click=lambda _=None, sid=it.id: AppState.insert_below(sid, "(write here)")
-                                            ),
-                                            content="Insert below",
-                                        ),
-                                        rx.tooltip(
-                                            rx.button("🗑️", size="1", color_scheme="red", variant="ghost",
-                                                title="Delete chunk",
-                                                on_click=lambda _=None, sid=it.id: AppState.delete_snippet(sid)
-                                            ),
-                                            content="Delete chunk",
-                                        ),
-                                        spacing="1",
-                                        justify="end",
-                                        class_name="chunk-actions",
+                                        # Row container styling
+                                        position="relative",
+                                        mb=2,
                                         style={
-                                            "position": "absolute",
-                                            "top": "4px",
-                                            "right": "6px",
+                                            "boxShadow": rx.cond(
+                                                it.kind == "ai",
+                                                "inset 3px 0 0 #60A5FA",  # blue-400
+                                                "inset 3px 0 0 #4ADE80",  # green-400
+                                            )
                                         },
+                                        class_name="chunk-row",
                                     ),
-                                    # Row container styling
-                                    position="relative",
-                                    mb=2,
-                                    style={
-                                        "boxShadow": rx.cond(
-                                            it.kind == "ai",
-                                            "inset 3px 0 0 #60A5FA",  # blue-400
-                                            "inset 3px 0 0 #4ADE80",  # green-400
-                                        )
-                                    },
-                                    class_name="chunk-row",
                                 ),
+                                spacing="2",
+                                align_items="stretch",
+                                id="draft-chunks",
                             ),
-                            spacing="2",
-                            align_items="stretch",
-                            id="draft-chunks",
-                        ),
+                        )
                     ),
                     # New user chunk composer at the end of the draft
                     rx.hstack(
@@ -1115,6 +1087,13 @@ def index() -> rx.Component:
             <style>
             .rt-TextAreaRoot textarea { max-height: none !important; overflow-y: hidden !important; }
             textarea { overflow-y: hidden !important; }
+            /* TipTap editor basic dark theme adjustments */
+            .tiptap-editor { color: #e5e7eb; background: transparent; line-height: 1.7; }
+            .tiptap-editor .ProseMirror { outline: none; white-space: pre-wrap; word-break: break-word; }
+            .tiptap-editor .chunk-node { position: relative; padding-left: 0.5rem; }
+            .tiptap-editor .chunk-node[data-chunk-kind="ai"] { box-shadow: inset 3px 0 0 #60A5FA; }
+            .tiptap-editor .chunk-node[data-chunk-kind="user"] { box-shadow: inset 3px 0 0 #4ADE80; }
+            .tiptap-editor .chunk-node + .chunk-node { margin-top: 0.75rem; }
             .panel-dark { background-color: #0f131a; color: #e5e7eb; }
             .panel-dark h1, .panel-dark h2, .panel-dark h3, .panel-dark h4, .panel-dark h5, .panel-dark h6 { color: #f3f4f6; }
             .panel-dark input, .panel-dark textarea, .panel-dark select { background-color: #111827 !important; color: #e5e7eb !important; border-color: #374151 !important; }

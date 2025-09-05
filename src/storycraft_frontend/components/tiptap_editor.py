@@ -19,11 +19,15 @@ class TipTapEditor(rx.Component):
     library = "tiptap-reflex-wrapper"
     tag = "TipTapEditor"
 
-    # Props
+    # Props (two modes)
+    # 1) Plain text mode (composer): value
     value: Var[str]
+    # 2) Chunk mode (seamless editor): chunks = [{id, kind, content}]
+    chunks: Var[list]  # list of dict-like items
     placeholder: Var[str]
     min_height: Var[str]
     disabled: Var[bool]
+    version: Var[str]
 
     # Event triggers definitions
     on_change: rx.EventHandler[lambda value: [value]]  # receives the new string value
@@ -32,21 +36,28 @@ class TipTapEditor(rx.Component):
 
 def tiptap_editor(
     *,
-    value: Var[str],
+    value: Var[str] | None = None,
+    chunks: Var[list] | None = None,
     placeholder: Var[str] | str = "",
     min_height: Var[str] | str = "140px",
     disabled: Var[bool] | bool = False,
     on_change: rx.EventHandler | None = None,
     on_blur: rx.EventHandler | None = None,
+    version: Var[str] | None = None,
 ) -> rx.Component:
     props: dict = {
-        "value": value,
         "placeholder": placeholder,
         "min_height": min_height,
         "disabled": disabled,
         # Basic styling to make it fill width similar to textarea
         "style": {"width": "100%"},
     }
+    if value is not None:
+        props["value"] = value
+    if chunks is not None:
+        props["chunks"] = chunks
+    if version is not None:
+        props["version"] = version
     # Only set event props when provided, to avoid invalid no-op lambdas.
     if on_change is not None:
         props["on_change"] = on_change

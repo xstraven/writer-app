@@ -494,6 +494,30 @@ class AppState(rx.State):
         # Update seamless joined text live as edits happen
         self.joined_chunks_text = "\n\n".join([e.content for e in items])
 
+    def set_chunk_edits_bulk(self, items: list[dict]):
+        """Update many chunk edits at once (from TipTap).
+
+        Expects a list of dicts with keys: id, content, kind.
+        Preserves order and updates joined text. Does not persist.
+        """
+        try:
+            mapping = {str(x.get("id")): str(x.get("content", "")) for x in (items or [])}
+        except Exception:
+            return
+        out: list[EditableChunk] = []
+        # Preserve existing order and kinds where possible
+        for it in self.chunk_edit_list:
+            c = mapping.get(it.id, it.content)
+            out.append(EditableChunk(id=it.id, kind=it.kind, content=c))
+        # If wrapper sent different ordering or missing items, fall back to full replace
+        if len(items or []) != len(out):
+            try:
+                out = [EditableChunk(id=str(x.get("id")), kind=str(x.get("kind", "user")), content=str(x.get("content", ""))) for x in (items or [])]
+            except Exception:
+                pass
+        self.chunk_edit_list = out
+        self.joined_chunks_text = "\n\n".join([e.content for e in self.chunk_edit_list])
+
     async def save_chunk(self, sid: str):
         # Find snippet; fall back to existing content if no edit.
         snippet = next((s for s in self.branch_path if s.id == sid), None)
