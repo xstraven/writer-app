@@ -18,7 +18,7 @@ import type {
   LoreGenerateResponse,
 } from './types';
 
-const API_BASE = process.env.NEXT_PUBLIC_STORYCRAFT_API_BASE || 'http://localhost:8001';
+const API_BASE = process.env.NEXT_PUBLIC_STORYCRAFT_API_BASE || 'http://localhost:8000';
 
 const apiClient = axios.create({
   baseURL: API_BASE,
@@ -134,8 +134,8 @@ export const updateSnippet = async (
   return response.data;
 };
 
-export const deleteSnippet = async (id: string): Promise<void> => {
-  await apiClient.delete(`/api/snippets/${id}`);
+export const deleteSnippet = async (id: string, story: string): Promise<void> => {
+  await apiClient.delete(`/api/snippets/${id}`, { params: { story } });
 };
 
 export const getSnippetChildren = async (parentId: string, story: string): Promise<Snippet[]> => {

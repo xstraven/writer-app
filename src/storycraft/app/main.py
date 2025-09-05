@@ -727,15 +727,19 @@ async def insert_below(req: InsertBelowRequest) -> Snippet:
 
 
 @app.delete("/api/snippets/{snippet_id}", response_model=DeleteSnippetResponse)
-async def delete_snippet(snippet_id: str, story: str) -> DeleteSnippetResponse:
-    story = (story or "").strip()
+async def delete_snippet(snippet_id: str, story: str | None = None) -> DeleteSnippetResponse:
+    """Delete a snippet by id.
+
+    If `story` is provided, verify it matches the snippet's story; otherwise, infer the story
+    from the snippet itself. This keeps the endpoint convenient for clients that only know the id.
+    """
     row = snippet_store.get(snippet_id)
     if not row:
         raise HTTPException(status_code=404, detail="Snippet not found")
-    if row.story != story:
+    if story is not None and story.strip() and row.story != story.strip():
         raise HTTPException(status_code=400, detail="Snippet belongs to a different story")
     try:
-        ok = snippet_store.delete_snippet(story=story, snippet_id=snippet_id)
+        ok = snippet_store.delete_snippet(story=row.story, snippet_id=snippet_id)
     except ValueError as e:
         # e.g., cannot delete a snippet that has children
         raise HTTPException(status_code=400, detail=str(e))
