@@ -14,7 +14,7 @@ export default function Home() {
       <TopNavigation />
 
       {/* Main Layout */}
-      <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="max-w-7xl mx-auto px-2 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Editor Column */}
         <div className="lg:col-span-8">
           <StoryEditor />
