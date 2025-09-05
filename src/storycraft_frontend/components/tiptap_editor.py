@@ -7,20 +7,18 @@ from reflex.vars import Var
 class TipTapEditor(rx.Component):
     """Custom TipTap editor wrapper (React) exposed to Reflex.
 
-    NOTE: This requires a matching React component exported as `TipTapEditor`
-    from a library named `tiptap-reflex-wrapper`. The wrapper should accept
-    props: value (string), placeholder (string), minHeight (string),
-    disabled (boolean), and event handlers: onChange(value: string), onBlur().
-
-    Until the JS wrapper is provided, keep this behind a feature flag so the
-    app renders with the default textarea editors.
+    Requires a matching React component exported as `TipTapEditor` from
+    the `tiptap-reflex-wrapper` library. The wrapper should accept props:
+    value (string) or chunks (array), placeholder (string), minHeight (string),
+    disabled (boolean), version (string), and handlers:
+    onChange(value: string), onBlur(), onOps(ops: array), onSubmit(value: string).
     """
 
     library = "tiptap-reflex-wrapper"
     tag = "TipTapEditor"
 
     # Props (two modes)
-    # 1) Plain text mode (composer): value
+    # 1) Plain text mode (composer, instruction, summaries): value
     value: Var[str]
     # 2) Chunk mode (seamless editor): chunks = [{id, kind, content}]
     chunks: Var[list]  # list of dict-like items

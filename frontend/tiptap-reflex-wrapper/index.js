@@ -88,6 +88,15 @@ function extractChunksFromEditor(editor) {
 }
 
 export function TipTapEditor(props) {
+  console.log('[TipTap] Component created with props:', {
+    hasValue: 'value' in (props || {}),
+    hasOnChange: 'on_change' in (props || {}),
+    hasOnSubmit: 'on_submit' in (props || {}),
+    hasChunks: 'chunks' in (props || {}),
+    onChangeType: typeof (props || {}).on_change,
+    onSubmitType: typeof (props || {}).on_submit
+  });
+
   const {
     value = '',
     placeholder = '',
@@ -121,6 +130,9 @@ export function TipTapEditor(props) {
   try { console.debug('[TipTap] chunks prop normalized length=', chunkList ? chunkList.length : 0); } catch {}
 
   const suppressInitial = useRef(true);
+  
+  console.log('[TipTap] Creating editor with on_change:', typeof on_change, 'on_submit:', typeof props.on_submit);
+  
   const editor = useEditor(
     {
       extensions: [
@@ -136,10 +148,16 @@ export function TipTapEditor(props) {
                 'Mod-Enter': () => {
                   try {
                     const text = this.editor.getText();
+                    console.log('[TipTap] Mod-Enter pressed, text:', `"${text}"`);
                     if (typeof props.on_submit === 'function') {
+                      console.log('[TipTap] Calling on_submit with text:', `"${text}"`);
                       props.on_submit(text);
+                    } else {
+                      console.log('[TipTap] on_submit is not a function:', typeof props.on_submit);
                     }
-                  } catch {}
+                  } catch (e) {
+                    console.error('[TipTap] Error in Mod-Enter handler:', e);
+                  }
                   return true;
                 },
               };
@@ -152,23 +170,33 @@ export function TipTapEditor(props) {
       on_ops: props.on_ops,
       onUpdate({ editor }) {
         try {
+          console.log('[TipTap] onUpdate fired, suppressNextUpdate:', editor._suppressNextUpdate, 'suppressInitial:', suppressInitial.current);
+          
           // Suppress setContent-triggered updates and the very first init update.
           if (editor._suppressNextUpdate) {
+            console.log('[TipTap] Suppressing update due to _suppressNextUpdate');
             editor._suppressNextUpdate = false;
             return;
           }
           if (suppressInitial.current) {
+            console.log('[TipTap] Suppressing initial update');
             suppressInitial.current = false;
             return;
           }
+          
+          console.log('[TipTap] Processing update, on_change type:', typeof on_change);
           if (typeof on_change === 'function') {
             if (props.chunks && Array.isArray(props.chunks)) {
               const chunks = extractChunksFromEditor(editor);
+              console.log('[TipTap] onUpdate calling on_change with chunks:', chunks.length);
               on_change(chunks);
             } else {
               const text = editor.getText();
+              console.log('[TipTap] onUpdate calling on_change with text:', `"${text}"`);
               on_change(text);
             }
+          } else {
+            console.log('[TipTap] onUpdate: on_change is not a function:', typeof on_change);
           }
           // Debounced save trigger
           if (typeof on_blur === 'function') {
@@ -180,7 +208,9 @@ export function TipTapEditor(props) {
               try { on_blur(); } catch {}
             }, 900);
           }
-        } catch {}
+        } catch (e) {
+          console.error('[TipTap] Error in onUpdate:', e);
+        }
       },
       onBlur() {
         try {
@@ -192,6 +222,15 @@ export function TipTapEditor(props) {
     },
     [disabled, placeholder]
   );
+
+  // Debug editor creation
+  useEffect(() => {
+    if (editor) {
+      console.log('[TipTap] Editor created successfully');
+      console.log('[TipTap] Editor config - editable:', editor.isEditable, 'destroyed:', editor.isDestroyed);
+      console.log('[TipTap] Editor initial content:', `"${editor.getText()}"`);
+    }
+  }, [editor]);
 
   // Keyboard shortcuts for split/merge.
   useEffect(() => {
@@ -272,27 +311,37 @@ export function TipTapEditor(props) {
 
   // Keep editor content in sync when 'value' or 'chunks' prop changes.
   useEffect(() => {
-    if (!editor) return;
+    if (!editor) {
+      console.log('[TipTap] useEffect: editor is null');
+      return;
+    }
+    console.log('[TipTap] useEffect: syncing content, chunkList:', !!chunkList, 'value:', `"${value}"`);
     try {
       if (chunkList) {
         const current = extractChunksFromEditor(editor);
         const next = chunkList || [];
         const same = (current.length === next.length) && current.every((c, i) => c.id === next[i].id && c.kind === next[i].kind && c.content === next[i].content);
         if (!same) {
-          try { console.debug('[TipTap] setContent from chunks, count=', next.length); } catch {}
+          console.log('[TipTap] setContent from chunks, count=', next.length);
           editor._suppressNextUpdate = true;
           editor.commands.setContent(buildDocFromChunks(next));
+        } else {
+          console.log('[TipTap] chunks content unchanged, skipping setContent');
         }
       } else {
         const current = editor.getText();
         const next = value || '';
         if (current !== next) {
-          try { console.debug('[TipTap] setContent from value, length=', (next || '').length); } catch {}
+          console.log('[TipTap] setContent from value, current:', `"${current}"`, 'next:', `"${next}"`);
           editor._suppressNextUpdate = true;
           editor.commands.setContent(next);
+        } else {
+          console.log('[TipTap] value content unchanged, skipping setContent');
         }
       }
-    } catch {}
+    } catch (e) {
+      console.error('[TipTap] Error in useEffect:', e);
+    }
   }, [editor, value, chunkList, props.version]);
 
   const mergedStyle = {

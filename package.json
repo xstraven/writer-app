@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "tiptap-reflex-wrapper": "file:frontend/tiptap-reflex-wrapper/tiptap-reflex-wrapper-0.0.1.tgz"
+  }
+}

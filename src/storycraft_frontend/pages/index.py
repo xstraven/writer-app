@@ -9,22 +9,7 @@ from ..components.tiptap_editor import tiptap_editor
 DEBUG_TIPTAP = os.getenv("STORYCRAFT_DEBUG_TIPTAP", "0").lower() in ("1", "true", "yes", "on")
 
 
-def seamless_chunks_view() -> rx.Component:
-    # Display the current branch as a single continuous text block.
-    return rx.box(
-        rx.text(
-            rx.cond(
-                (AppState.joined_chunks_text == ""),
-                AppState.draft_text,
-                AppState.joined_chunks_text,
-            ),
-            style={
-                "whiteSpace": "pre-wrap",
-                "lineHeight": "1.7",
-            },
-        ),
-        p=0,
-    )
+ 
 
 def memory_panel() -> rx.Component:
     return rx.box(
@@ -85,11 +70,11 @@ def context_panel() -> rx.Component:
         rx.vstack(
             rx.box(
                 rx.text("Scene Summary", weight="bold"),
-                rx.text_area(
+                tiptap_editor(
+                    value=AppState.context.summary,  # type: ignore[arg-type]
                     placeholder="Short summary of the current scene...",
-                    value=AppState.context.summary,
+                    min_height="100px",
                     on_change=AppState.set_context_summary,
-                    rows="4",
                 ),
                 mb=3,
             ),
@@ -223,9 +208,10 @@ def lorebook_panel() -> rx.Component:
                     on_change=AppState.set_new_lore_kind,
                 ),
             ),
-            rx.text_area(
+            tiptap_editor(
+                value=AppState.new_lore_summary,  # type: ignore[arg-type]
                 placeholder="Summary",
-                value=AppState.new_lore_summary,
+                min_height="100px",
                 on_change=AppState.set_new_lore_summary,
             ),
             rx.button("Add", on_click=AppState.submit_new_lore),
@@ -287,10 +273,10 @@ def generation_settings_panel() -> rx.Component:
             ),
             rx.box(
                 rx.text("System Prompt", weight="bold"),
-                rx.text_area(
-                    value=AppState.system_prompt,
+                tiptap_editor(
+                    value=AppState.system_prompt,  # type: ignore[arg-type]
                     on_change=AppState.set_system_prompt,
-                    rows="6",
+                    min_height="120px",
                     placeholder="Guide the model's style, voice, and constraints...",
                 ),
             ),
@@ -508,11 +494,11 @@ def meta_lore_panel() -> rx.Component:
             rx.hstack(rx.heading("Story Meta", size="5")),
             rx.divider(),
             rx.text("Story Description"),
-            rx.text_area(
+            tiptap_editor(
+                value=AppState.context.summary,  # type: ignore[arg-type]
                 placeholder="What is this story about?",
-                value=AppState.context.summary,
+                min_height="120px",
                 on_change=AppState.set_context_summary,
-                rows="6",
             ),
             rx.hstack(
                 rx.button("Suggest from draft", size="2", on_click=AppState.suggest_context),
@@ -889,15 +875,26 @@ def index() -> rx.Component:
                         ),
                         id="draft-chunks",
                     ),
-                    # New user chunk composer (full width)
+                    # New user chunk composer (Simple textarea for reliability)
                     rx.box(
                         rx.text("Composer", weight="bold"),
-                        tiptap_editor(
-                            value=AppState.new_chunk_text,  # type: ignore[arg-type]
-                            placeholder="Write the next part here…",
+                        rx.text_area(
+                            value=AppState.new_chunk_text,
+                            placeholder="Write the next part here… (Press Cmd+Enter to commit)",
                             min_height="140px",
                             on_change=AppState.set_new_chunk_text,
-                            on_submit=AppState.commit_composer_text,
+                            width="100%",
+                            style={
+                                "background": "#0b0f15",
+                                "border": "1px solid #2a2f3a", 
+                                "border_radius": "8px",
+                                "padding": "0.75rem 0.9rem 0.8rem 0.9rem",
+                                "color": "#e5e7eb",
+                                "font_family": "inherit",
+                                "line_height": "1.7",
+                                "resize": "vertical"
+                            },
+                            on_key_down=AppState.handle_composer_keydown,
                         ),
                         id="composer",
                         data_row_id="composer",
@@ -973,8 +970,6 @@ def index() -> rx.Component:
         
         rx.html("""
             <style>
-            .rt-TextAreaRoot textarea { max-height: none !important; overflow-y: hidden !important; }
-            textarea { overflow-y: hidden !important; }
             /* TipTap editor basic dark theme adjustments */
             .tiptap-editor { color: #e5e7eb; background: transparent; line-height: 1.7; }
             .tiptap-editor .ProseMirror { outline: none; white-space: pre-wrap; word-break: break-word; min-height: inherit; }
@@ -1032,8 +1027,7 @@ def index() -> rx.Component:
             #instruction .tiptap-editor .ProseMirror p:last-child { margin-bottom: 0; }
             .panel-dark { background-color: #0f131a; color: #e5e7eb; }
             .panel-dark h1, .panel-dark h2, .panel-dark h3, .panel-dark h4, .panel-dark h5, .panel-dark h6 { color: #f3f4f6; }
-            .panel-dark input, .panel-dark textarea, .panel-dark select { background-color: #111827 !important; color: #e5e7eb !important; border-color: #374151 !important; }
-            .panel-dark .rt-TextAreaRoot textarea { background-color: #111827 !important; color: #e5e7eb !important; border-color: #374151 !important; }
+            .panel-dark input, .panel-dark select { background-color: #111827 !important; color: #e5e7eb !important; border-color: #374151 !important; }
             .panel-dark .rt-SelectTrigger, .panel-dark .rt-InputRoot { background-color: #111827 !important; color: #e5e7eb !important; border-color: #374151 !important; }
             .panel-dark .rt-BadgeRoot { background-color: #1f2937 !important; color: #e5e7eb !important; }
             .panel-dark .rt-ButtonRoot[data-variant="soft"] { background-color: #1f2937; color: #e5e7eb; }
@@ -1064,8 +1058,8 @@ def base_styles() -> rx.Component:
           .app-topbar .rt-ButtonRoot[data-variant="soft"] { background-color: rgba(147, 51, 234, 0.15); color: #c4b5fd; }
           .app-topbar .rt-ButtonRoot[data-variant="soft"]:hover { background-color: rgba(147, 51, 234, 0.25); }
           /* Inputs general dark */
-          input, textarea, select { background-color: #111827; color: #e5e7eb; border-color: #374151; }
-          .rt-InputRoot, .rt-SelectTrigger, .rt-TextAreaRoot textarea { background-color: #111827; color: #e5e7eb; border-color: #374151; }
+          input, select { background-color: #111827; color: #e5e7eb; border-color: #374151; }
+          .rt-InputRoot, .rt-SelectTrigger { background-color: #111827; color: #e5e7eb; border-color: #374151; }
         </style>
         """
     )

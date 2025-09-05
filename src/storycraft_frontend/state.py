@@ -178,6 +178,71 @@ class AppState(rx.State):
     def clear_status(self):
         self.status = "idle"
 
+    # --- Simple setters used by TipTap and inputs ---
+    def set_new_chunk_text(self, value: str):
+        print(f"[DEBUG] set_new_chunk_text called with: '{value}'")
+        self.new_chunk_text = value or ""
+        print(f"[DEBUG] new_chunk_text set to: '{self.new_chunk_text}'")
+        
+    async def handle_composer_keydown(self, key):
+        """Handle Cmd+Enter in the composer textarea."""
+        print(f"[DEBUG] handle_composer_keydown called with key: {key}, type: {type(key)}")
+        
+        # Handle the case where key might be a string or dict
+        if isinstance(key, str):
+            print(f"[DEBUG] Key is string: '{key}' - cannot detect modifier keys")
+            return
+        elif hasattr(key, 'get'):
+            key_name = str(key.get("key", ""))
+            ctrl_key = bool(key.get("ctrlKey", False))
+            meta_key = bool(key.get("metaKey", False))
+        elif hasattr(key, 'key'):
+            key_name = str(getattr(key, 'key', ''))
+            ctrl_key = bool(getattr(key, 'ctrlKey', False)) or bool(getattr(key, 'ctrl_key', False))
+            meta_key = bool(getattr(key, 'metaKey', False)) or bool(getattr(key, 'meta_key', False))
+        else:
+            print(f"[DEBUG] Unknown key format: {key}")
+            return
+            
+        print(f"[DEBUG] Key details - name: '{key_name}', ctrl: {ctrl_key}, meta: {meta_key}")
+        
+        if key_name == "Enter" and (ctrl_key or meta_key):
+            print(f"[DEBUG] Cmd+Enter detected, committing composer text: '{self.new_chunk_text}'")
+            await self.commit_user_chunk()
+
+    def set_instruction(self, value: str):
+        self.instruction = value or ""
+
+    def set_model(self, value: str):
+        self.model = (value or "").strip() or self.model
+
+    def set_new_lore_name(self, value: str):
+        self.new_lore_name = value or ""
+
+    def set_new_lore_kind(self, value: str):
+        self.new_lore_kind = value or ""
+
+    def set_new_lore_summary(self, value: str):
+        self.new_lore_summary = value or ""
+
+    def set_new_npc_label(self, value: str):
+        self.new_npc_label = value or ""
+
+    def set_new_npc_detail(self, value: str):
+        self.new_npc_detail = value or ""
+
+    def set_new_object_label(self, value: str):
+        self.new_object_label = value or ""
+
+    def set_new_object_detail(self, value: str):
+        self.new_object_detail = value or ""
+
+    def set_include_context(self, value: bool):
+        self.include_context = bool(value)
+
+    def set_include_memory(self, value: bool):
+        self.include_memory = bool(value)
+
     async def dev_seed_current(self):
         """Import sample chunks and lore for the current story if available."""
         payload = {
@@ -201,6 +266,7 @@ class AppState(rx.State):
         return {
             "draft_text": self.draft_text,
             "instruction": self.instruction,
+            "new_chunk_text": self.new_chunk_text,
             "model": self.model,
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
@@ -214,6 +280,7 @@ class AppState(rx.State):
     def _apply_snapshot(self, data: dict):
         self.draft_text = data.get("draft_text", "")
         self.instruction = data.get("instruction", "")
+        self.new_chunk_text = data.get("new_chunk_text", "")
         self.model = data.get("model") or self.model
         self.temperature = float(data.get("temperature", self.temperature))
         self.max_tokens = int(data.get("max_tokens", self.max_tokens))
@@ -245,6 +312,7 @@ class AppState(rx.State):
             # New story: clear to defaults
             self.draft_text = ""
             self.instruction = ""
+            self.new_chunk_text = ""
             self.continuation = ""
         # Clear branch-related UI and reload for the new story
         self.branch_path = []
@@ -484,22 +552,24 @@ class AppState(rx.State):
         await self.reload_branch()
 
     async def commit_user_chunk(self):
+        """Commit user chunk from composer text."""
+        print(f"[DEBUG] commit_user_chunk called, new_chunk_text: '{self.new_chunk_text}'")
+        
         story = self.current_story
-        # Prefer the dedicated composer input if provided, else fall back to diffing draft_text.
         chunk = (self.new_chunk_text or "").strip()
+        
         if not chunk:
-            # Build base text from current branch and infer tail from draft_text.
-            base_text = "\n\n".join([s.content for s in self.branch_path])
-            draft = self.draft_text or ""
-            if base_text:
-                if not draft.startswith(base_text):
-                    self.status = "error: draft diverged; refresh branch first"
-                    return
-                chunk = draft[len(base_text):].lstrip("\n")
-            else:
-                chunk = draft.strip()
-            if not chunk.strip():
-                return
+            print("[DEBUG] No chunk content to commit")
+            self.status = "error: nothing to commit - write something in the composer first"
+            return
+            
+        if not self.head_id:
+            print("[DEBUG] No head_id available")
+            self.status = "error: no parent to append to - try refreshing the branch"
+            return
+            
+        print(f"[DEBUG] Committing chunk with {len(chunk)} characters to parent {self.head_id}")
+        
         parent_id = self.head_id
         payload = {
             "story": story,
@@ -508,19 +578,31 @@ class AppState(rx.State):
             "parent_id": parent_id,
             "set_active": True,
         }
-        async with httpx.AsyncClient() as client:
-            r = await client.post(f"{API_BASE}/api/snippets/append", json=payload)
-            r.raise_for_status()
-        await self.reload_branch()
-        await self.save_state()
-        self.status = "saved"
-        # Clear composer and instruction after committing
-        self.new_chunk_text = ""
-        self.instruction = ""
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                r = await client.post(f"{API_BASE}/api/snippets/append", json=payload)
+                r.raise_for_status()
+            
+            print("[DEBUG] Chunk committed successfully, reloading branch")
+            await self.reload_branch()
+            await self.save_state()
+            self.status = "saved"
+            
+            # Clear composer and instruction after committing
+            self.new_chunk_text = ""
+            self.instruction = ""
+            print("[DEBUG] Composer cleared after successful commit")
+            
+        except Exception as e:
+            print(f"[DEBUG] Commit failed with error: {e}")
+            self.status = f"error: failed to commit - {e}"
 
     async def commit_composer_text(self, value: str):
-        # Commit the provided composer text directly (used by TipTap Mod+Enter)
-        self.new_chunk_text = (value or "")
+        """Commit the provided composer text directly (used by TipTap Mod+Enter)."""
+        print(f"[DEBUG] commit_composer_text called with value: '{value}'")
+        self.new_chunk_text = (value or "").strip()
+        print(f"[DEBUG] Set new_chunk_text to: '{self.new_chunk_text}'")
         await self.commit_user_chunk()
 
     def set_chunk_edit(self, sid: str, value: str):
