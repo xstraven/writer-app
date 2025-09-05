@@ -35,6 +35,10 @@ from .models import (
     PromptPreviewResponse,
     DevSeedRequest,
     DevSeedResponse,
+    SeedStoryRequest,
+    SeedStoryResponse,
+    LoreGenerateRequest,
+    LoreGenerateResponse,
 )
 
 
@@ -235,6 +239,235 @@ async def prompt_preview(req: PromptPreviewRequest) -> PromptPreviewResponse:
     )
     return PromptPreviewResponse(messages=messages)  # type: ignore[arg-type]
 
+
+@app.post("/api/stories/seed-ai", response_model=SeedStoryResponse)
+async def seed_story_from_prompt(req: SeedStoryRequest) -> SeedStoryResponse:
+    story = (req.story or "").strip()
+    prompt = (req.prompt or "").strip()
+    if not story:
+        raise HTTPException(status_code=400, detail="Missing story name")
+    if not prompt:
+        raise HTTPException(status_code=400, detail="Missing prompt")
+
+    # 1) Generate an opening chunk based on the prompt.
+    opening_instruction = (
+        "Write the opening scene for this story idea. Establish tone, POV, and a hook. "
+        "Aim for 1–2 short paragraphs. Do not include meta commentary. Story idea: "
+        + prompt
+    )
+    from .openrouter import OpenRouterClient
+
+    client = OpenRouterClient()
+    # Reuse PromptBuilder structure with empty history and only an instruction.
+    from .prompt_builder import PromptBuilder
+
+    messages = (
+        PromptBuilder()
+        .with_instruction(opening_instruction)
+        .with_history_text("")
+        .with_draft_text("")
+        .build_messages()
+    )
+    gen = await client.chat(
+        messages=messages,
+        model=req.model,
+        max_tokens=req.max_tokens_first_chunk,
+        temperature=req.temperature,
+    )
+    content = gen.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+    if not content:
+        content = "[Starter]"  # minimal fallback in dev mode
+
+    # 2) Persist as root snippet for the new story.
+    row = snippet_store.create_snippet(
+        story=story,
+        content=content,
+        kind="ai",
+        parent_id=None,
+        set_active=None,
+    )
+
+    # 3) Derive a concise synopsis using the context suggester (summary field).
+    synopsis = ""
+    try:
+        ctx = await suggest_context_from_text(text=content, model=req.model, max_npcs=4, max_objects=4)
+        synopsis = (ctx.summary or "").strip()
+        # Persist synopsis and initial context to per-story settings.
+        story_settings_store.update(story, {"synopsis": synopsis, "context": ctx.model_dump()})
+    except Exception:
+        synopsis = ""
+
+    # 4) Select relevant lore entries by matching keys against the prompt+content.
+    relevant_ids: list[str] = []
+    if req.use_lore:
+        try:
+            selection_text = (prompt + "\n\n" + content).lower()[-4000:]
+            for entry in store.list(story):
+                if getattr(entry, "always_on", False):
+                    relevant_ids.append(entry.id)
+                    continue
+                keys = [k.strip().lower() for k in getattr(entry, "keys", []) if k and k.strip()]
+                if keys and any(k in selection_text for k in keys):
+                    relevant_ids.append(entry.id)
+        except Exception:
+            relevant_ids = []
+
+    return SeedStoryResponse(
+        story=story,
+        root_snippet_id=row.id,
+        content=content,
+        synopsis=synopsis,
+        relevant_lore_ids=relevant_ids,
+    )
+
+
+@app.post("/api/lorebook/generate", response_model=LoreGenerateResponse)
+async def generate_lorebook(req: LoreGenerateRequest) -> LoreGenerateResponse:
+    story = (req.story or "").strip()
+    if not story:
+        raise HTTPException(status_code=400, detail="Missing story")
+
+    # Gather current story text from main path
+    path = snippet_store.main_path(story)
+    story_text = snippet_store.build_text(path)
+    if not story_text.strip():
+        # Allow generation to proceed but likely produce minimal entries
+        story_text = ""
+
+    # JSON schema for an array of lore entries (names may be provided by user)
+    schema = {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "kind": {"type": "string", "description": "character | location | item | faction | concept | note"},
+                "summary": {"type": "string"},
+                "tags": {"type": "array", "items": {"type": "string"}},
+                "keys": {"type": "array", "items": {"type": "string"}},
+                "always_on": {"type": "boolean"},
+            },
+            "required": ["name", "summary"],
+            "additionalProperties": False,
+        },
+    }
+
+    from .openrouter import OpenRouterClient
+
+    client = OpenRouterClient()
+    names = [n.strip() for n in (req.names or []) if n and n.strip()]
+    if names:
+        # Guided mode: user provides names; infer and fill details for each.
+        names_block = "\n".join(f"- {n}" for n in names)
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a story bible generator. Given a list of entry names and the story text, "
+                    "produce lore entries with the same names (do NOT rename). Infer kind, write a concise "
+                    "summary (1-3 sentences), suggest tags and trigger keys, and set always_on true only if core canon."
+                ),
+            },
+            {"role": "user", "content": "Names:\n" + names_block},
+            {
+                "role": "user",
+                "content": ("Use the following story text as source (avoid invention beyond what's implied).\n\n" + story_text),
+            },
+        ]
+    else:
+        # Unguided mode: infer entries from story text up to max_items
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a story bible generator. From the provided story text, extract a concise lorebook. "
+                    "Return a JSON array where each item has: name, kind, summary, tags, keys, always_on. "
+                    "- name: short unique label.\n- kind: character | location | item | faction | concept.\n"
+                    "- summary: 1-3 sentences, factual.\n- tags: short labels.\n- keys: trigger words to auto-include.\n- always_on: true for core canon only."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Produce up to {max(1, int(req.max_items))} entries from this story text.\n\n" + story_text
+                ),
+            },
+        ]
+
+    result = await client.chat(
+        messages=messages,
+        model=req.model,
+        temperature=0.2,
+        response_format={
+            "type": "json_schema",
+            "json_schema": {"name": "lore_entries", "schema": schema, "strict": False},
+        },
+    )
+
+    created = 0
+    try:
+        content = result.get("choices", [{}])[0].get("message", {}).get("content")
+        import json as _json
+
+        data = content if isinstance(content, list) else _json.loads(content or "[]")
+    except Exception:
+        # Dev-mode fallback: create a single synopsis-style note
+        data = [
+            {
+                "name": "Synopsis",
+                "kind": "note",
+                "summary": (story_text[:200] + ("…" if len(story_text) > 200 else "")) or "Story synopsis placeholder.",
+                "tags": ["auto"],
+                "keys": [],
+                "always_on": True,
+            }
+        ]
+
+    # Apply strategy and persist
+    if req.strategy == "replace":
+        try:
+            store.delete_all(story)
+        except Exception:
+            pass
+
+    # Avoid duplicate name-kind pairs when appending
+    existing = {(e.name.strip().lower(), (e.kind or "").strip().lower()) for e in store.list(story)}
+    for it in data or []:
+        try:
+            name = (it.get("name", "") or "").strip()
+            summary = (it.get("summary", "") or "").strip()
+            if not name or not summary:
+                continue
+            kind = (it.get("kind", "note") or "note").strip() or "note"
+            key = (name.lower(), kind.lower())
+            if key in existing and req.strategy != "replace":
+                continue
+            tags = it.get("tags") or []
+            if not isinstance(tags, list):
+                tags = []
+            keys = it.get("keys") or []
+            if not isinstance(keys, list):
+                keys = []
+            always_on = bool(it.get("always_on", False))
+            created_entry = store.create(
+                LoreEntryCreate(
+                    story=story,
+                    name=name,
+                    kind=kind,
+                    summary=summary,
+                    tags=[str(t) for t in tags if str(t).strip()],
+                    keys=[str(k) for k in keys if str(k).strip()],
+                    always_on=always_on,
+                )
+            )
+            existing.add(key)
+            if created_entry:
+                created += 1
+        except Exception:
+            continue
+
+    total = len(store.list(story))
+    return LoreGenerateResponse(story=story, created=created, total=total)
 
 @app.post("/api/dev/seed", response_model=DevSeedResponse)
 async def dev_seed(req: DevSeedRequest) -> DevSeedResponse:
@@ -572,3 +805,24 @@ async def list_stories() -> list[str]:
     if not stories:
         stories = ["Story One", "Story Two"]
     return stories
+
+
+@app.delete("/api/stories/{story}", response_model=dict)
+async def delete_story(story: str) -> dict:
+    story = (story or "").strip()
+    if not story:
+        raise HTTPException(status_code=400, detail="Missing story")
+    # Best-effort delete across stores
+    try:
+        snippet_store.delete_story(story)
+    except Exception:
+        pass
+    try:
+        store.delete_all(story)
+    except Exception:
+        pass
+    try:
+        story_settings_store.delete_story(story)
+    except Exception:
+        pass
+    return {"ok": True}

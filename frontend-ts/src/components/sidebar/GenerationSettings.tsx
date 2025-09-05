@@ -7,22 +7,23 @@ import { useAppStore } from '@/stores/appStore'
 
 export function GenerationSettings() {
   const { generationSettings, updateGenerationSettings } = useAppStore()
+  const temp = Number.isFinite(generationSettings.temperature as any)
+    ? (generationSettings.temperature as number)
+    : 0.7
 
   return (
     <div className="space-y-4">
       <div>
         <div className="flex items-center justify-between">
           <label htmlFor="temp" className="text-sm font-medium">Temperature</label>
-          <span className="text-sm text-neutral-500">
-            {generationSettings.temperature.toFixed(2)}
-          </span>
+          <span className="text-sm text-neutral-500">{temp.toFixed(2)}</span>
         </div>
         <Slider
           id="temp"
           min={0}
           max={2}
           step={0.01}
-          value={[generationSettings.temperature]}
+          value={[temp]}
           onValueChange={(value) => updateGenerationSettings({ temperature: value[0] })}
           className="mt-2"
         />

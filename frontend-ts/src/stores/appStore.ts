@@ -100,7 +100,15 @@ export const useAppStore = create<AppState>()(
     (set, get) => ({
       ...initialState,
 
-      setCurrentStory: (story) => set({ currentStory: story }),
+      setCurrentStory: (story) => set((state) => ({ 
+        currentStory: story,
+        // Reset per-story draft data so sync adopts backend for the selected story
+        chunks: [],
+        history: [],
+        editingId: null,
+        editingText: '',
+        hoveredId: null,
+      })),
       
       setInstruction: (instruction) => set({ instruction }),
       

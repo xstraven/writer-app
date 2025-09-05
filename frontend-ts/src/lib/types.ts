@@ -160,6 +160,37 @@ export interface PromptPreviewResponse {
   messages: PromptMessage[];
 }
 
+// --- AI Seed Story ---
+export interface SeedStoryRequest {
+  story: string;
+  prompt: string;
+  model?: string | null;
+  temperature?: number;
+  max_tokens_first_chunk?: number;
+  use_lore?: boolean;
+}
+
+export interface SeedStoryResponse {
+  story: string;
+  root_snippet_id: string;
+  content: string;
+  synopsis: string;
+  relevant_lore_ids: string[];
+}
+
+export interface LoreGenerateRequest {
+  story: string;
+  model?: string | null;
+  max_items?: number;
+  strategy?: 'append' | 'replace';
+}
+
+export interface LoreGenerateResponse {
+  story: string;
+  created: number;
+  total: number;
+}
+
 export interface AppState {
   currentStory: string;
   instruction: string;

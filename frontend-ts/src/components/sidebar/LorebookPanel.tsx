@@ -20,7 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useAppStore } from '@/stores/appStore'
-import { createLoreEntry, updateLoreEntry, deleteLoreEntry, saveStorySettings } from '@/lib/api'
+import { createLoreEntry, updateLoreEntry, deleteLoreEntry, saveStorySettings, generateLorebook, getLorebook } from '@/lib/api'
 import { toast } from 'sonner'
 import { getApiErrorMessage } from '@/lib/errors'
 import { uid } from '@/lib/utils'
@@ -36,6 +36,9 @@ export function LorebookPanel() {
   const [searchTerm, setSearchTerm] = useState('')
   const [editingEntry, setEditingEntry] = useState<EditingEntry | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [showGenerateModal, setShowGenerateModal] = useState(false)
+  const [namesText, setNamesText] = useState('')
 
   // Filter lorebook based on search
   const filteredLorebook = lorebook.filter(entry =>
@@ -318,6 +321,7 @@ export function LorebookPanel() {
   }
 
   return (
+    <>
     <div className="space-y-3">
       {/* Header with Search and Add Button */}
       <div className="flex items-center gap-2">
@@ -337,6 +341,9 @@ export function LorebookPanel() {
         >
           <Plus className="h-3 w-3 mr-1" />
           Add
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => setShowGenerateModal(true)} disabled={isLoading || !!editingEntry}>
+          Generate
         </Button>
       </div>
 
@@ -420,5 +427,50 @@ export function LorebookPanel() {
         </div>
       </ScrollArea>
     </div>
+    {/* Generate Modal */}
+    {showGenerateModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20">
+        <div className="bg-white rounded-md shadow-lg w-[520px] max-w-[95vw]">
+          <div className="p-3 border-b flex items-center justify-between">
+            <div className="font-medium">Generate Lore Entries</div>
+            <button className="text-gray-500" onClick={() => setShowGenerateModal(false)}><X className="h-4 w-4" /></button>
+          </div>
+          <div className="p-3 space-y-3">
+            <div className="text-sm text-gray-600">Enter one name per line. The assistant will infer kind, summary, tags, and keys from the current story. Names are preserved.</div>
+            <Textarea
+              value={namesText}
+              onChange={(e) => setNamesText(e.target.value)}
+              placeholder={"Mira\nThe Quiet War\nStormbreak Harbor"}
+              className="min-h-[120px]"
+            />
+            <div className="text-xs text-gray-500">Entries will be appended to the lorebook.</div>
+          </div>
+          <div className="p-3 border-t flex items-center justify-end gap-2">
+            <Button variant="ghost" onClick={() => setShowGenerateModal(false)} disabled={isGenerating}>Cancel</Button>
+            <Button onClick={async () => {
+              const names = namesText.split(/\r?\n/).map(s => s.trim()).filter(Boolean)
+              if (names.length === 0) { toast.error('Please enter at least one name'); return }
+              setIsGenerating(true)
+              try {
+                const res = await generateLorebook({ story: currentStory, names, strategy: 'append' })
+                const updated = await getLorebook(currentStory)
+                setLorebook(updated)
+                try { await saveStorySettings({ story: currentStory, lorebook: updated }) } catch {}
+                toast.success(`Generated ${res.created} entr${res.created === 1 ? 'y' : 'ies'}`)
+                setShowGenerateModal(false)
+                setNamesText('')
+              } catch (error: any) {
+                toast.error(`Failed to generate lore: ${getApiErrorMessage(error)}`)
+              } finally {
+                setIsGenerating(false)
+              }
+            }} disabled={isGenerating}>
+              {isGenerating ? 'Generating…' : 'Generate'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }

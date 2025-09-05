@@ -113,11 +113,11 @@ export function useStorySync() {
       if (typeof s.synopsis === 'string') setSynopsis(s.synopsis)
       if (s.memory) setMemory(s.memory)
       const settingsToUpdate: any = {}
-      if (s.temperature !== undefined) settingsToUpdate.temperature = s.temperature
-      if (s.max_tokens !== undefined) settingsToUpdate.max_tokens = s.max_tokens
-      if (s.model !== undefined) settingsToUpdate.model = s.model || undefined
-      if (s.system_prompt !== undefined) settingsToUpdate.system_prompt = s.system_prompt || undefined
-      if (s.max_context_window !== undefined) settingsToUpdate.max_context_window = s.max_context_window
+      if (s.temperature !== undefined && s.temperature !== null) settingsToUpdate.temperature = s.temperature
+      if (s.max_tokens !== undefined && s.max_tokens !== null) settingsToUpdate.max_tokens = s.max_tokens
+      if (s.model !== undefined && s.model !== null) settingsToUpdate.model = s.model || undefined
+      if (s.system_prompt !== undefined && s.system_prompt !== null) settingsToUpdate.system_prompt = s.system_prompt || undefined
+      if (s.max_context_window !== undefined && s.max_context_window !== null) settingsToUpdate.max_context_window = s.max_context_window
       if (Object.keys(settingsToUpdate).length > 0) updateGenerationSettings(settingsToUpdate)
       // Gallery (UI-only, local state)
       if (Array.isArray(s.gallery)) setGallery(s.gallery)

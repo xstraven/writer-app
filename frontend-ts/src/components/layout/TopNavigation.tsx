@@ -2,10 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { 
-  GitBranch, 
   BookOpen, 
   Plus, 
-  ChevronDown,
   AlertCircle,
   CheckCircle,
   Sparkles
@@ -19,10 +17,9 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Modal } from '@/components/ui/modal'
-import { BranchesPanel } from '@/components/sidebar/BranchesPanel'
 // import { GenerationSettings } from '@/components/sidebar/GenerationSettings'
 import { useAppStore } from '@/stores/appStore'
-import { getStories, healthCheck, getPromptPreview } from '@/lib/api'
+import { getStories, healthCheck, seedStoryAI } from '@/lib/api'
 import { toast } from 'sonner'
 
 export function TopNavigation() {
@@ -31,11 +28,11 @@ export function TopNavigation() {
   const [apiStatus, setApiStatus] = useState<'checking' | 'ok' | 'error'>('checking')
   const [apiMessage, setApiMessage] = useState('')
   
-  // Modal states
-  // const [showSettings, setShowSettings] = useState(false)
-  const [showBranches, setShowBranches] = useState(false)
-  const [showPromptPreview, setShowPromptPreview] = useState(false)
-  const [promptMessages, setPromptMessages] = useState<Array<{role: string, content: string}>>([])
+  // Modal: AI seed
+  const [showSeedAI, setShowSeedAI] = useState(false)
+  const [seedName, setSeedName] = useState('')
+  const [seedPrompt, setSeedPrompt] = useState('')
+  const [seeding, setSeeding] = useState(false)
 
   useEffect(() => {
     loadStories()
@@ -53,6 +50,25 @@ export function TopNavigation() {
     } catch (error) {
       console.error('Failed to load stories:', error)
       toast.error('Failed to load stories')
+    }
+  }
+
+  const handleDeleteStory = async () => {
+    if (!currentStory) return
+    setDeleting(true)
+    try {
+      await apiDeleteStory(currentStory)
+      const updated = await getStories()
+      setStories(updated)
+      const next = updated[0] || ''
+      if (next) setCurrentStory(next)
+      setShowDelete(false)
+    } catch (error) {
+      console.error('Failed to delete story:', error)
+      // eslint-disable-next-line no-undef
+      ;(await import('sonner')).toast.error(`Failed to delete story: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -77,25 +93,44 @@ export function TopNavigation() {
     }
   }
 
-  const handleShowPromptPreview = async () => {
+  const handleOpenSeedAI = () => {
+    setSeedName('')
+    setSeedPrompt('')
+    setShowSeedAI(true)
+  }
+
+  const handleSeedStory = async () => {
+    const prompt = seedPrompt.trim()
+    if (!prompt) {
+      toast.error('Please enter a prompt')
+      return
+    }
+    // Determine name
+    const base = seedName.trim()
+    const storyName = base || `Untitled ${stories.length + 1}`
+    setSeeding(true)
     try {
-      const result = await getPromptPreview(currentStory, '', undefined)
-      setPromptMessages(result.messages || [])
-      setShowPromptPreview(true)
+      await seedStoryAI({
+        story: storyName,
+        prompt,
+        // Keep the first chunk small to avoid timeouts
+        max_tokens_first_chunk: 200,
+        // Model/params can be wired from settings later if needed
+      })
+      // Add to list and switch
+      setStories([...stories, storyName])
+      setCurrentStory(storyName)
+      setShowSeedAI(false)
+      toast.success('Starter generated')
     } catch (error) {
-      console.error('Failed to get prompt preview:', error)
-      toast.error(`Failed to get prompt preview: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      console.error('Failed to seed story:', error)
+      toast.error(`Failed to seed story: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setSeeding(false)
     }
   }
 
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case 'system': return 'bg-purple-100 text-purple-800'
-      case 'user': return 'bg-blue-100 text-blue-800'
-      case 'assistant': return 'bg-green-100 text-green-800'
-      default: return 'bg-gray-100 text-gray-800'
-    }
-  }
+  // Prompt preview moved to right sidebar Generation card
 
   return (
     <>
@@ -131,33 +166,28 @@ export function TopNavigation() {
                 <Plus className="h-4 w-4 mr-1" />
                 New Story
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleOpenSeedAI}
+                className="text-purple-600 border-purple-200 hover:bg-purple-50"
+              >
+                <Sparkles className="h-4 w-4 mr-1" />
+                New Story (AI)
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowDelete(true)}
+                className="text-red-600 border-red-200 hover:bg-red-50"
+              >
+                Delete Story
+              </Button>
             </div>
           </div>
 
           {/* Right Side - Actions and Status */}
           <div className="flex items-center gap-3">
-            {/* Action Buttons */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowBranches(true)}
-              className="text-purple-600 border-purple-200 hover:bg-purple-50"
-            >
-              <GitBranch className="h-4 w-4 mr-1" />
-              Branches
-            </Button>
-            
-            {/* Settings moved to right sidebar; button removed */}
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleShowPromptPreview}
-              className="text-purple-600 border-purple-200 hover:bg-purple-50"
-            >
-              <Sparkles className="h-4 w-4 mr-1" />
-              Preview Prompt
-            </Button>
 
             {/* API Status */}
             <div className="flex items-center gap-2">
@@ -188,44 +218,44 @@ export function TopNavigation() {
         </div>
       </div>
 
-      {/* Modals */}
-      {/* Settings modal removed; use sidebar controls */}
+      {/* Modals: AI seed only; other modals moved to right sidebar */}
 
       <Modal
-        isOpen={showBranches}
-        onClose={() => setShowBranches(false)}
-        title="Story Branches"
-        size="lg"
-        position="right"
-      >
-        <div className="p-4 h-full overflow-y-auto">
-          <BranchesPanel />
-        </div>
-      </Modal>
-
-      <Modal
-        isOpen={showPromptPreview}
-        onClose={() => setShowPromptPreview(false)}
-        title="Generation Prompt Preview"
+        isOpen={showSeedAI}
+        onClose={() => setShowSeedAI(false)}
+        title="Create New Story with AI"
         size="lg"
       >
-        <div className="p-4 max-h-[70vh] overflow-y-auto">
-          <div className="space-y-3">
-            {promptMessages.map((message, index) => (
-              <div key={index} className="border rounded-lg p-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${getRoleColor(message.role)}`}>
-                    {message.role.toUpperCase()}
-                  </span>
-                </div>
-                <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed text-gray-700">
-                  {message.content}
-                </pre>
-              </div>
-            ))}
+        <div className="p-4 space-y-3">
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">Story Name (optional)</label>
+            <input
+              className="w-full border rounded px-2 py-2"
+              value={seedName}
+              onChange={(e) => setSeedName(e.target.value)}
+              placeholder="e.g., The Fallen Spire"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">What is this story about?</label>
+            <textarea
+              className="w-full border rounded px-2 py-2 min-h-[120px]"
+              value={seedPrompt}
+              onChange={(e) => setSeedPrompt(e.target.value)}
+              placeholder="A haunted archaeologist returns to her hometown…"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Button onClick={handleSeedStory} disabled={seeding}>
+              {seeding ? 'Generating…' : 'Generate Starter'}
+            </Button>
+            <Button variant="ghost" onClick={() => setShowSeedAI(false)} disabled={seeding}>
+              Cancel
+            </Button>
           </div>
         </div>
       </Modal>
+
     </>
   )
 }

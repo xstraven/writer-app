@@ -291,3 +291,38 @@ class DevSeedResponse(BaseModel):
     story: str
     chunks_imported: int = 0
     lore_imported: int = 0
+
+
+# --- Story Seeding (AI) ---
+class SeedStoryRequest(BaseModel):
+    story: str
+    prompt: str
+    model: Optional[str] = None
+    temperature: float = 0.7
+    max_tokens_first_chunk: int = 200
+    # When true, attempt to pick relevant lore entries by keyword match.
+    use_lore: bool = True
+
+
+class SeedStoryResponse(BaseModel):
+    story: str
+    root_snippet_id: str
+    content: str
+    synopsis: str = ""
+    relevant_lore_ids: list[str] = Field(default_factory=list)
+
+
+# --- Lorebook Generation ---
+class LoreGenerateRequest(BaseModel):
+    story: str
+    model: Optional[str] = None
+    max_items: int = 20
+    strategy: str = Field(default="append", description="append | replace")
+    # Optional: when provided, generate details for these entry names.
+    names: Optional[List[str]] = None
+
+
+class LoreGenerateResponse(BaseModel):
+    story: str
+    created: int = 0
+    total: int = 0

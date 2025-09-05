@@ -12,6 +12,10 @@ import type {
   Snippet,
   ContextState,
   StorySettingsPayload,
+  SeedStoryRequest,
+  SeedStoryResponse,
+  LoreGenerateRequest,
+  LoreGenerateResponse,
 } from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_STORYCRAFT_API_BASE || 'http://localhost:8001';
@@ -62,6 +66,10 @@ export const healthCheck = async () => {
 export const getStories = async (): Promise<string[]> => {
   const response = await apiClient.get('/api/stories');
   return response.data;
+};
+
+export const deleteStory = async (story: string): Promise<void> => {
+  await apiClient.delete(`/api/stories/${encodeURIComponent(story)}`)
 };
 
 // Lorebook
@@ -260,3 +268,16 @@ export const saveStorySettings = async (payload: StorySettingsPayload): Promise<
     throw err;
   }
 };
+
+// AI seeding: create a new story from a prompt
+export const seedStoryAI = async (payload: SeedStoryRequest): Promise<SeedStoryResponse> => {
+  // Seeding can take longer than default; allow up to 30s.
+  const response = await apiClient.post('/api/stories/seed-ai', payload, { timeout: 30000 })
+  return response.data
+}
+
+// Generate lorebook entries from current story text
+export const generateLorebook = async (payload: LoreGenerateRequest): Promise<LoreGenerateResponse> => {
+  const response = await apiClient.post('/api/lorebook/generate', payload, { timeout: 30000 })
+  return response.data
+}
