@@ -56,29 +56,34 @@ export function useStorySync() {
 
   // Sync backend chunks when branch data changes
   useEffect(() => {
-    if (branchData?.path && branchData.path.length > 0) {
-      // Convert snippets to chunks
-      const backendChunks = branchData.path.map(snippetToChunk)
-      
-      // Only update if chunks are different (avoid infinite loops)
-      const chunksAreDifferent = 
-        backendChunks.length !== chunks.length ||
-        backendChunks.some((chunk, index) => 
-          chunks[index]?.id !== chunk.id || 
-          chunks[index]?.text !== chunk.text
-        )
-      
-      if (chunksAreDifferent) {
-        console.log('Syncing chunks from backend:', backendChunks)
-        setChunks(backendChunks)
-      }
-    } else if (branchData?.path && branchData.path.length === 0) {
-      // Empty story - clear chunks
-      if (chunks.length > 0) {
-        console.log('Story is empty, clearing chunks')
-        setChunks([])
-      }
+    if (!branchData) return
+    const path = branchData.path || []
+    const backendChunks = path.map(snippetToChunk)
+
+    if (backendChunks.length === 0) {
+      // Do not clobber local draft when backend is empty
+      return
     }
+
+    // If frontend has no chunks, adopt backend entirely
+    if (chunks.length === 0 && backendChunks.length > 0) {
+      setChunks(backendChunks)
+      return
+    }
+
+    // If backend has extended content beyond local and shares the same prefix, adopt backend
+    const minLen = Math.min(chunks.length, backendChunks.length)
+    const prefixesMatch = Array.from({ length: minLen }).every((_, i) => (
+      chunks[i]?.id === backendChunks[i]?.id && chunks[i]?.text === backendChunks[i]?.text
+    ))
+
+    if (prefixesMatch && backendChunks.length > chunks.length) {
+      console.log('Backend has additional chunks; extending local copy')
+      setChunks(backendChunks)
+      return
+    }
+
+    // Otherwise, leave local state as-is to preserve uncommitted local chunks
   }, [branchData, setChunks, chunks])
 
   // Sync lorebook when data changes

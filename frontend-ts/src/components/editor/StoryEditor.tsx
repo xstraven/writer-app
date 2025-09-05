@@ -1,13 +1,11 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Wand2, RefreshCcw, Undo2, Plus, AlertCircle } from 'lucide-react'
+import { Wand2, RefreshCcw, Undo2, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import { TipTapComposer } from './TipTapComposer'
-import { AddChunkModal } from './AddChunkModal'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ChunkRenderer } from './ChunkRenderer'
 import { Loading } from '@/components/ui/loading'
@@ -19,14 +17,15 @@ import { uid } from '@/lib/utils'
 import type { Chunk } from '@/lib/types'
 
 export function StoryEditor() {
-  const [showAddChunkModal, setShowAddChunkModal] = useState(false)
   const [isAddingChunk, setIsAddingChunk] = useState(false)
+  const [userDraft, setUserDraft] = useState('')
   
   const {
     chunks,
     instruction,
     setInstruction,
     addChunk,
+    updateChunk,
     setChunks,
     history,
     revertFromHistory,
@@ -65,25 +64,46 @@ export function StoryEditor() {
     toast.success("Reverted to previous state")
   }
 
-  const handleAddUserText = async (userText: string) => {
+  const handleSubmitUserChunk = async (maybeText?: string) => {
+    const text = (maybeText ?? userDraft).trim()
+    if (!text) {
+      toast.error('Please write something before saving')
+      return
+    }
+
     setIsAddingChunk(true)
-    
+
+    // Optimistically add to the draft
+    const optimistic: Chunk = {
+      id: uid(),
+      text,
+      author: 'user',
+      timestamp: Date.now(),
+    }
+    addChunk(optimistic)
+    const previousDraft = userDraft
+    setUserDraft('')
+
     try {
-      // Add to backend first
-      await appendSnippet({
+      const created = await appendSnippet({
         story: currentStory,
-        content: userText,
+        content: text,
         kind: 'user',
         set_active: true,
       })
-      
-      // Refresh story data to sync the new chunk from backend
-      setTimeout(() => {
-        refetchStory()
-      }, 500) // Small delay to ensure backend has processed the request
-      
-      toast.success("User chunk added to story")
+
+      // Replace optimistic ID/timestamp with server values without refetching
+      updateChunk(optimistic.id, {
+        id: created.id,
+        text: created.content,
+        timestamp: new Date(created.created_at).getTime(),
+      })
+
+      toast.success('Chunk added')
     } catch (error) {
+      // Revert optimistic add and restore draft
+      setChunks(chunks.filter(c => c.id !== optimistic.id))
+      setUserDraft(previousDraft)
       console.error('Failed to add user chunk:', error)
       toast.error(`Failed to add chunk: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
@@ -120,15 +140,34 @@ export function StoryEditor() {
                   </div>
                 )}
 
-                {/* Add user chunk */}
-                <Button 
-                  onClick={() => setShowAddChunkModal(true)} 
-                  variant="secondary" 
-                  className="mt-1"
-                  disabled={isGenerating || isAddingChunk}
-                >
-                  <Plus className="h-4 w-4 mr-2" /> Add user chunk
-                </Button>
+                {/* Active user draft chunk */}
+                <div className="mt-3">
+                  <label className="text-sm text-neutral-600">
+                    Your next chunk (Cmd/Ctrl+Enter to save)
+                  </label>
+                  <div className="mt-2">
+                    <TipTapComposer
+                      value={userDraft}
+                      onChange={setUserDraft}
+                      onSubmit={handleSubmitUserChunk}
+                      placeholder="Write your next chunk..."
+                      disabled={isGenerating || isAddingChunk}
+                      className="min-h-[96px]"
+                    />
+                  </div>
+                  {/* Inline status: saving or generating */}
+                  <div className="mt-2 h-5 text-xs text-neutral-500 flex items-center gap-2" aria-live="polite">
+                    {isAddingChunk ? (
+                      <>
+                        <Loading size="sm" className="mr-1" /> Saving...
+                      </>
+                    ) : isGenerating ? (
+                      <>
+                        <Loading size="sm" className="mr-1" /> Generating...
+                      </>
+                    ) : null}
+                  </div>
+                </div>
               </>
             )}
           </div>

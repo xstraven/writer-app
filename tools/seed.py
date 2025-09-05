@@ -14,7 +14,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--story", required=True, help="Story name to seed (e.g., 'Test Story 1')")
     p.add_argument(
         "--base",
-        default=os.environ.get("STORYCRAFT_API_BASE", "http://127.0.0.1:8001"),
+        default=os.environ.get("NEW_STORYCRAFT_API_BASE", "http://127.0.0.1:8000"),
         help="Storycraft API base URL",
     )
     p.add_argument("--chunks", default=None, help="Override chunks filename under data/samples/")
