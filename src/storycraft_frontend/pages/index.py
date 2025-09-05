@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import os
 import reflex as rx
 
 from ..state import AppState
+from ..components.tiptap_editor import tiptap_editor
+
+DEBUG_TIPTAP = os.getenv("STORYCRAFT_DEBUG_TIPTAP", "0").lower() in ("1", "true", "yes", "on")
 
 
 def seamless_chunks_view() -> rx.Component:
@@ -737,6 +741,53 @@ def meta_overlay() -> rx.Component:
     )
 
 
+def tiptap_help_overlay() -> rx.Component:
+    return rx.cond(
+        AppState.show_tiptap_help,
+        rx.box(
+            rx.center(
+                rx.box(
+                    rx.hstack(
+                        rx.heading("Editor Tips", size="6"),
+                        rx.spacer(),
+                        rx.button("Close", on_click=AppState.close_tiptap_help, size="2", color_scheme="gray"),
+                        mb=2,
+                    ),
+                    rx.vstack(
+                        rx.text("Editing is seamless; chunks are preserved under the hood.", color="#9CA3AF"),
+                        rx.unordered_list(
+                            rx.list_item(rx.text("Split: Cmd/Ctrl + Enter at cursor → splits the current chunk.")),
+                            rx.list_item(rx.text("Merge: Backspace at the very start of a chunk → merges into previous.")),
+                            rx.list_item(rx.text("Save: Changes auto-save on idle and when focus leaves the editor.")),
+                            rx.list_item(rx.text("Generate: Adds AI text into the composer; commit to save into the branch.")),
+                            rx.list_item(rx.text("Boundaries: Subtle colored strip — green=user, blue=AI.")),
+                        ),
+                        spacing="2",
+                        align_items="stretch",
+                    ),
+                    p=4,
+                    class_name="panel-dark",
+                    bg="#0f131a",
+                    color="#e5e7eb",
+                    width=["95vw", "90vw", "680px"],
+                    border_radius="10px",
+                    box_shadow="lg",
+                    border="1px solid",
+                    border_color="#1f2937",
+                )
+            ),
+            position="fixed",
+            top="0",
+            left="0",
+            right="0",
+            bottom="0",
+            bg="rgba(0,0,0,0.6)",
+            z_index=1000,
+        ),
+        None,
+    )
+
+
 def index() -> rx.Component:
     confirm_overlay = rx.cond(
         AppState.show_confirm_flatten,
@@ -774,106 +825,79 @@ def index() -> rx.Component:
             # Main editor column
             rx.box(
                 rx.vstack(
-                    rx.text("Draft"),
-                    # Integrated chunk editors; no inner scroll, let page scroll
-                    rx.box(
-                        rx.vstack(
-                            rx.foreach(
-                                AppState.chunk_edit_list,
-                                lambda it: rx.box(
-                                    # Text area editor
-                                    rx.text_area(
-                                        value=it.content,
-                                        on_change=lambda v, sid=it.id: AppState.set_chunk_edit(sid, v),
-                                        rows="1",
-                                        auto_height=True,
-                                        min_rows=1,
-                                        max_rows=1000,
-                                        on_blur=lambda _=None, sid=it.id: AppState.save_chunk(sid),
-                                        id=f"chunk-{it.id}",
-                                        data_chunk_id=it.id,
-                                        width="100%",
-                                        wrap="soft",
-                                        style={
-                                            "overflow": "hidden",
-                                            "overflowY": "hidden",
-                                            "maxHeight": "none",
-                                            "resize": "none",
-                                            "whiteSpace": "pre-wrap",
-                                            "wordWrap": "break-word",
-                                        },
-                                    ),
-                                    # Top-right overlay actions
-                                    rx.hstack(
-                                        rx.tooltip(
-                                            rx.button("↑", size="1", variant="ghost",
-                                                title="Insert above",
-                                                on_click=lambda _=None, sid=it.id: AppState.insert_above(sid, "(write here)")
-                                            ),
-                                            content="Insert above",
-                                        ),
-                                        rx.tooltip(
-                                            rx.button("↓", size="1", variant="ghost",
-                                                title="Insert below",
-                                                on_click=lambda _=None, sid=it.id: AppState.insert_below(sid, "(write here)")
-                                            ),
-                                            content="Insert below",
-                                        ),
-                                        rx.tooltip(
-                                            rx.button("🗑️", size="1", color_scheme="red", variant="ghost",
-                                                title="Delete chunk",
-                                                on_click=lambda _=None, sid=it.id: AppState.delete_snippet(sid)
-                                            ),
-                                            content="Delete chunk",
-                                        ),
-                                        spacing="1",
-                                        justify="end",
-                                        class_name="chunk-actions",
-                                        style={
-                                            "position": "absolute",
-                                            "top": "4px",
-                                            "right": "6px",
-                                        },
-                                    ),
-                                    # Row container styling
-                                    position="relative",
-                                    mb=2,
-                                    style={
-                                        "boxShadow": rx.cond(
-                                            it.kind == "ai",
-                                            "inset 3px 0 0 #60A5FA",  # blue-400
-                                            "inset 3px 0 0 #4ADE80",  # green-400
-                                        )
-                                    },
-                                    class_name="chunk-row",
-                                ),
-                            ),
-                            spacing="2",
-                            align_items="stretch",
-                            id="draft-chunks",
+                    rx.hstack(
+                        rx.text("Draft", weight="bold"),
+                        rx.tooltip(
+                            rx.icon("info", size=18, color="#9CA3AF", cursor="pointer", on_click=AppState.open_tiptap_help),
+                            content="Editor tips & shortcuts",
                         ),
+                        rx.spacer(),
+                        rx.cond(
+                            AppState.joined_chunks_text == "",
+                            rx.button("Load Sample", size="1", variant="soft", on_click=AppState.dev_seed_current),
+                            None,
+                        ),
+                        justify="start",
+                        align="center",
+                        gap="2",
+                    ),
+                    # Integrated chunk editors; no inner scroll, let page scroll
+                    # Status banner for errors/saves
+                    rx.cond(
+                        AppState.status.startswith("error:"),
+                        rx.box(
+                            rx.hstack(
+                                rx.text("Error", color="#ef4444", weight="bold"),
+                                rx.spacer(),
+                                rx.button("Dismiss", size="1", variant="soft", color_scheme="gray", on_click=AppState.clear_status),
+                            ),
+                            rx.text(AppState.status, color="#fca5a5"),
+                            p=2,
+                            mb=2,
+                            border="1px solid",
+                            border_color="#7f1d1d",
+                            border_radius="6px",
+                            bg="#1b1212",
+                        ),
+                        rx.cond(
+                            AppState.status == "saved",
+                            rx.box(
+                                rx.hstack(
+                                    rx.text("Saved", color="#10b981", weight="bold"),
+                                    rx.spacer(),
+                                    rx.button("Dismiss", size="1", variant="soft", color_scheme="gray", on_click=AppState.clear_status),
+                                ),
+                                p=2,
+                                mb=2,
+                                border="1px solid",
+                                border_color="#064e3b",
+                                border_radius="6px",
+                                bg="#0b1915",
+                            ),
+                            None,
+                        ),
+                    ),
+                    rx.box(
+                        tiptap_editor(
+                            chunks=AppState.chunk_edit_dicts,  # type: ignore[arg-type]
+                            placeholder="Draft your story…",
+                            min_height="240px",
+                            on_change=AppState.set_chunk_edits_bulk,
+                            on_blur=AppState.save_all_chunks,
+                            version=AppState.joined_chunks_text,
+                            on_ops=AppState.apply_tiptap_ops,
+                        ),
+                        id="draft-chunks",
                     ),
                     # New user chunk composer at the end of the draft
                     rx.hstack(
                         # Left: composer input (84%)
                         rx.box(
-                            rx.text_area(
+                            tiptap_editor(
+                                value=AppState.new_chunk_text,  # type: ignore[arg-type]
                                 placeholder="Write the next part here…",
-                                value=AppState.new_chunk_text,
+                                min_height="140px",
                                 on_change=AppState.set_new_chunk_text,
-                                rows="1",
-                                auto_height=True,
-                                min_rows=1,
-                                max_rows=1000,
-                                wrap="soft",
-                                style={
-                                    "overflow": "hidden",
-                                    "overflowY": "hidden",
-                                    "maxHeight": "none",
-                                    "resize": "none",
-                                    "whiteSpace": "pre-wrap",
-                                    "wordWrap": "break-word",
-                                },
                             ),
                             width="84%",
                         ),
@@ -946,152 +970,20 @@ def index() -> rx.Component:
         settings_overlay(),
         prompt_overlay(),
         meta_overlay(),
+        tiptap_help_overlay(),
         confirm_overlay,
-        rx.script(
-            """
-            (function(){
-              const handler = function(e){
-                const ta = e.target;
-                if(!ta || ta.tagName !== 'TEXTAREA') return;
-                const container = document.getElementById('draft-chunks');
-                if(!container || !container.contains(ta)) return;
-                const list = Array.from(container.querySelectorAll('textarea'));
-                const idx = list.indexOf(ta);
-                if(idx === -1) return;
-                const atStart = ta.selectionStart === 0 && ta.selectionEnd === 0;
-                const atEnd = ta.selectionStart === ta.value.length && ta.selectionEnd === ta.value.length;
-                const plain = !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey;
-                if(e.key === 'ArrowDown' && atEnd && idx < list.length - 1 && plain){
-                  e.preventDefault();
-                  try { ta.blur(); } catch(_){}
-                  const next = list[idx+1];
-                  if(next){
-                    try { next.focus(); next.setSelectionRange(0,0); } catch(_){ try { next.focus(); } catch(_){} }
-                  }
-                }
-                if(e.key === 'ArrowUp' && atStart && idx > 0 && plain){
-                  e.preventDefault();
-                  try { ta.blur(); } catch(_){}
-                  const prev = list[idx-1];
-                  if(prev){
-                    try { const len = prev.value.length; prev.focus(); prev.setSelectionRange(len,len); } catch(_){ try { prev.focus(); } catch(_){} }
-                  }
-                }
-              };
-              document.addEventListener('keydown', handler, true);
-            })();
-            """
-        ),
-        rx.script(
-            """
-            (function(){
-              const timers = new WeakMap();
-              function schedule(ta){
-                const prev = timers.get(ta);
-                if(prev) clearTimeout(prev);
-                const start = ta.selectionStart, end = ta.selectionEnd;
-                const t = setTimeout(()=>{
-                  try {
-                    // Ensure auto size before blur
-                    try { ta.style.maxHeight = 'none'; ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight)+'px'; } catch(_){ }
-                    ta.dataset.autosaving = '1';
-                    ta.blur();
-                    setTimeout(()=>{
-                      if(document.body.contains(ta)){
-                        try { ta.focus(); ta.setSelectionRange(start,end); } catch(_){ try { ta.focus(); } catch(_){} }
-                        // Ensure auto size after refocus
-                        try { ta.style.maxHeight = 'none'; ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight)+'px'; } catch(_){ }
-                      }
-                      delete ta.dataset.autosaving;
-                    }, 40);
-                  } catch(_){ }
-                }, 450);
-                timers.set(ta, t);
-              }
-              document.addEventListener('input', function(e){
-                const ta = e.target;
-                if(!ta || ta.tagName !== 'TEXTAREA') return;
-                const container = document.getElementById('draft-chunks');
-                if(!container || !container.contains(ta)) return;
-                schedule(ta);
-              }, true);
-              // Flush pending edits on unload/visibility change by forcing blur
-              function flush(){
-                try {
-                  const container = document.getElementById('draft-chunks');
-                  if(!container) return;
-                  container.querySelectorAll('textarea').forEach(function(ta){
-                    try { ta.blur(); } catch(_){ }
-                  });
-                } catch(_){ }
-              }
-              window.addEventListener('beforeunload', flush, {capture: true});
-              window.addEventListener('pagehide', flush, {capture: true});
-              document.addEventListener('visibilitychange', function(){ if(document.hidden){ flush(); } }, true);
-            })();
-            """
-        ),
-        rx.script(
-            """
-            (function(){
-              function autoExpand(ta){
-                if(!ta) return;
-                try {
-                  ta.style.overflow = 'hidden';
-                  ta.style.resize = 'none';
-                  ta.style.maxHeight = 'none';
-                  ta.style.height = 'auto';
-                  ta.style.height = (ta.scrollHeight) + 'px';
-                } catch(_){ }
-              }
-              function expandAll(){
-                try {
-                  document.querySelectorAll('#draft-chunks textarea, #composer textarea').forEach(function(ta){
-                    autoExpand(ta);
-                    try { ta.dispatchEvent(new Event('input', { bubbles: true })); } catch(_){ }
-                  });
-                } catch(_){ }
-              }
-              function scheduleBurst(){
-                expandAll();
-                try { requestAnimationFrame(expandAll); } catch(_){ }
-                setTimeout(expandAll, 50);
-                setTimeout(expandAll, 200);
-                setTimeout(expandAll, 600);
-                setTimeout(expandAll, 1200);
-              }
-              document.addEventListener('input', function(e){
-                const ta = e.target;
-                if(!ta || ta.tagName !== 'TEXTAREA') return;
-                autoExpand(ta);
-              }, true);
-              document.addEventListener('focus', function(e){
-                const ta = e.target;
-                if(!ta || ta.tagName !== 'TEXTAREA') return;
-                autoExpand(ta);
-              }, true);
-              const observer = new MutationObserver(function(){
-                scheduleBurst();
-              });
-              observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-              const trig = document.getElementById('expand-trigger');
-              if(trig){
-                const attrObserver = new MutationObserver(function(){
-                  scheduleBurst();
-                });
-                attrObserver.observe(trig, { attributes: true, attributeFilter: ['data-version'] });
-              }
-              window.addEventListener('load', scheduleBurst);
-              document.addEventListener('DOMContentLoaded', scheduleBurst);
-              window.addEventListener('resize', scheduleBurst);
-              document.addEventListener('visibilitychange', function(){ if(!document.hidden){ scheduleBurst(); } });
-            })();
-            """
-        ),
+        
         rx.html("""
             <style>
             .rt-TextAreaRoot textarea { max-height: none !important; overflow-y: hidden !important; }
             textarea { overflow-y: hidden !important; }
+            /* TipTap editor basic dark theme adjustments */
+            .tiptap-editor { color: #e5e7eb; background: transparent; line-height: 1.7; }
+            .tiptap-editor .ProseMirror { outline: none; white-space: pre-wrap; word-break: break-word; min-height: inherit; }
+            .tiptap-editor .chunk-node { position: relative; padding-left: 0.5rem; }
+            .tiptap-editor .chunk-node[data-chunk-kind="ai"] { box-shadow: inset 2px 0 0 #2563EB; }
+            .tiptap-editor .chunk-node[data-chunk-kind="user"] { box-shadow: inset 2px 0 0 #16A34A; }
+            .tiptap-editor .chunk-node + .chunk-node { margin-top: 0.75rem; }
             .panel-dark { background-color: #0f131a; color: #e5e7eb; }
             .panel-dark h1, .panel-dark h2, .panel-dark h3, .panel-dark h4, .panel-dark h5, .panel-dark h6 { color: #f3f4f6; }
             .panel-dark input, .panel-dark textarea, .panel-dark select { background-color: #111827 !important; color: #e5e7eb !important; border-color: #374151 !important; }
@@ -1102,6 +994,16 @@ def index() -> rx.Component:
             .panel-dark .rt-ButtonRoot:hover { filter: brightness(1.1); }
             </style>
         """),
+        rx.cond(
+            DEBUG_TIPTAP,
+            rx.box(
+                rx.text("[Debug] TipTap enabled: true"),
+                rx.text("[Debug] Current story: ", AppState.current_story),
+                rx.text("[Debug] Joined length: ", rx.cond(AppState.joined_chunks_text == "", "0", "1")),
+                p=2,
+            ),
+            None,
+        ),
         # Icons are always visible now; no reveal script needed
         on_mount=[AppState.load_stories, AppState.load_state, AppState.load_lore, AppState.reload_branch, AppState.probe_backend],
         py=4,

@@ -1,0 +1,17 @@
+{
+  "name": "tiptap-reflex-wrapper",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "index.js",
+  "module": "index.js",
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "dependencies": {
+    "@tiptap/react": "^2",
+    "@tiptap/starter-kit": "^2",
+    "@tiptap/extension-placeholder": "^2"
+  }
+}
+
