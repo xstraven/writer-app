@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     # OpenRouter
     openrouter_api_key: Optional[str] = None
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
-    openrouter_default_model: str = "openrouter/auto"
+    openrouter_default_model: str = "deepseek/deepseek-chat-v3-0324"
 
     # Server
     cors_origins: list[str] = [
@@ -28,4 +28,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

@@ -8,7 +8,7 @@ from typing import Any, Dict
 
 
 DEFAULTS: Dict[str, Any] = {
-    "model": "openrouter/auto",
+    "model": "deepseek/deepseek-chat-v3-0324",
     "temperature": 0.7,
     "max_tokens": 512,
     "include_memory": True,
@@ -68,4 +68,3 @@ class BaseSettingsStore:
         merged = dict(DEFAULTS)
         merged.update(data)
         self._write(merged)
-

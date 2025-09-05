@@ -86,9 +86,10 @@ export function GenerationSettings() {
           type="text"
           value={generationSettings.model || ''}
           onChange={(e) => updateGenerationSettings({ model: e.target.value })}
-          placeholder="e.g., openrouter/anthropic/claude-3.5-sonnet"
+          placeholder="deepseek/deepseek-chat-v3-0324"
           className="mt-2"
         />
+        <p className="mt-1 text-xs text-neutral-500">Default if blank: deepseek/deepseek-chat-v3-0324</p>
       </div>
 
       <div>

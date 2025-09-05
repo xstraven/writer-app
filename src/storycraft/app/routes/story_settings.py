@@ -16,20 +16,20 @@ async def get_story_settings(story: str):
         raise HTTPException(status_code=400, detail="Missing story")
     data = story_settings_store.get(story)
     if data is None:
-        legacy = state_store.get()
+        # For a new story with no saved settings, return generation defaults only.
+        # Do NOT copy legacy global state (context/synopsis/memory) to avoid leaking
+        # prior story data into new stories.
         base_defaults = base_settings_store.get()
-        merged = dict(base_defaults)
-        merged.update(legacy or {})
         return StorySettings(
             story=story,
-            temperature=merged.get("temperature"),
-            max_tokens=merged.get("max_tokens"),
-            model=merged.get("model"),
-            system_prompt=merged.get("system_prompt"),
-            max_context_window=merged.get("max_context_window"),
-            context=merged.get("context"),
-            synopsis=merged.get("synopsis"),
-            memory=merged.get("memory"),
+            temperature=base_defaults.get("temperature"),
+            max_tokens=base_defaults.get("max_tokens"),
+            model=base_defaults.get("model"),
+            system_prompt=base_defaults.get("system_prompt"),
+            max_context_window=base_defaults.get("max_context_window"),
+            context=None,
+            synopsis=None,
+            memory=None,
             gallery=[],
         )
     return StorySettings(
