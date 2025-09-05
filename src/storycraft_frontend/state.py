@@ -7,8 +7,8 @@ import reflex as rx
 import httpx
 
 
-# Configurable API base; default to 8001 to avoid Reflex dev backend (8000).
-API_BASE = os.environ.get("STORYCRAFT_API_BASE", "http://127.0.0.1:8001")
+# Configurable API base; default to FastAPI dev port 8000.
+API_BASE = os.environ.get("STORYCRAFT_API_BASE", "http://127.0.0.1:8000")
 
 
 class MemoryItem(rx.Base):

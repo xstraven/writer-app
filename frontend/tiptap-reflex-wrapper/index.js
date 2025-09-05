@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { Node } from '@tiptap/core';
+import { Node, Extension } from '@tiptap/core';
 import Placeholder from '@tiptap/extension-placeholder';
 
 // Light chunk node: block-level container with attributes id/kind and rich text content.
@@ -127,6 +127,25 @@ export function TipTapEditor(props) {
         StarterKit,
         Chunk,
         Placeholder.configure({ placeholder: placeholder || '' }),
+        // Only enable composer submit shortcut in value-mode (no chunkList)
+        ...(chunkList ? [] : [
+          Extension.create({
+            name: 'composerSubmit',
+            addKeyboardShortcuts() {
+              return {
+                'Mod-Enter': () => {
+                  try {
+                    const text = this.editor.getText();
+                    if (typeof props.on_submit === 'function') {
+                      props.on_submit(text);
+                    }
+                  } catch {}
+                  return true;
+                },
+              };
+            },
+          })
+        ]),
       ],
       content: (chunkList) ? buildDocFromChunks(chunkList) : (value || ''),
       editable: !disabled,
@@ -249,27 +268,7 @@ export function TipTapEditor(props) {
     return () => view.dom.removeEventListener('keydown', onKeyDown, true);
   }, [editor]);
 
-  // Value-mode submit: Mod+Enter commits composer
-  useEffect(() => {
-    if (!editor) return;
-    if (chunkList) return; // only for value mode (composer)
-    const view = editor.view;
-    function onKeyDown(e) {
-      const isEnter = (e.key === 'Enter' || e.key === 'Return' || e.code === 'Enter' || e.code === 'NumpadEnter');
-      if (isEnter && (e.metaKey || e.ctrlKey)) {
-        try {
-          if (typeof props.on_submit === 'function') {
-            e.preventDefault();
-            const text = editor.getText();
-            props.on_submit(text);
-            return;
-          }
-        } catch {}
-      }
-    }
-    view.dom.addEventListener('keydown', onKeyDown, true);
-    return () => view.dom.removeEventListener('keydown', onKeyDown, true);
-  }, [editor, chunkList, props.on_submit]);
+  // (Composer submit handled via Extension keyboard shortcut above)
 
   // Keep editor content in sync when 'value' or 'chunks' prop changes.
   useEffect(() => {

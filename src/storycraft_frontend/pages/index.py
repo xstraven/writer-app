@@ -906,11 +906,15 @@ def index() -> rx.Component:
                     # Hidden trigger to signal content changes for auto-expansion
                     rx.box(id="expand-trigger", data_version=AppState.joined_chunks_text, display="none"),
                     rx.text("Instruction (optional)"),
-                    rx.text_area(
-                        placeholder="e.g., continue with a tense cliffhanger...",
-                        value=AppState.instruction,
-                        on_change=AppState.set_instruction,
-                        rows="4",
+                    rx.box(
+                        tiptap_editor(
+                            value=AppState.instruction,  # type: ignore[arg-type]
+                            placeholder="e.g., continue with a tense cliffhanger...",
+                            min_height="100px",
+                            on_change=AppState.set_instruction,
+                        ),
+                        id="instruction",
+                        mb=2,
                     ),
                     rx.hstack(
                         rx.button(
@@ -1016,6 +1020,16 @@ def index() -> rx.Component:
             #composer .tiptap-editor .ProseMirror p { margin: 0.25rem 0; }
             #composer .tiptap-editor .ProseMirror p:first-child { margin-top: 0; }
             #composer .tiptap-editor .ProseMirror p:last-child { margin-bottom: 0; }
+            /* Instruction styling matches composer */
+            #instruction .tiptap-editor {
+              background: #0b0f15;
+              border: 1px solid #2a2f3a;
+              border-radius: 8px;
+              padding: 0.6rem 0.8rem 0.7rem 0.8rem;
+            }
+            #instruction .tiptap-editor .ProseMirror p { margin: 0.25rem 0; }
+            #instruction .tiptap-editor .ProseMirror p:first-child { margin-top: 0; }
+            #instruction .tiptap-editor .ProseMirror p:last-child { margin-bottom: 0; }
             .panel-dark { background-color: #0f131a; color: #e5e7eb; }
             .panel-dark h1, .panel-dark h2, .panel-dark h3, .panel-dark h4, .panel-dark h5, .panel-dark h6 { color: #f3f4f6; }
             .panel-dark input, .panel-dark textarea, .panel-dark select { background-color: #111827 !important; color: #e5e7eb !important; border-color: #374151 !important; }
