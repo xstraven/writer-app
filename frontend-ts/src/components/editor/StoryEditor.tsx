@@ -53,8 +53,8 @@ export function StoryEditor() {
       // If user didn't provide custom instruction, pass empty so backend applies base instruction
       const payloadInstr = (text === DEFAULT_INSTRUCTION) ? '' : text
       const continuation = await generateContinuationAsync(payloadInstr)
-      // Reset to default prompt after generate
-      setInstruction(DEFAULT_INSTRUCTION)
+      // Clear instruction box after generate (placeholder shows default)
+      setInstruction('')
       // Append to the active user draft (with a space if needed)
       setUserDraft((prev) => {
         if (!prev) return continuation

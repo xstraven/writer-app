@@ -43,7 +43,7 @@ interface AppState extends AppStateType {
 
 const initialState = {
   currentStory: 'default',
-  instruction: 'Continue the story, matching established voice, tone, and point of view. Maintain continuity with prior events and details.',
+  instruction: '',
   chunks: [],
   history: [],
   editingId: null,
