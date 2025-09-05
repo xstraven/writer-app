@@ -39,6 +39,8 @@ export function useStoryGeneration() {
         system_prompt: generationSettings.system_prompt,
         use_memory: true,
         use_context: true,
+        // Preview-only: do not persist on backend; UI handles results
+        preview_only: true,
         context: {
           summary: synopsis,
           npcs: [],
@@ -58,10 +60,12 @@ export function useStoryGeneration() {
   // Mutation for committing user chunks to backend
   const commitChunkMutation = useMutation({
     mutationFn: async (content: string) => {
+      const parentId = chunks.length > 0 ? chunks[chunks.length - 1].id : null
       return await appendSnippet({
         story: currentStory,
         content,
         kind: 'user',
+        parent_id: parentId,
         set_active: true,
       })
     },

@@ -94,10 +94,12 @@ export function StoryEditor() {
     setUserDraft('')
 
     try {
+      const parentId = chunks.length > 0 ? chunks[chunks.length - 1].id : null
       const created = await appendSnippet({
         story: currentStory,
         content: text,
         kind: 'user',
+        parent_id: parentId,
         set_active: true,
       })
 
@@ -154,7 +156,12 @@ export function StoryEditor() {
                   <label className="text-sm text-neutral-600">
                     Your next chunk (Cmd/Ctrl+Enter to save)
                   </label>
-                  <div className="mt-2">
+                  <div className="mt-2 relative" aria-busy={isGenerating}>
+                    {isGenerating && (
+                      <div className="absolute inset-0 rounded-md bg-white/60 backdrop-blur-[1px] z-10 flex items-center justify-center" aria-hidden="true">
+                        <Loading size="md" text="Generating..." />
+                      </div>
+                    )}
                     <TipTapComposer
                       value={userDraft}
                       onChange={setUserDraft}
@@ -187,7 +194,12 @@ export function StoryEditor() {
           <label htmlFor="instruction" className="text-sm text-neutral-600">
             Instruction to model (Press Cmd/Ctrl+Enter to generate)
           </label>
-          <div className="mt-2">
+          <div className="mt-2 relative" aria-busy={isGenerating}>
+            {isGenerating && (
+              <div className="absolute inset-0 rounded-md bg-white/60 backdrop-blur-[1px] z-10 flex items-center justify-center" aria-hidden="true">
+                <Loading size="md" text="Generating..." />
+              </div>
+            )}
             <TipTapComposer
               value={instruction}
               onChange={setInstruction}
