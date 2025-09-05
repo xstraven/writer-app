@@ -55,6 +55,7 @@ const initialState = {
     max_tokens: 256,
     model: undefined,
     system_prompt: undefined,
+    max_context_window: 1000,
   },
   synopsis: "Mira, a courier in a rain-soaked coastal city, discovers a message that could end a quiet war.",
   lorebook: [

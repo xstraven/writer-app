@@ -34,7 +34,7 @@ export function Sidebar() {
         )}
       </Card>
 
-      {/* Context (collapsible) */}
+      {/* Scene (collapsible) */}
       <Card className="shadow-sm">
         <CardHeader className="pb-2">
           <button
@@ -43,7 +43,7 @@ export function Sidebar() {
             onClick={() => setOpenCtx(v => !v)}
             aria-expanded={openCtx}
           >
-            <CardTitle className="text-lg">Context</CardTitle>
+            <CardTitle className="text-lg">Scene</CardTitle>
             <ChevronDown className={`h-4 w-4 transition-transform ${openCtx ? '' : '-rotate-90'}`} />
           </button>
         </CardHeader>

@@ -20,7 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useAppStore } from '@/stores/appStore'
-import { createLoreEntry, updateLoreEntry, deleteLoreEntry } from '@/lib/api'
+import { createLoreEntry, updateLoreEntry, deleteLoreEntry, saveStorySettings } from '@/lib/api'
 import { toast } from 'sonner'
 import { uid } from '@/lib/utils'
 import type { LoreEntry, LoreEntryCreate, LoreEntryUpdate } from '@/lib/types'
@@ -94,7 +94,10 @@ export function LorebookPanel() {
         }
         
         const createdEntry = await createLoreEntry(newEntryData)
-        setLorebook([...lorebook, createdEntry])
+        const updatedLore = [...lorebook, createdEntry]
+        setLorebook(updatedLore)
+        // Persist full lorebook snapshot per-story (best-effort)
+        try { await saveStorySettings({ story: currentStory, lorebook: updatedLore }) } catch {}
         toast.success("Lore entry created")
       } else {
         // Update existing entry
@@ -108,9 +111,11 @@ export function LorebookPanel() {
         }
         
         const updatedEntry = await updateLoreEntry(editingEntry.id!, updateData)
-        setLorebook(lorebook.map(entry => 
+        const updatedLore = lorebook.map(entry => 
           entry.id === editingEntry.id ? updatedEntry : entry
-        ))
+        )
+        setLorebook(updatedLore)
+        try { await saveStorySettings({ story: currentStory, lorebook: updatedLore }) } catch {}
         toast.success("Lore entry updated")
       }
       
@@ -131,7 +136,9 @@ export function LorebookPanel() {
     setIsLoading(true)
     try {
       await deleteLoreEntry(entryId)
-      setLorebook(lorebook.filter(entry => entry.id !== entryId))
+      const updatedLore = lorebook.filter(entry => entry.id !== entryId)
+      setLorebook(updatedLore)
+      try { await saveStorySettings({ story: currentStory, lorebook: updatedLore }) } catch {}
       toast.success("Lore entry deleted")
     } catch (error) {
       console.error('Failed to delete lore entry:', error)

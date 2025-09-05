@@ -40,6 +40,7 @@ from .models import (
 from .state_store import StateStore
 from .base_settings_store import BaseSettingsStore
 from .snippet_store import SnippetStore
+from .story_settings_store import StorySettingsStore
 
 
 settings = get_settings()
@@ -57,6 +58,7 @@ store = LorebookStore()
 state_store = StateStore()
 snippet_store = SnippetStore()
 base_settings_store = BaseSettingsStore()
+story_settings_store = StorySettingsStore()
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -268,6 +270,10 @@ async def dev_seed(req: DevSeedRequest) -> DevSeedResponse:
             store.delete_all_global()
         except Exception:
             pass
+        try:
+            story_settings_store.delete_all()
+        except Exception:
+            pass
     elif req.clear_existing:
         try:
             snippet_store.delete_story(req.story)
@@ -275,6 +281,10 @@ async def dev_seed(req: DevSeedRequest) -> DevSeedResponse:
             pass
         try:
             store.delete_all(req.story)
+        except Exception:
+            pass
+        try:
+            story_settings_store.delete_story(req.story)
         except Exception:
             pass
 
@@ -365,6 +375,99 @@ async def put_state(payload: AppPersistedState) -> dict:
     return {"ok": True}
 
 
+@app.get("/api/story-settings")
+async def get_story_settings(story: str):
+    story = (story or "").strip()
+    if not story:
+        raise HTTPException(status_code=400, detail="Missing story")
+    data = story_settings_store.get(story)
+    if data is None:
+        # Fallback to legacy global app state for defaults
+        legacy = state_store.get()
+        base_defaults = base_settings_store.get()
+        merged = dict(base_defaults)
+        merged.update(legacy or {})
+        # Only project the fields we support
+        resp = {
+            "story": story,
+            "temperature": merged.get("temperature"),
+            "max_tokens": merged.get("max_tokens"),
+            "model": merged.get("model"),
+            "system_prompt": merged.get("system_prompt"),
+            "max_context_window": merged.get("max_context_window"),
+            "context": merged.get("context"),
+            "synopsis": merged.get("synopsis"),
+            "memory": merged.get("memory"),
+            "gallery": [],
+        }
+        # Always include current lorebook for this story
+        resp["lorebook"] = [e.model_dump() for e in store.list(story)]
+        return resp
+    # Ensure shape
+    resp = {
+        "story": story,
+        "temperature": data.get("temperature"),
+        "max_tokens": data.get("max_tokens"),
+        "model": data.get("model"),
+        "system_prompt": data.get("system_prompt"),
+        "max_context_window": data.get("max_context_window"),
+        "context": data.get("context"),
+        "synopsis": data.get("synopsis"),
+        "memory": data.get("memory"),
+        "gallery": data.get("gallery") or [],
+    }
+    resp["lorebook"] = [e.model_dump() for e in store.list(story)]
+    return resp
+
+
+@app.put("/api/story-settings")
+async def put_story_settings(payload: dict):
+    story = (payload.get("story") or "").strip()
+    if not story:
+        raise HTTPException(status_code=400, detail="Missing story")
+    # Accept only known keys
+    allowed = {
+        k: payload.get(k)
+        for k in [
+            "temperature",
+            "max_tokens",
+            "model",
+            "system_prompt",
+            "max_context_window",
+            "context",
+            "gallery",
+            "synopsis",
+            "memory",
+        ]
+        if k in payload
+    }
+    story_settings_store.update(story, allowed)
+    # Optional: replace lorebook if provided
+    if "lorebook" in payload and isinstance(payload["lorebook"], list):
+        try:
+            from .models import LoreEntryCreate
+            # Purge existing for story, then recreate from payload
+            store.delete_all(story)
+            for item in payload["lorebook"]:
+                try:
+                    lec = LoreEntryCreate(
+                        story=story,
+                        name=item.get("name", ""),
+                        kind=item.get("kind", "note") or "note",
+                        summary=item.get("summary", ""),
+                        tags=item.get("tags", []) or [],
+                        keys=item.get("keys", []) or [],
+                        always_on=bool(item.get("always_on", False)),
+                    )
+                    if lec.name and lec.summary:
+                        store.create(lec)
+                except Exception:
+                    continue
+        except Exception:
+            pass
+    return {"ok": True, "story": story, "updated_keys": list(allowed.keys())}
+
+
 # --- Snippets & Branching API ---
 
 
@@ -432,6 +535,13 @@ async def regenerate_ai(req: RegenerateAIRequest) -> Snippet:
         # Regenerating root: treat base text as empty
         base_path = []
     base_text = snippet_store.build_text(base_path)
+    # Apply optional max context window: cap characters to 3x window from the end
+    try:
+        win = int(getattr(req, "max_context_window", 0) or 0)
+        if win > 0 and len(base_text) > win * 3:
+            base_text = base_text[-(win * 3) :]
+    except Exception:
+        pass
 
     mem: MemoryState | None = None
     if req.use_memory and base_text.strip():

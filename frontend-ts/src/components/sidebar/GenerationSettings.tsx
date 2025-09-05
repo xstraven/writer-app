@@ -20,7 +20,7 @@ export function GenerationSettings() {
         <Slider
           id="temp"
           min={0}
-          max={1}
+          max={2}
           step={0.01}
           value={[generationSettings.temperature]}
           onValueChange={(value) => updateGenerationSettings({ temperature: value[0] })}
@@ -39,6 +39,20 @@ export function GenerationSettings() {
           onChange={(e) => updateGenerationSettings({ max_tokens: Number(e.target.value) })}
           className="mt-2"
         />
+      </div>
+
+      <div>
+        <label htmlFor="maxcontext" className="text-sm font-medium">Max context window</label>
+        <Input
+          id="maxcontext"
+          type="number"
+          min={0}
+          step={1}
+          value={generationSettings.max_context_window ?? 0}
+          onChange={(e) => updateGenerationSettings({ max_context_window: Math.max(0, Number(e.target.value)) })}
+          className="mt-2"
+        />
+        <p className="mt-1 text-xs text-neutral-500">Story text in prompt is truncated from the top to 3× this value (characters).</p>
       </div>
 
       <div>

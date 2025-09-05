@@ -21,7 +21,11 @@ export function useStoryGeneration() {
   // Mutation for generating story continuation (preview-only; UI decides what to do)
   const generateMutation = useMutation({
     mutationFn: async ({ instruction }: { instruction: string }) => {
-      const draftText = chunks.map(c => c.text).join('\n\n')
+      let draftText = chunks.map(c => c.text).join('\n\n')
+      const windowChars = Math.max(0, Math.floor((generationSettings.max_context_window ?? 0) * 3))
+      if (windowChars > 0 && draftText.length > windowChars) {
+        draftText = draftText.slice(-windowChars)
+      }
 
       const request: ContinueRequest = {
         draft_text: draftText,
@@ -81,6 +85,8 @@ export function useStoryGeneration() {
         model: generationSettings.model ?? null,
         use_memory: true,
         temperature: generationSettings.temperature,
+        // Pass window to backend so it can truncate server-side
+        max_context_window: generationSettings.max_context_window,
         context: {
           summary: synopsis,
           npcs: [],

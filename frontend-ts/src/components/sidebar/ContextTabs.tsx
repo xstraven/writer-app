@@ -28,7 +28,7 @@ export function ContextTabs() {
         </TabsTrigger>
         <TabsTrigger value="context" className="flex items-center gap-1">
           <MapPin className="h-3 w-3" />
-          Context
+          Scene
         </TabsTrigger>
         <TabsTrigger value="lorebook" className="flex items-center gap-1">
           <BookText className="h-3 w-3" />

@@ -131,6 +131,7 @@ export interface GenerationSettings {
   max_tokens: number;
   model?: string;
   system_prompt?: string;
+  max_context_window?: number; // custom: used to limit draft context (chars = 3x)
 }
 
 export interface BranchInfo {
@@ -176,4 +177,20 @@ export interface AppState {
   branches: BranchInfo[];
   treeRows: TreeRow[];
   gallery: string[];
+}
+
+// Per-story settings payload persisted in backend
+export interface StorySettingsPayload {
+  story: string;
+  temperature?: number;
+  max_tokens?: number;
+  model?: string | null;
+  system_prompt?: string | null;
+  max_context_window?: number;
+  context?: ContextState;
+  gallery?: string[];
+  // Optional future fields: synopsis, memory
+  synopsis?: string;
+  memory?: MemoryState;
+  lorebook?: LoreEntry[];
 }

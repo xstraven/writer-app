@@ -117,6 +117,30 @@ class AppPersistedState(BaseModel):
     gen_index: int = -1
 
 
+class StorySettings(BaseModel):
+    story: str
+    temperature: float | None = None
+    max_tokens: int | None = None
+    model: str | None = None
+    system_prompt: str | None = None
+    context: ContextState | None = None
+    gallery: list[str] = Field(default_factory=list)
+    synopsis: str | None = None
+    memory: MemoryState | None = None
+
+
+class StorySettingsUpdate(BaseModel):
+    story: str
+    temperature: float | None = None
+    max_tokens: int | None = None
+    model: str | None = None
+    system_prompt: str | None = None
+    context: ContextState | None = None
+    gallery: list[str] | None = None
+    synopsis: str | None = None
+    memory: MemoryState | None = None
+
+
 # --- Snippets & Branching ---
 
 class Snippet(BaseModel):
@@ -167,6 +191,7 @@ class RegenerateAIRequest(BaseModel):
     model: Optional[str] = None
     use_memory: bool = True
     temperature: float = 0.7
+    max_context_window: Optional[int] = None
     context: Optional[ContextState] = None
     use_context: bool = True
     set_active: bool = True

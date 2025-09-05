@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getBranchPath, getLorebook, loadAppState } from '@/lib/api'
+import { getBranchPath, getLorebook, loadAppState, getStorySettings } from '@/lib/api'
 import { useAppStore } from '@/stores/appStore'
 import { toast } from 'sonner'
 import type { Chunk, Snippet } from '@/lib/types'
@@ -26,6 +26,7 @@ export function useStorySync() {
     setMemory,
     updateGenerationSettings,
     context,
+    setGallery,
   } = useAppStore()
 
   // Query to load story branch from backend
@@ -46,12 +47,22 @@ export function useStorySync() {
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
 
-  // Query to load app state (contains synopsis, context, memory)
-  const { data: appStateData, isLoading: appStateLoading, error: appStateError } = useQuery({
-    queryKey: ['app-state'],
-    queryFn: () => loadAppState(),
+  // Query to load per-story settings (preferred)
+  const { data: storySettings, isLoading: storySettingsLoading, error: storySettingsError } = useQuery({
+    queryKey: ['story-settings', currentStory],
+    queryFn: () => getStorySettings(currentStory),
+    enabled: !!currentStory,
     refetchOnWindowFocus: false,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // Legacy global app state (fallback)
+  const { data: appStateData, isLoading: appStateLoading, error: appStateError } = useQuery({
+    queryKey: ['app-state-legacy'],
+    queryFn: () => loadAppState(),
+    enabled: !currentStory, // disabled when story available; only used as deep fallback in effects
+    refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000,
   })
 
   // Sync backend chunks when branch data changes
@@ -94,29 +105,35 @@ export function useStorySync() {
     }
   }, [lorebookData, setLorebook])
 
-  // Sync app state (context, generation settings) when data changes
+  // Apply per-story settings when available
   useEffect(() => {
-    if (appStateData) {
-      console.log('Syncing app state from backend:', appStateData)
-      
-      // Update context if available
-      if (appStateData.context) {
-        setContext(appStateData.context)
-      }
-      
-      // Update generation settings if available
-      if (appStateData.temperature !== undefined || appStateData.max_tokens !== undefined) {
-        const settingsToUpdate: any = {}
-        if (appStateData.temperature !== undefined) settingsToUpdate.temperature = appStateData.temperature
-        if (appStateData.max_tokens !== undefined) settingsToUpdate.max_tokens = appStateData.max_tokens
-        if (appStateData.model) settingsToUpdate.model = appStateData.model
-        if (appStateData.system_prompt) settingsToUpdate.system_prompt = appStateData.system_prompt
-        
-        updateGenerationSettings(settingsToUpdate)
-        console.log('Updated generation settings from backend:', settingsToUpdate)
-      }
+    if (storySettings) {
+      const s = storySettings
+      if (s.context) setContext(s.context)
+      if (typeof s.synopsis === 'string') setSynopsis(s.synopsis)
+      if (s.memory) setMemory(s.memory)
+      const settingsToUpdate: any = {}
+      if (s.temperature !== undefined) settingsToUpdate.temperature = s.temperature
+      if (s.max_tokens !== undefined) settingsToUpdate.max_tokens = s.max_tokens
+      if (s.model !== undefined) settingsToUpdate.model = s.model || undefined
+      if (s.system_prompt !== undefined) settingsToUpdate.system_prompt = s.system_prompt || undefined
+      if (s.max_context_window !== undefined) settingsToUpdate.max_context_window = s.max_context_window
+      if (Object.keys(settingsToUpdate).length > 0) updateGenerationSettings(settingsToUpdate)
+      // Gallery (UI-only, local state)
+      if (Array.isArray(s.gallery)) setGallery(s.gallery)
+      // Lorebook (if provided)
+      if (Array.isArray((s as any).lorebook)) setLorebook((s as any).lorebook)
+    } else if (!storySettings && appStateData) {
+      // Legacy fallback path
+      if (appStateData.context) setContext(appStateData.context)
+      const settingsToUpdate: any = {}
+      if (appStateData.temperature !== undefined) settingsToUpdate.temperature = appStateData.temperature
+      if (appStateData.max_tokens !== undefined) settingsToUpdate.max_tokens = appStateData.max_tokens
+      if (appStateData.model) settingsToUpdate.model = appStateData.model
+      if (appStateData.system_prompt) settingsToUpdate.system_prompt = appStateData.system_prompt
+      if (Object.keys(settingsToUpdate).length > 0) updateGenerationSettings(settingsToUpdate)
     }
-  }, [appStateData, setContext, updateGenerationSettings])
+  }, [storySettings, appStateData, setContext, updateGenerationSettings])
 
   // Auto-sync when story changes
   useEffect(() => {
@@ -125,8 +142,8 @@ export function useStorySync() {
     }
   }, [currentStory, refetchBranch])
 
-  const isLoading = branchLoading || lorebookLoading || appStateLoading
-  const error = branchError || lorebookError || appStateError
+  const isLoading = branchLoading || lorebookLoading || storySettingsLoading
+  const error = branchError || lorebookError || storySettingsError
 
   return {
     isLoading,

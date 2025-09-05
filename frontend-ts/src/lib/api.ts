@@ -11,6 +11,7 @@ import type {
   ContinueResponse,
   Snippet,
   ContextState,
+  StorySettingsPayload,
 } from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_STORYCRAFT_API_BASE || 'http://localhost:8001';
@@ -213,3 +214,49 @@ export const getPromptPreview = async (
 };
 
 export default apiClient;
+
+// Per-story settings (gallery, context, generation params)
+export const getStorySettings = async (story: string): Promise<StorySettingsPayload | null> => {
+  try {
+    const response = await apiClient.get('/api/story-settings', { params: { story } });
+    return response.data;
+  } catch (err: any) {
+    // Fallback for older backends: return global state as a baseline
+    if (err?.response?.status === 404) {
+      try {
+        const legacy = await loadAppState();
+        return {
+          story,
+          temperature: legacy.temperature,
+          max_tokens: legacy.max_tokens,
+          model: legacy.model,
+          system_prompt: legacy.system_prompt,
+          context: legacy.context,
+          gallery: [],
+        } as StorySettingsPayload;
+      } catch {
+        return null;
+      }
+    }
+    throw err;
+  }
+};
+
+export const saveStorySettings = async (payload: StorySettingsPayload): Promise<void> => {
+  try {
+    await apiClient.put('/api/story-settings', payload);
+  } catch (err: any) {
+    // If endpoint missing, try legacy /api/state without story scoping
+    if (err?.response?.status === 404) {
+      const legacy: any = {};
+      if (payload.temperature !== undefined) legacy.temperature = payload.temperature;
+      if (payload.max_tokens !== undefined) legacy.max_tokens = payload.max_tokens;
+      if (payload.model !== undefined) legacy.model = payload.model;
+      if (payload.system_prompt !== undefined) legacy.system_prompt = payload.system_prompt;
+      if (payload.context !== undefined) legacy.context = payload.context;
+      await saveAppState(legacy);
+      return;
+    }
+    throw err;
+  }
+};
