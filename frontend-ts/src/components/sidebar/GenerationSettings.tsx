@@ -2,6 +2,7 @@
 
 import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
+import { Textarea } from '@/components/ui/textarea'
 import { useAppStore } from '@/stores/appStore'
 
 export function GenerationSettings() {
@@ -37,6 +38,29 @@ export function GenerationSettings() {
           value={generationSettings.max_tokens}
           onChange={(e) => updateGenerationSettings({ max_tokens: Number(e.target.value) })}
           className="mt-2"
+        />
+      </div>
+
+      <div>
+        <label htmlFor="model" className="text-sm font-medium">Model</label>
+        <Input
+          id="model"
+          type="text"
+          value={generationSettings.model || ''}
+          onChange={(e) => updateGenerationSettings({ model: e.target.value })}
+          placeholder="e.g., openrouter/anthropic/claude-3.5-sonnet"
+          className="mt-2"
+        />
+      </div>
+
+      <div>
+        <label htmlFor="systemprompt" className="text-sm font-medium">System prompt</label>
+        <Textarea
+          id="systemprompt"
+          value={generationSettings.system_prompt || ''}
+          onChange={(e) => updateGenerationSettings({ system_prompt: e.target.value })}
+          placeholder="High-level guide for the model's behavior, style, and constraints..."
+          className="mt-2 min-h-[100px] text-sm"
         />
       </div>
     </div>

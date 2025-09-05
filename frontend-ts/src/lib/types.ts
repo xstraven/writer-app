@@ -175,4 +175,5 @@ export interface AppState {
   context: ContextState;
   branches: BranchInfo[];
   treeRows: TreeRow[];
+  gallery: string[];
 }

@@ -35,6 +35,10 @@ interface AppState extends AppStateType {
   pushHistory: (action: HistoryEntry['action'], before: Chunk[], after: Chunk[]) => void
   revertFromHistory: () => void
   clearHistory: () => void
+  // Gallery
+  setGallery: (urls: string[]) => void
+  addGalleryImage: (url: string) => void
+  removeGalleryImage: (url: string) => void
 }
 
 const initialState = {
@@ -87,6 +91,7 @@ const initialState = {
   },
   branches: [],
   treeRows: [],
+  gallery: [],
 }
 
 export const useAppStore = create<AppState>()(
@@ -144,6 +149,11 @@ export const useAppStore = create<AppState>()(
       setBranches: (branches) => set({ branches }),
       
       setTreeRows: (treeRows) => set({ treeRows }),
+      
+      // Gallery actions
+      setGallery: (gallery: string[]) => set({ gallery }),
+      addGalleryImage: (url: string) => set((state) => ({ gallery: [url, ...state.gallery] })),
+      removeGalleryImage: (url: string) => set((state) => ({ gallery: state.gallery.filter(u => u !== url) })),
       
       pushHistory: (action, before, after) => set((state) => ({
         history: [{
