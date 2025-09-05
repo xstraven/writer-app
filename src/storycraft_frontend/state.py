@@ -513,9 +513,15 @@ class AppState(rx.State):
             r.raise_for_status()
         await self.reload_branch()
         await self.save_state()
+        self.status = "saved"
         # Clear composer and instruction after committing
         self.new_chunk_text = ""
         self.instruction = ""
+
+    async def commit_composer_text(self, value: str):
+        # Commit the provided composer text directly (used by TipTap Mod+Enter)
+        self.new_chunk_text = (value or "")
+        await self.commit_user_chunk()
 
     def set_chunk_edit(self, sid: str, value: str):
         # Update content for the editable chunk with the given id.

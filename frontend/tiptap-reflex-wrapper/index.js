@@ -249,6 +249,28 @@ export function TipTapEditor(props) {
     return () => view.dom.removeEventListener('keydown', onKeyDown, true);
   }, [editor]);
 
+  // Value-mode submit: Mod+Enter commits composer
+  useEffect(() => {
+    if (!editor) return;
+    if (chunkList) return; // only for value mode (composer)
+    const view = editor.view;
+    function onKeyDown(e) {
+      const isEnter = (e.key === 'Enter' || e.key === 'Return' || e.code === 'Enter' || e.code === 'NumpadEnter');
+      if (isEnter && (e.metaKey || e.ctrlKey)) {
+        try {
+          if (typeof props.on_submit === 'function') {
+            e.preventDefault();
+            const text = editor.getText();
+            props.on_submit(text);
+            return;
+          }
+        } catch {}
+      }
+    }
+    view.dom.addEventListener('keydown', onKeyDown, true);
+    return () => view.dom.removeEventListener('keydown', onKeyDown, true);
+  }, [editor, chunkList, props.on_submit]);
+
   // Keep editor content in sync when 'value' or 'chunks' prop changes.
   useEffect(() => {
     if (!editor) return;

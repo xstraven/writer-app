@@ -889,25 +889,19 @@ def index() -> rx.Component:
                         ),
                         id="draft-chunks",
                     ),
-                    # New user chunk composer at the end of the draft
-                    rx.hstack(
-                        # Left: composer input (84%)
-                        rx.box(
-                            tiptap_editor(
-                                value=AppState.new_chunk_text,  # type: ignore[arg-type]
-                                placeholder="Write the next part here…",
-                                min_height="140px",
-                                on_change=AppState.set_new_chunk_text,
-                            ),
-                            width="84%",
+                    # New user chunk composer (full width)
+                    rx.box(
+                        rx.text("Composer", weight="bold"),
+                        tiptap_editor(
+                            value=AppState.new_chunk_text,  # type: ignore[arg-type]
+                            placeholder="Write the next part here…",
+                            min_height="140px",
+                            on_change=AppState.set_new_chunk_text,
+                            on_submit=AppState.commit_composer_text,
                         ),
-                        # Right: meta/actions (16%) — simplified (removed quick Add button)
-                        rx.box(width="16%", align_self="start"),
-                        align="start",
-                        mb=2,
-                        style={"boxShadow": "inset 3px 0 0 #4ADE80"},
                         id="composer",
                         data_row_id="composer",
+                        mb=2,
                     ),
                     # Hidden trigger to signal content changes for auto-expansion
                     rx.box(id="expand-trigger", data_version=AppState.joined_chunks_text, display="none"),
@@ -1009,6 +1003,15 @@ def index() -> rx.Component:
               border: 1px solid #2a2f3a;
               border-radius: 8px;
               padding: 0.75rem 0.9rem 0.8rem 0.9rem;
+            }
+            /* Visible placeholder in dark mode */
+            .tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
+              content: attr(data-placeholder);
+              color: #9CA3AF; /* gray-400 */
+              opacity: 0.85;
+              pointer-events: none;
+              height: 0;
+              float: left;
             }
             #composer .tiptap-editor .ProseMirror p { margin: 0.25rem 0; }
             #composer .tiptap-editor .ProseMirror p:first-child { margin-top: 0; }

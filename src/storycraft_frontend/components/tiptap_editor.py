@@ -33,6 +33,7 @@ class TipTapEditor(rx.Component):
     on_change: rx.EventHandler[lambda value: [value]]  # receives the new string value
     on_blur: rx.EventHandler[lambda: []]
     on_ops: rx.EventHandler[lambda ops: [ops]]  # structural ops: split/merge
+    on_submit: rx.EventHandler[lambda value: [value]]  # value-mode submit (Mod+Enter) passes current text
 
 
 def tiptap_editor(
@@ -46,6 +47,7 @@ def tiptap_editor(
     on_blur: rx.EventHandler | None = None,
     version: Var[str] | None = None,
     on_ops: rx.EventHandler | None = None,
+    on_submit: rx.EventHandler | None = None,
 ) -> rx.Component:
     props: dict = {
         "placeholder": placeholder,
@@ -67,4 +69,6 @@ def tiptap_editor(
         props["on_blur"] = on_blur
     if on_ops is not None:
         props["on_ops"] = on_ops
+    if on_submit is not None:
+        props["on_submit"] = on_submit
     return TipTapEditor.create(**props)
