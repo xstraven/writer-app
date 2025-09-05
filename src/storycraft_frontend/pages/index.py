@@ -980,10 +980,39 @@ def index() -> rx.Component:
             /* TipTap editor basic dark theme adjustments */
             .tiptap-editor { color: #e5e7eb; background: transparent; line-height: 1.7; }
             .tiptap-editor .ProseMirror { outline: none; white-space: pre-wrap; word-break: break-word; min-height: inherit; }
-            .tiptap-editor .chunk-node { position: relative; padding-left: 0.5rem; }
+            /* Chunk container: subtle like instruction pane */
+            .tiptap-editor .chunk-node {
+              position: relative;
+              padding: 0.75rem 0.9rem 0.8rem 0.9rem;
+              border: 1px solid transparent;
+              border-radius: 8px;
+              background: transparent;
+              transition: background-color 120ms ease, border-color 120ms ease;
+            }
+            /* Keep the kind strip but soften */
             .tiptap-editor .chunk-node[data-chunk-kind="ai"] { box-shadow: inset 2px 0 0 #2563EB; }
             .tiptap-editor .chunk-node[data-chunk-kind="user"] { box-shadow: inset 2px 0 0 #16A34A; }
+            /* Active/focused chunk: match instruction window look */
+            .tiptap-editor .chunk-node:focus-within {
+              background: #0b0f15;            /* similar to instruction area */
+              border-color: #2a2f3a;           /* subtle border */
+            }
+            /* Paragraph spacing inside chunks */
+            .tiptap-editor .chunk-node p { margin: 0.25rem 0; }
+            .tiptap-editor .chunk-node p:first-child { margin-top: 0; }
+            .tiptap-editor .chunk-node p:last-child { margin-bottom: 0; }
+            /* Space between chunks */
             .tiptap-editor .chunk-node + .chunk-node { margin-top: 0.75rem; }
+            /* Composer styling: match instruction pane look */
+            #composer .tiptap-editor {
+              background: #0b0f15;
+              border: 1px solid #2a2f3a;
+              border-radius: 8px;
+              padding: 0.75rem 0.9rem 0.8rem 0.9rem;
+            }
+            #composer .tiptap-editor .ProseMirror p { margin: 0.25rem 0; }
+            #composer .tiptap-editor .ProseMirror p:first-child { margin-top: 0; }
+            #composer .tiptap-editor .ProseMirror p:last-child { margin-bottom: 0; }
             .panel-dark { background-color: #0f131a; color: #e5e7eb; }
             .panel-dark h1, .panel-dark h2, .panel-dark h3, .panel-dark h4, .panel-dark h5, .panel-dark h6 { color: #f3f4f6; }
             .panel-dark input, .panel-dark textarea, .panel-dark select { background-color: #111827 !important; color: #e5e7eb !important; border-color: #374151 !important; }
