@@ -38,6 +38,7 @@ async def get_story_settings(story: str):
         max_tokens=data.get("max_tokens"),
         model=data.get("model"),
         system_prompt=data.get("system_prompt"),
+        base_instruction=data.get("base_instruction"),
         max_context_window=data.get("max_context_window"),
         context=data.get("context"),
         synopsis=data.get("synopsis"),

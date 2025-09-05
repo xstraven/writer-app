@@ -22,6 +22,7 @@ export function usePersistAppState(delayMs: number = 600) {
         max_tokens: generationSettings.max_tokens,
         model: generationSettings.model ?? null,
         system_prompt: generationSettings.system_prompt ?? null,
+        base_instruction: generationSettings.base_instruction ?? null,
         max_context_window: generationSettings.max_context_window,
         context,
         gallery,

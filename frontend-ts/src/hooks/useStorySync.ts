@@ -117,6 +117,7 @@ export function useStorySync() {
       if (s.max_tokens !== undefined && s.max_tokens !== null) settingsToUpdate.max_tokens = s.max_tokens
       if (s.model !== undefined && s.model !== null) settingsToUpdate.model = s.model || undefined
       if (s.system_prompt !== undefined && s.system_prompt !== null) settingsToUpdate.system_prompt = s.system_prompt || undefined
+      if ((s as any).base_instruction !== undefined && (s as any).base_instruction !== null) settingsToUpdate.base_instruction = (s as any).base_instruction || undefined
       if (s.max_context_window !== undefined && s.max_context_window !== null) settingsToUpdate.max_context_window = s.max_context_window
       if (Object.keys(settingsToUpdate).length > 0) updateGenerationSettings(settingsToUpdate)
       // Gallery (UI-only, local state)

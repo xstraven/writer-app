@@ -6,10 +6,15 @@ import { Textarea } from '@/components/ui/textarea'
 import { useAppStore } from '@/stores/appStore'
 
 export function GenerationSettings() {
-  const { generationSettings, updateGenerationSettings } = useAppStore()
+  const { generationSettings, updateGenerationSettings, instruction } = useAppStore()
   const temp = Number.isFinite(generationSettings.temperature as any)
     ? (generationSettings.temperature as number)
     : 0.7
+  const base = generationSettings.base_instruction || 'Continue the story, matching established voice, tone, and point of view. Maintain continuity with prior events and details.'
+  const userInstr = (instruction || '').trim()
+  const merged = userInstr
+    ? `${base}\n\nFollow this direction for the continuation:\n${userInstr}`
+    : base
 
   return (
     <div className="space-y-4">
@@ -54,6 +59,24 @@ export function GenerationSettings() {
           className="mt-2"
         />
         <p className="mt-1 text-xs text-neutral-500">Story text in prompt is truncated from the top to 3× this value (characters).</p>
+      </div>
+
+      <div>
+        <label htmlFor="baseinstr" className="text-sm font-medium">Default instruction</label>
+        <Textarea
+          id="baseinstr"
+          value={generationSettings.base_instruction || ''}
+          onChange={(e) => updateGenerationSettings({ base_instruction: e.target.value })}
+          placeholder="Base guidance applied to every continuation"
+          className="mt-2 min-h-[90px] text-sm"
+        />
+      </div>
+
+      <div>
+        <label className="text-sm font-medium">Instruction preview</label>
+        <div className="mt-2 border rounded bg-gray-50 p-2">
+          <pre className="whitespace-pre-wrap text-xs text-gray-700">{merged}</pre>
+        </div>
       </div>
 
       <div>

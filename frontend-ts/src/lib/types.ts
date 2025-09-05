@@ -132,6 +132,7 @@ export interface GenerationSettings {
   model?: string;
   system_prompt?: string;
   max_context_window?: number; // custom: used to limit draft context (chars = 3x)
+  base_instruction?: string;
 }
 
 export interface BranchInfo {
@@ -217,6 +218,7 @@ export interface StorySettingsPayload {
   max_tokens?: number;
   model?: string | null;
   system_prompt?: string | null;
+  base_instruction?: string | null;
   max_context_window?: number;
   context?: ContextState;
   gallery?: string[];

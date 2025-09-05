@@ -134,7 +134,7 @@ async def continue_endpoint(req: ContinueRequest) -> ContinueResponse:
 
     result = await continue_story(
         draft_text=req.draft_text,
-        instruction=req.instruction,
+        instruction=_merge_instruction(req.instruction, req.story) or "",
         mem=mem,
         context=(req.context if req.use_context else None),
         model=req.model,
@@ -226,10 +226,11 @@ async def prompt_preview(req: PromptPreviewRequest) -> PromptPreviewResponse:
         sys += "\nUse the provided Memory to maintain continuity."
     if req.use_context:
         sys += "\nIncorporate the Context details when plausible."
+    merged_instr = _merge_instruction(req.instruction, req.story)
     messages = (
         PromptBuilder()
         .with_system(sys)
-        .with_instruction(req.instruction or "")
+        .with_instruction(merged_instr or "")
         .with_lore(lore_items)
         .with_memory(mem)
         .with_context(req.context if req.use_context else None)
@@ -666,7 +667,7 @@ async def regenerate_ai(req: RegenerateAIRequest) -> Snippet:
 
     result = await continue_story(
         draft_text=base_text,
-        instruction=req.instruction,
+        instruction=_merge_instruction(req.instruction, req.story) or "",
         mem=mem,
         context=(req.context if req.use_context else None),
         model=req.model,
@@ -826,3 +827,24 @@ async def delete_story(story: str) -> dict:
     except Exception:
         pass
     return {"ok": True}
+
+
+def _merge_instruction(user_instr: str | None, story: str | None = None) -> str | None:
+    text = (user_instr or "").strip()
+    if not text:
+        return None
+    # Prefer per-story base instruction when available
+    base = None
+    try:
+        if story:
+            data = story_settings_store.get(story)
+            if data and isinstance(data, dict):
+                base = (data.get("base_instruction") or "").strip() or None
+    except Exception:
+        base = None
+    if not base:
+        base = (
+            "Continue the story, matching established voice, tone, and point of view. "
+            "Maintain continuity with prior events and details."
+        )
+    return base + "\n\nFollow this direction for the continuation:\n" + text

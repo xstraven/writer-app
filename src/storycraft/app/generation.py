@@ -26,6 +26,17 @@ def collect_active_branch_until_head(
     return path, text
 
 
+def _merge_instruction(user_instr: Optional[str], base_instruction: Optional[str] = None) -> Optional[str]:
+    text = (user_instr or "").strip()
+    if not text:
+        return None
+    base = (base_instruction or "").strip() or (
+        "Continue the story, matching established voice, tone, and point of view. "
+        "Maintain continuity with prior events and details."
+    )
+    return base + "\n\nFollow this direction for the continuation:\n" + text
+
+
 async def generate_continuation_from_branch(
     *,
     story: str,
@@ -52,9 +63,11 @@ async def generate_continuation_from_branch(
         mem = await memory_mod.extract_memory_from_text(text=story_so_far, model=model)
 
     # Build messages via PromptBuilder
+    # Note: caller may supply a base via settings in the future
+    merged_instr = _merge_instruction(instruction) or ""
     messages = (
         PromptBuilder()
-        .with_instruction(instruction)
+        .with_instruction(merged_instr)
         .with_lore(lore_items)
         .with_memory(mem)
         .with_context(context if use_context else None)
@@ -73,4 +86,3 @@ async def generate_continuation_from_branch(
     content = resp.get("choices", [{}])[0].get("message", {}).get("content", "")
     used_model = resp.get("model", model or client.default_model)
     return {"continuation": content, "model": used_model}
-

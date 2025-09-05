@@ -20,7 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useAppStore } from '@/stores/appStore'
-import { createLoreEntry, updateLoreEntry, deleteLoreEntry, saveStorySettings, generateLorebook, getLorebook } from '@/lib/api'
+import { createLoreEntry, updateLoreEntry, deleteLoreEntry, generateLorebook, getLorebook } from '@/lib/api'
 import { toast } from 'sonner'
 import { getApiErrorMessage } from '@/lib/errors'
 import { uid } from '@/lib/utils'
@@ -100,8 +100,6 @@ export function LorebookPanel() {
         const createdEntry = await createLoreEntry(newEntryData)
         const updatedLore = [...lorebook, createdEntry]
         setLorebook(updatedLore)
-        // Persist full lorebook snapshot per-story (best-effort)
-        try { await saveStorySettings({ story: currentStory, lorebook: updatedLore }) } catch {}
         toast.success("Lore entry created")
       } else {
         // Update existing entry
@@ -119,7 +117,6 @@ export function LorebookPanel() {
           entry.id === editingEntry.id ? updatedEntry : entry
         )
         setLorebook(updatedLore)
-        try { await saveStorySettings({ story: currentStory, lorebook: updatedLore }) } catch {}
         toast.success("Lore entry updated")
       }
       
@@ -142,7 +139,6 @@ export function LorebookPanel() {
       await deleteLoreEntry(entryId)
       const updatedLore = lorebook.filter(entry => entry.id !== entryId)
       setLorebook(updatedLore)
-      try { await saveStorySettings({ story: currentStory, lorebook: updatedLore }) } catch {}
       toast.success("Lore entry deleted")
     } catch (error) {
       console.error('Failed to delete lore entry:', error)
@@ -455,7 +451,6 @@ export function LorebookPanel() {
                 const res = await generateLorebook({ story: currentStory, names, strategy: 'append' })
                 const updated = await getLorebook(currentStory)
                 setLorebook(updated)
-                try { await saveStorySettings({ story: currentStory, lorebook: updated }) } catch {}
                 toast.success(`Generated ${res.created} entr${res.created === 1 ? 'y' : 'ies'}`)
                 setShowGenerateModal(false)
                 setNamesText('')

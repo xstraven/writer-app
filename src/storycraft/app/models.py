@@ -125,6 +125,8 @@ class StorySettings(BaseModel):
     max_tokens: int | None = None
     model: str | None = None
     system_prompt: str | None = None
+    # New: default/base instruction merged with user instruction for continuations
+    base_instruction: str | None = None
     context: ContextState | None = None
     gallery: list[str] = Field(default_factory=list)
     synopsis: str | None = None
@@ -137,6 +139,7 @@ class StorySettingsUpdate(BaseModel):
     max_tokens: int | None = None
     model: str | None = None
     system_prompt: str | None = None
+    base_instruction: str | None = None
     context: ContextState | None = None
     gallery: list[str] | None = None
     synopsis: str | None = None

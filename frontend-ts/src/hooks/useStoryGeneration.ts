@@ -30,6 +30,7 @@ export function useStoryGeneration() {
 
       const request: ContinueRequest = {
         draft_text: draftText,
+        // If empty, backend applies base instruction; if provided, backend merges base+user
         instruction,
         story: currentStory,
         max_tokens: generationSettings.max_tokens,
@@ -81,6 +82,7 @@ export function useStoryGeneration() {
       const created = await regenerateSnippet({
         story: currentStory,
         target_snippet_id: last.id,
+        // If empty, backend applies base; else merges base+user
         instruction,
         max_tokens: generationSettings.max_tokens,
         model: generationSettings.model ?? null,
