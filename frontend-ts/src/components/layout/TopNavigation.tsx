@@ -43,6 +43,11 @@ export function TopNavigation() {
     return () => clearInterval(interval)
   }, [])
 
+  // Keep stories list fresh when current story changes (e.g., after deletion via sidebar)
+  useEffect(() => {
+    loadStories()
+  }, [currentStory])
+
   const loadStories = async () => {
     try {
       const result = await getStories()
@@ -50,25 +55,6 @@ export function TopNavigation() {
     } catch (error) {
       console.error('Failed to load stories:', error)
       toast.error('Failed to load stories')
-    }
-  }
-
-  const handleDeleteStory = async () => {
-    if (!currentStory) return
-    setDeleting(true)
-    try {
-      await apiDeleteStory(currentStory)
-      const updated = await getStories()
-      setStories(updated)
-      const next = updated[0] || ''
-      if (next) setCurrentStory(next)
-      setShowDelete(false)
-    } catch (error) {
-      console.error('Failed to delete story:', error)
-      // eslint-disable-next-line no-undef
-      ;(await import('sonner')).toast.error(`Failed to delete story: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    } finally {
-      setDeleting(false)
     }
   }
 
@@ -175,14 +161,7 @@ export function TopNavigation() {
                 <Sparkles className="h-4 w-4 mr-1" />
                 New Story (AI)
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowDelete(true)}
-                className="text-red-600 border-red-200 hover:bg-red-50"
-              >
-                Delete Story
-              </Button>
+              {/* Delete Story action moved to Sidebar */}
             </div>
           </div>
 

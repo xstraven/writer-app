@@ -12,6 +12,7 @@ import { BranchesPanel } from './BranchesPanel'
 import { useAppStore } from '@/stores/appStore'
 import { getPromptPreview, deleteStory as apiDeleteStory, getStories } from '@/lib/api'
 import { useState as useReactState } from 'react'
+import { toast } from 'sonner'
 
 export function Sidebar() {
   const [openGen, setOpenGen] = useState(true)
@@ -31,6 +32,33 @@ export function Sidebar() {
 
   return (
     <div className="space-y-4 sticky top-24 max-h-[calc(100vh-6rem)] overflow-y-auto pr-1">
+      {/* Story (collapsible) – moved to top */}
+      <Card className="shadow-sm">
+        <CardHeader className="pb-2">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between"
+            onClick={() => setOpenStory(v => !v)}
+            aria-expanded={openStory}
+          >
+            <CardTitle className="text-lg">Story</CardTitle>
+            <ChevronDown className={`h-4 w-4 transition-transform ${openStory ? '' : '-rotate-90'}`} />
+          </button>
+        </CardHeader>
+        {openStory && (
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowBranches(true)}>
+                Branches
+              </Button>
+              <Button variant="destructive" size="sm" onClick={() => setShowDelete(true)}>
+                Delete Story
+              </Button>
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
       {/* Generation Settings (collapsible) */}
       <Card className="shadow-sm">
         <CardHeader className="pb-2">
@@ -109,32 +137,7 @@ export function Sidebar() {
         )}
       </Card>
 
-      {/* Story (collapsible) */}
-      <Card className="shadow-sm">
-        <CardHeader className="pb-2">
-          <button
-            type="button"
-            className="flex w-full items-center justify-between"
-            onClick={() => setOpenStory(v => !v)}
-            aria-expanded={openStory}
-          >
-            <CardTitle className="text-lg">Story</CardTitle>
-            <ChevronDown className={`h-4 w-4 transition-transform ${openStory ? '' : '-rotate-90'}`} />
-          </button>
-        </CardHeader>
-        {openStory && (
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={() => setShowBranches(true)}>
-                Branches
-              </Button>
-              <Button variant="destructive" size="sm" onClick={() => setShowDelete(true)}>
-                Delete Story
-              </Button>
-            </div>
-          </CardContent>
-        )}
-      </Card>
+      
 
       {/* Branches Modal */}
       <Modal isOpen={showBranches} onClose={() => setShowBranches(false)} title="Story Branches" size="lg" position="right">
@@ -175,8 +178,16 @@ export function Sidebar() {
                 await apiDeleteStory(currentStory)
                 const updated = await getStories()
                 const next = updated[0] || ''
-                if (next) setCurrentStory(next)
+                if (next) {
+                  setCurrentStory(next)
+                } else {
+                  setCurrentStory('')
+                }
                 setShowDelete(false)
+                toast.success('Story deleted')
+              } catch (error) {
+                console.error('Failed to delete story:', error)
+                toast.error(`Failed to delete story: ${error instanceof Error ? error.message : 'Unknown error'}`)
               } finally {
                 setDeleting(false)
               }
