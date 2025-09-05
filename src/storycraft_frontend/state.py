@@ -184,31 +184,6 @@ class AppState(rx.State):
         self.new_chunk_text = value or ""
         print(f"[DEBUG] new_chunk_text set to: '{self.new_chunk_text}'")
         
-    async def handle_composer_keydown(self, key):
-        """Handle Cmd+Enter in the composer textarea."""
-        print(f"[DEBUG] handle_composer_keydown called with key: {key}, type: {type(key)}")
-        
-        # Handle the case where key might be a string or dict
-        if isinstance(key, str):
-            print(f"[DEBUG] Key is string: '{key}' - cannot detect modifier keys")
-            return
-        elif hasattr(key, 'get'):
-            key_name = str(key.get("key", ""))
-            ctrl_key = bool(key.get("ctrlKey", False))
-            meta_key = bool(key.get("metaKey", False))
-        elif hasattr(key, 'key'):
-            key_name = str(getattr(key, 'key', ''))
-            ctrl_key = bool(getattr(key, 'ctrlKey', False)) or bool(getattr(key, 'ctrl_key', False))
-            meta_key = bool(getattr(key, 'metaKey', False)) or bool(getattr(key, 'meta_key', False))
-        else:
-            print(f"[DEBUG] Unknown key format: {key}")
-            return
-            
-        print(f"[DEBUG] Key details - name: '{key_name}', ctrl: {ctrl_key}, meta: {meta_key}")
-        
-        if key_name == "Enter" and (ctrl_key or meta_key):
-            print(f"[DEBUG] Cmd+Enter detected, committing composer text: '{self.new_chunk_text}'")
-            await self.commit_user_chunk()
 
     def set_instruction(self, value: str):
         self.instruction = value or ""

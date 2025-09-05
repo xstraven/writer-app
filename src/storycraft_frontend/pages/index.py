@@ -894,7 +894,7 @@ def index() -> rx.Component:
                                 "line_height": "1.7",
                                 "resize": "vertical"
                             },
-                            on_key_down=AppState.handle_composer_keydown,
+                            id="composer-textarea",
                         ),
                         id="composer",
                         data_row_id="composer",
@@ -967,8 +967,45 @@ def index() -> rx.Component:
         meta_overlay(),
         tiptap_help_overlay(),
         confirm_overlay,
+        # composer_keyhandler_script(),
         
         rx.html("""
+            <script>
+            console.log('[TEST] JavaScript is loading!');
+            
+            // Simple test function
+            function testComposerHandler() {
+                console.log('[TEST] Looking for textarea...');
+                const textarea = document.getElementById('composer-textarea');
+                console.log('[TEST] Found textarea:', textarea);
+                
+                if (textarea) {
+                    console.log('[TEST] Adding simple keydown listener...');
+                    textarea.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                            console.log('[TEST] Cmd+Enter detected! Looking for button...');
+                            e.preventDefault();
+                            const buttons = Array.from(document.querySelectorAll('button'));
+                            const commitButton = buttons.find(b => b.textContent && b.textContent.includes('Commit Chunk'));
+                            if (commitButton) {
+                                console.log('[TEST] Found button, clicking...');
+                                commitButton.click();
+                            } else {
+                                console.log('[TEST] No commit button found');
+                            }
+                        }
+                    });
+                } else {
+                    console.log('[TEST] No textarea found, trying again...');
+                    setTimeout(testComposerHandler, 500);
+                }
+            }
+            
+            // Try multiple times to attach
+            testComposerHandler();
+            setTimeout(testComposerHandler, 1000);
+            setTimeout(testComposerHandler, 2000);
+            </script>
             <style>
             /* TipTap editor basic dark theme adjustments */
             .tiptap-editor { color: #e5e7eb; background: transparent; line-height: 1.7; }
@@ -1047,6 +1084,45 @@ def index() -> rx.Component:
         # Icons are always visible now; no reveal script needed
         on_mount=[AppState.load_stories, AppState.load_state, AppState.load_lore, AppState.reload_branch, AppState.probe_backend],
         py=4,
+    )
+    
+# Add script tag as a separate component to ensure it loads
+def composer_keyhandler_script() -> rx.Component:
+    return rx.html(
+        """
+        <script>
+        console.log('[Composer] Script loading...');
+        window.setupComposer = function() {
+            console.log('[Composer] setupComposer called');
+            const textarea = document.getElementById('composer-textarea');
+            if (textarea) {
+                console.log('[Composer] Found textarea:', textarea);
+                textarea.addEventListener('keydown', function(e) {
+                    console.log('[Composer] Key event:', e.key, 'Meta:', e.metaKey, 'Ctrl:', e.ctrlKey);
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                        console.log('[Composer] Cmd+Enter detected!');
+                        e.preventDefault();
+                        const button = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Commit Chunk'));
+                        if (button) {
+                            console.log('[Composer] Clicking button');
+                            button.click();
+                        }
+                    }
+                });
+            } else {
+                console.log('[Composer] Textarea not found');
+            }
+        };
+        // Try immediately and then with delays
+        if (document.readyState === 'complete') {
+            window.setupComposer();
+        } else {
+            window.addEventListener('load', window.setupComposer);
+        }
+        setTimeout(window.setupComposer, 1000);
+        setTimeout(window.setupComposer, 2000);
+        </script>
+        """
     )
 def base_styles() -> rx.Component:
     return rx.html(
