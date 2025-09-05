@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Wand2, RefreshCcw, Undo2, AlertCircle } from 'lucide-react'
+import { Wand2, Undo2, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -35,7 +35,7 @@ export function StoryEditor() {
 
   const { 
     generateContinuation, 
-    regenerateLast, 
+    generateContinuationAsync,
     isGenerating, 
     generationError 
   } = useStoryGeneration()
@@ -45,19 +45,26 @@ export function StoryEditor() {
 
   const draftText = useMemo(() => chunks.map(c => c.text).join(' '), [chunks])
 
-  const handleGenerate = () => {
-    if (instruction.trim()) {
-      generateContinuation(instruction)
-      setInstruction('')
-    } else {
-      toast.error("Please enter an instruction first")
+  const DEFAULT_INSTRUCTION = "Continue the story, matching established voice, tone, and point of view. Maintain continuity with prior events and details."
+  const handleGenerate = async (maybeText?: string) => {
+    const raw = (maybeText ?? instruction)
+    const text = raw.trim() || DEFAULT_INSTRUCTION
+    try {
+      const continuation = await generateContinuationAsync(text)
+      // Reset to default prompt after generate
+      setInstruction(DEFAULT_INSTRUCTION)
+      // Append to the active user draft (with a space if needed)
+      setUserDraft((prev) => {
+        if (!prev) return continuation
+        const needsSpace = /\S$/.test(prev)
+        return needsSpace ? prev + ' ' + continuation : prev + continuation
+      })
+    } catch (e) {
+      // Error toast is handled in hook
     }
   }
 
-  const handleRegenerateLast = () => {
-    if (chunks.length === 0) return
-    regenerateLast()
-  }
+  // Regenerate temporarily disabled (button hidden)
 
   const handleRevert = () => {
     revertFromHistory()
@@ -117,7 +124,7 @@ export function StoryEditor() {
         <CardTitle className="text-lg">Draft</CardTitle>
       </CardHeader>
       <CardContent>
-        <ScrollArea className="h-[44vh] rounded-2xl border bg-white p-4">
+        <ScrollArea className="h-[72vh] rounded-2xl border bg-white px-3 py-3">
           <div className="space-y-3">
             {isSyncing && chunks.length === 0 ? (
               <div className="flex items-center justify-center py-8">
@@ -183,7 +190,7 @@ export function StoryEditor() {
               value={instruction}
               onChange={setInstruction}
               onSubmit={handleGenerate}
-              placeholder="e.g., Continue in a tense, noir voice. Focus on atmosphere; add subtle foreshadowing."
+              placeholder={DEFAULT_INSTRUCTION}
               disabled={isGenerating}
               className="min-h-[72px]"
             />
@@ -193,8 +200,8 @@ export function StoryEditor() {
         {/* Command Bar */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Button 
-            onClick={handleGenerate}
-            disabled={isGenerating || !instruction.trim()}
+            onClick={() => handleGenerate()}
+            disabled={isGenerating}
           >
             {isGenerating ? (
               <>
@@ -208,18 +215,7 @@ export function StoryEditor() {
               </>
             )}
           </Button>
-          <Button 
-            variant="outline" 
-            onClick={handleRegenerateLast}
-            disabled={isGenerating || chunks.length === 0}
-          >
-            {isGenerating ? (
-              <Loading size="sm" className="mr-2" />
-            ) : (
-              <RefreshCcw className="h-4 w-4 mr-2" />
-            )}
-            Regenerate last chunk
-          </Button>
+          {/* Regenerate button hidden for now */}
           <Button 
             variant="ghost" 
             onClick={handleRevert} 

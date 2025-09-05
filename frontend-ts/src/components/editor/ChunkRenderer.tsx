@@ -206,7 +206,7 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
       onMouseEnter={() => setHoveredId(chunk.id)}
       onMouseLeave={() => setHoveredId(null)}
       className={cn(
-        "relative group rounded-xl px-3 py-2 transition-colors",
+        "relative group rounded-lg px-2 py-2 transition-colors",
         isHovered ? "bg-amber-50" : "bg-white",
         chunk.author === "llm" ? "border border-dashed" : "border"
       )}

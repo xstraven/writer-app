@@ -1,10 +1,9 @@
 'use client'
 
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { continueStory, appendSnippet, getBranchPath } from '@/lib/api'
+import { continueStory, appendSnippet, regenerateSnippet } from '@/lib/api'
 import { useAppStore } from '@/stores/appStore'
-import { uid } from '@/lib/utils'
 import type { Chunk, ContinueRequest } from '@/lib/types'
 
 export function useStoryGeneration() {
@@ -19,11 +18,11 @@ export function useStoryGeneration() {
     memory,
   } = useAppStore()
 
-  // Mutation for generating story continuation
+  // Mutation for generating story continuation (preview-only; UI decides what to do)
   const generateMutation = useMutation({
-    mutationFn: async ({ instruction, isRegeneration = false }: { instruction: string, isRegeneration?: boolean }) => {
+    mutationFn: async ({ instruction }: { instruction: string }) => {
       const draftText = chunks.map(c => c.text).join('\n\n')
-      
+
       const request: ContinueRequest = {
         draft_text: draftText,
         instruction,
@@ -42,36 +41,11 @@ export function useStoryGeneration() {
         lore_ids: lorebook.filter(l => l.always_on).map(l => l.id),
       }
 
-      const response = await continueStory(request)
-      return response
+      const { continuation } = await continueStory(request)
+      return continuation
     },
-    onSuccess: (data, { isRegeneration }) => {
-      const newChunk: Chunk = {
-        id: uid(),
-        text: data.continuation,
-        author: "llm",
-        timestamp: Date.now(),
-      }
-
-      const before = [...chunks]
-      let after: Chunk[]
-
-      if (isRegeneration && chunks.length > 0) {
-        // Replace the last chunk
-        after = [...chunks.slice(0, -1), newChunk]
-        pushHistory("regenerate", before, after)
-        toast.success("Story chunk regenerated successfully")
-      } else {
-        // Add new chunk
-        after = [...chunks, newChunk]
-        pushHistory("generate", before, after)
-        toast.success("Story continued successfully")
-      }
-
-      setChunks(after)
-    },
-    onError: (error) => {
-      toast.error(`Generation failed: ${error.message}`)
+    onError: (error: any) => {
+      toast.error(`Generation failed: ${error.message || 'Unknown error'}`)
     },
   })
 
@@ -93,19 +67,59 @@ export function useStoryGeneration() {
     },
   })
 
-  // Query to load story branch from backend
-  const { data: branchData, refetch: refetchBranch } = useQuery({
-    queryKey: ['branch', currentStory],
-    queryFn: () => getBranchPath(currentStory),
-    enabled: !!currentStory,
+  // Mutation for regenerating the last LLM chunk on the backend
+  const regenerateMutation = useMutation({
+    mutationFn: async ({ instruction }: { instruction: string }) => {
+      const last = chunks[chunks.length - 1]
+      if (!last) throw new Error('No chunk to regenerate')
+
+      const created = await regenerateSnippet({
+        story: currentStory,
+        target_snippet_id: last.id,
+        instruction,
+        max_tokens: generationSettings.max_tokens,
+        model: generationSettings.model ?? null,
+        use_memory: true,
+        temperature: generationSettings.temperature,
+        context: {
+          summary: synopsis,
+          npcs: [],
+          objects: [],
+        },
+        use_context: true,
+        set_active: true,
+        lore_ids: lorebook.filter(l => l.always_on).map(l => l.id),
+      })
+      return created
+    },
+    onSuccess: (created) => {
+      const before = [...chunks]
+      const after = [...chunks]
+      after[after.length - 1] = {
+        id: created.id,
+        text: created.content,
+        author: 'llm',
+        timestamp: new Date(created.created_at).getTime(),
+      }
+      pushHistory('regenerate', before, after)
+      setChunks(after)
+      toast.success('Story chunk regenerated successfully')
+    },
+    onError: (error: any) => {
+      toast.error(`Regeneration failed: ${error.message || 'Unknown error'}`)
+    },
   })
 
   const generateContinuation = (instruction: string) => {
     generateMutation.mutate({ instruction })
   }
 
+  const generateContinuationAsync = (instruction: string) => {
+    return generateMutation.mutateAsync({ instruction })
+  }
+
   const regenerateLast = (instruction: string = '') => {
-    generateMutation.mutate({ instruction, isRegeneration: true })
+    regenerateMutation.mutate({ instruction })
   }
 
   const commitChunk = (content: string) => {
@@ -114,11 +128,10 @@ export function useStoryGeneration() {
 
   return {
     generateContinuation,
+    generateContinuationAsync,
     regenerateLast,
     commitChunk,
-    isGenerating: generateMutation.isPending,
-    generationError: generateMutation.error,
-    branchData,
-    refetchBranch,
+    isGenerating: generateMutation.isPending || regenerateMutation.isPending,
+    generationError: generateMutation.error || regenerateMutation.error,
   }
 }
