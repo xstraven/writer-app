@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { 
-  Settings, 
   GitBranch, 
   BookOpen, 
   Plus, 
@@ -21,7 +20,7 @@ import {
 } from '@/components/ui/select'
 import { Modal } from '@/components/ui/modal'
 import { BranchesPanel } from '@/components/sidebar/BranchesPanel'
-import { GenerationSettings } from '@/components/sidebar/GenerationSettings'
+// import { GenerationSettings } from '@/components/sidebar/GenerationSettings'
 import { useAppStore } from '@/stores/appStore'
 import { getStories, healthCheck, getPromptPreview } from '@/lib/api'
 import { toast } from 'sonner'
@@ -33,7 +32,7 @@ export function TopNavigation() {
   const [apiMessage, setApiMessage] = useState('')
   
   // Modal states
-  const [showSettings, setShowSettings] = useState(false)
+  // const [showSettings, setShowSettings] = useState(false)
   const [showBranches, setShowBranches] = useState(false)
   const [showPromptPreview, setShowPromptPreview] = useState(false)
   const [promptMessages, setPromptMessages] = useState<Array<{role: string, content: string}>>([])
@@ -148,15 +147,7 @@ export function TopNavigation() {
               Branches
             </Button>
             
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowSettings(true)}
-              className="text-purple-600 border-purple-200 hover:bg-purple-50"
-            >
-              <Settings className="h-4 w-4 mr-1" />
-              Settings
-            </Button>
+            {/* Settings moved to right sidebar; button removed */}
 
             <Button
               variant="outline"
@@ -198,16 +189,7 @@ export function TopNavigation() {
       </div>
 
       {/* Modals */}
-      <Modal
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-        title="Generation Settings"
-        size="md"
-      >
-        <div className="p-4">
-          <GenerationSettings />
-        </div>
-      </Modal>
+      {/* Settings modal removed; use sidebar controls */}
 
       <Modal
         isOpen={showBranches}

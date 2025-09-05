@@ -8,24 +8,31 @@ import { useAppStore } from '@/stores/appStore'
 export function usePersistAppState(delayMs: number = 600) {
   const { currentStory, generationSettings, context, gallery, synopsis, memory } = useAppStore()
   const timer = useRef<NodeJS.Timeout | null>(null)
+  const latest = useRef<{ story: string; payload: any }>({ story: '', payload: {} })
 
   useEffect(() => {
     if (!currentStory) return
     if (timer.current) clearTimeout(timer.current)
+    // Cache latest payload for potential flush
+    latest.current = {
+      story: currentStory,
+      payload: {
+        story: currentStory,
+        temperature: generationSettings.temperature,
+        max_tokens: generationSettings.max_tokens,
+        model: generationSettings.model ?? null,
+        system_prompt: generationSettings.system_prompt ?? null,
+        max_context_window: generationSettings.max_context_window,
+        context,
+        gallery,
+        synopsis,
+        memory,
+      },
+    }
+
     timer.current = setTimeout(async () => {
       try {
-        await saveStorySettings({
-          story: currentStory,
-          temperature: generationSettings.temperature,
-          max_tokens: generationSettings.max_tokens,
-          model: generationSettings.model ?? null,
-          system_prompt: generationSettings.system_prompt ?? null,
-          max_context_window: generationSettings.max_context_window,
-          context,
-          gallery,
-          synopsis,
-          memory,
-        })
+        await saveStorySettings(latest.current.payload)
         // Optional: add a subtle console log for debugging
         // console.log('App state saved')
       } catch (e) {
@@ -38,4 +45,13 @@ export function usePersistAppState(delayMs: number = 600) {
       if (timer.current) clearTimeout(timer.current)
     }
   }, [currentStory, generationSettings, context, gallery, synopsis, memory, delayMs])
+
+  // Best-effort flush on unload (no blocking call here; rely on debounce normally)
+  useEffect(() => {
+    const handler = () => {
+      // Intentionally no sync request; consider navigator.sendBeacon with a dedicated endpoint.
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [])
 }

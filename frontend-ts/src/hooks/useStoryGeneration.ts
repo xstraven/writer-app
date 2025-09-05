@@ -2,6 +2,7 @@
 
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { getApiErrorMessage } from '@/lib/errors'
 import { continueStory, appendSnippet, regenerateSnippet } from '@/lib/api'
 import { useAppStore } from '@/stores/appStore'
 import type { Chunk, ContinueRequest } from '@/lib/types'
@@ -49,7 +50,7 @@ export function useStoryGeneration() {
       return continuation
     },
     onError: (error: any) => {
-      toast.error(`Generation failed: ${error.message || 'Unknown error'}`)
+      toast.error(`Generation failed: ${getApiErrorMessage(error)}`)
     },
   })
 
@@ -112,7 +113,7 @@ export function useStoryGeneration() {
       toast.success('Story chunk regenerated successfully')
     },
     onError: (error: any) => {
-      toast.error(`Regeneration failed: ${error.message || 'Unknown error'}`)
+      toast.error(`Regeneration failed: ${getApiErrorMessage(error)}`)
     },
   })
 

@@ -22,6 +22,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { useAppStore } from '@/stores/appStore'
 import { createLoreEntry, updateLoreEntry, deleteLoreEntry, saveStorySettings } from '@/lib/api'
 import { toast } from 'sonner'
+import { getApiErrorMessage } from '@/lib/errors'
 import { uid } from '@/lib/utils'
 import type { LoreEntry, LoreEntryCreate, LoreEntryUpdate } from '@/lib/types'
 
@@ -122,7 +123,7 @@ export function LorebookPanel() {
       setEditingEntry(null)
     } catch (error) {
       console.error('Failed to save lore entry:', error)
-      toast.error(`Failed to save entry: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error(`Failed to save entry: ${getApiErrorMessage(error)}`)
     } finally {
       setIsLoading(false)
     }
@@ -142,7 +143,7 @@ export function LorebookPanel() {
       toast.success("Lore entry deleted")
     } catch (error) {
       console.error('Failed to delete lore entry:', error)
-      toast.error(`Failed to delete entry: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error(`Failed to delete entry: ${getApiErrorMessage(error)}`)
     } finally {
       setIsLoading(false)
     }

@@ -5,7 +5,6 @@ from pathlib import Path
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
-from .lorebook_store import LorebookStore
 from .memory import continue_story, extract_memory_from_text, suggest_context_from_text
 from .models import (
     AppPersistedState,
@@ -37,10 +36,6 @@ from .models import (
     DevSeedRequest,
     DevSeedResponse,
 )
-from .state_store import StateStore
-from .base_settings_store import BaseSettingsStore
-from .snippet_store import SnippetStore
-from .story_settings_store import StorySettingsStore
 
 
 settings = get_settings()
@@ -54,42 +49,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-store = LorebookStore()
-state_store = StateStore()
-snippet_store = SnippetStore()
-base_settings_store = BaseSettingsStore()
-story_settings_store = StorySettingsStore()
+from .runtime import lorebook_store as store
+from .runtime import state_store, base_settings_store, snippet_store, story_settings_store
 
 
-@app.get("/health", response_model=HealthResponse)
-async def health() -> HealthResponse:
-    return HealthResponse()
+from .routes.health import router as health_router
+from .routes.state import router as state_router
+from .routes.story_settings import router as story_settings_router
+from .routes.lorebook import router as lorebook_router
+
+app.include_router(health_router)
+app.include_router(state_router)
+app.include_router(story_settings_router)
+app.include_router(lorebook_router)
 
 
-@app.get("/api/lorebook", response_model=list[LoreEntry])
-async def list_lore(story: str) -> list[LoreEntry]:
-    return store.list(story)
-
-
-@app.post("/api/lorebook", response_model=LoreEntry)
-async def create_lore(payload: LoreEntryCreate) -> LoreEntry:
-    return store.create(payload)
-
-
-@app.put("/api/lorebook/{entry_id}", response_model=LoreEntry)
-async def update_lore(entry_id: str, payload: LoreEntryUpdate) -> LoreEntry:
-    updated = store.update(entry_id, payload)
-    if not updated:
-        raise HTTPException(status_code=404, detail="Lore entry not found")
-    return updated
-
-
-@app.delete("/api/lorebook/{entry_id}")
-async def delete_lore(entry_id: str) -> dict:
-    ok = store.delete(entry_id)
-    if not ok:
-        raise HTTPException(status_code=404, detail="Lore entry not found")
-    return {"ok": True}
+# lorebook endpoints moved to router
 
 
 @app.post("/api/extract-memory", response_model=MemoryState)
@@ -99,14 +74,23 @@ async def extract_memory(req: ExtractMemoryRequest) -> MemoryState:
 
 @app.post("/api/continue", response_model=ContinueResponse)
 async def continue_endpoint(req: ContinueRequest) -> ContinueResponse:
+    # Apply optional max context window to draft text (truncate from top)
+    draft_text = req.draft_text or ""
+    try:
+        win_c = int(getattr(req, "max_context_window", 0) or 0)
+        if win_c > 0 and len(draft_text) > win_c * 3:
+            draft_text = draft_text[-(win_c * 3) :]
+    except Exception:
+        pass
+
     mem: MemoryState | None = None
-    if req.use_memory and req.draft_text.strip():
-        mem = await extract_memory_from_text(text=req.draft_text, model=req.model)
+    if req.use_memory and draft_text.strip():
+        mem = await extract_memory_from_text(text=draft_text, model=req.model)
     # Select lorebook entries: union of explicit IDs + auto by keys + always_on.
     lore_items = []
     explicit_ids = set(req.lore_ids or [])
     # Build selection text from draft or history (prefer draft).
-    selection_text = (req.draft_text or "").strip() or ""
+    selection_text = (draft_text or "").strip() or ""
     if not selection_text:
         # Fallback to history gathered below if draft empty; else leave blank.
         selection_text = ""
@@ -353,119 +337,10 @@ async def dev_seed(req: DevSeedRequest) -> DevSeedResponse:
     return DevSeedResponse(story=req.story, chunks_imported=chunks_count, lore_imported=lore_count)
 
 
-@app.get("/api/state", response_model=AppPersistedState)
-async def get_state() -> AppPersistedState:
-    data = state_store.get()
-    try:
-        # Fallback/merge with base settings file for defaults
-        base_defaults = base_settings_store.get()
-        merged = dict(base_defaults)
-        merged.update(data or {})
-        return AppPersistedState(**merged)
-    except Exception:
-        try:
-            return AppPersistedState(**base_settings_store.get())
-        except Exception:
-            return AppPersistedState()
+# state endpoints moved to router
 
 
-@app.put("/api/state", response_model=dict)
-async def put_state(payload: AppPersistedState) -> dict:
-    state_store.set(payload.model_dump())
-    return {"ok": True}
-
-
-@app.get("/api/story-settings")
-async def get_story_settings(story: str):
-    story = (story or "").strip()
-    if not story:
-        raise HTTPException(status_code=400, detail="Missing story")
-    data = story_settings_store.get(story)
-    if data is None:
-        # Fallback to legacy global app state for defaults
-        legacy = state_store.get()
-        base_defaults = base_settings_store.get()
-        merged = dict(base_defaults)
-        merged.update(legacy or {})
-        # Only project the fields we support
-        resp = {
-            "story": story,
-            "temperature": merged.get("temperature"),
-            "max_tokens": merged.get("max_tokens"),
-            "model": merged.get("model"),
-            "system_prompt": merged.get("system_prompt"),
-            "max_context_window": merged.get("max_context_window"),
-            "context": merged.get("context"),
-            "synopsis": merged.get("synopsis"),
-            "memory": merged.get("memory"),
-            "gallery": [],
-        }
-        # Always include current lorebook for this story
-        resp["lorebook"] = [e.model_dump() for e in store.list(story)]
-        return resp
-    # Ensure shape
-    resp = {
-        "story": story,
-        "temperature": data.get("temperature"),
-        "max_tokens": data.get("max_tokens"),
-        "model": data.get("model"),
-        "system_prompt": data.get("system_prompt"),
-        "max_context_window": data.get("max_context_window"),
-        "context": data.get("context"),
-        "synopsis": data.get("synopsis"),
-        "memory": data.get("memory"),
-        "gallery": data.get("gallery") or [],
-    }
-    resp["lorebook"] = [e.model_dump() for e in store.list(story)]
-    return resp
-
-
-@app.put("/api/story-settings")
-async def put_story_settings(payload: dict):
-    story = (payload.get("story") or "").strip()
-    if not story:
-        raise HTTPException(status_code=400, detail="Missing story")
-    # Accept only known keys
-    allowed = {
-        k: payload.get(k)
-        for k in [
-            "temperature",
-            "max_tokens",
-            "model",
-            "system_prompt",
-            "max_context_window",
-            "context",
-            "gallery",
-            "synopsis",
-            "memory",
-        ]
-        if k in payload
-    }
-    story_settings_store.update(story, allowed)
-    # Optional: replace lorebook if provided
-    if "lorebook" in payload and isinstance(payload["lorebook"], list):
-        try:
-            from .models import LoreEntryCreate
-            # Purge existing for story, then recreate from payload
-            store.delete_all(story)
-            for item in payload["lorebook"]:
-                try:
-                    lec = LoreEntryCreate(
-                        story=story,
-                        name=item.get("name", ""),
-                        kind=item.get("kind", "note") or "note",
-                        summary=item.get("summary", ""),
-                        tags=item.get("tags", []) or [],
-                        keys=item.get("keys", []) or [],
-                        always_on=bool(item.get("always_on", False)),
-                    )
-                    if lec.name and lec.summary:
-                        store.create(lec)
-                except Exception:
-                    continue
-        except Exception:
-            pass
-    return {"ok": True, "story": story, "updated_keys": list(allowed.keys())}
+# story settings endpoints moved to router
 
 
 # --- Snippets & Branching API ---

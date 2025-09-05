@@ -1,120 +1,181 @@
 from __future__ import annotations
 
 import json
-import os
 import threading
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from .models import LoreEntry, LoreEntryCreate, LoreEntryUpdate
 
 
 class LorebookStore:
-    def __init__(self, path: str | Path = "data/lorebook.json") -> None:
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+    """DuckDB-backed lorebook store. Imports existing JSON on first use if present.
+
+    Table schema:
+      - id TEXT PRIMARY KEY
+      - story TEXT NOT NULL
+      - name TEXT NOT NULL
+      - kind TEXT NOT NULL
+      - summary TEXT NOT NULL
+      - tags TEXT (JSON)
+      - keys TEXT (JSON)
+      - always_on BOOLEAN
+    """
+
+    def __init__(self, db_path: str | Path = "data/story.duckdb", legacy_json: str | Path = "data/lorebook.json", **kwargs) -> None:
+        # Back-compat: accept 'path' keyword to specify a legacy JSON file, and pick a sibling DB
+        legacy_path = kwargs.pop("path", None)
+        if legacy_path is not None:
+            legacy_json = legacy_path
+            p = Path(legacy_path)
+            # Use a DB next to the provided JSON path
+            db_path = p.with_suffix(".duckdb")
+        self.db_path = Path(db_path)
+        self.legacy_json = Path(legacy_json)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
-        if not self.path.exists():
-            self._write({})
+        self._init_db()
+        self._maybe_import_legacy_json()
 
-    def _read_raw(self) -> Dict[str, dict]:
-        """Read the on-disk JSON as a plain dict map."""
-        with self._lock:
-            with self.path.open("r", encoding="utf-8") as f:
-                raw = json.load(f)
-        # Ensure structure is dict[str, dict]
-        out: Dict[str, dict] = {}
-        for k, v in raw.items():
-            if isinstance(v, dict):
-                out[k] = v
-            else:
-                # Back-compat: if older code wrote pydantic-like objects, coerce via model
-                try:
-                    out[k] = LoreEntry(**v).model_dump()  # type: ignore[arg-type]
-                except Exception:
-                    out[k] = json.loads(json.dumps(v, default=str))
-        return out
+    def _conn(self):
+        import duckdb  # type: ignore
 
-    def _read(self) -> Dict[str, LoreEntry]:
-        raw = self._read_raw()
-        fixed: Dict[str, LoreEntry] = {}
-        for k, v in raw.items():
-            if "story" not in v or not v.get("story"):
-                # Backward-compat: assign old entries to default story
-                v = {**v, "story": "Story One"}
-            fixed[k] = LoreEntry(**v)
-        return fixed
+        return duckdb.connect(self.db_path.as_posix())
 
-    def _write(self, data: Dict[str, dict]) -> None:
-        with self._lock:
-            tmp = self.path.with_suffix(".tmp")
-            with tmp.open("w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-            os.replace(tmp, self.path)
+    def _init_db(self) -> None:
+        with self._conn() as con:
+            con.execute(
+                """
+                CREATE TABLE IF NOT EXISTS lorebook (
+                    id TEXT PRIMARY KEY,
+                    story TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    summary TEXT NOT NULL,
+                    tags TEXT,
+                    keys TEXT,
+                    always_on BOOLEAN
+                )
+                """
+            )
+            con.execute("CREATE INDEX IF NOT EXISTS idx_lore_story ON lorebook(story)")
+
+    def _maybe_import_legacy_json(self) -> None:
+        try:
+            if not self.legacy_json.exists():
+                return
+            # If DB already has entries, skip import
+            with self._conn() as con:
+                cnt = int(con.execute("SELECT COUNT(*) FROM lorebook").fetchone()[0])
+                if cnt > 0:
+                    return
+            # Read old JSON file and import
+            raw = json.loads(self.legacy_json.read_text(encoding="utf-8"))
+            if not isinstance(raw, dict):
+                return
+            with self._conn() as con:
+                for _id, v in raw.items():
+                    try:
+                        e = LoreEntry(**v)
+                        con.execute(
+                            "INSERT INTO lorebook(id, story, name, kind, summary, tags, keys, always_on) VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+                            [
+                                e.id,
+                                e.story,
+                                e.name,
+                                e.kind,
+                                e.summary,
+                                json.dumps(e.tags),
+                                json.dumps(e.keys),
+                                bool(e.always_on),
+                            ],
+                        )
+                    except Exception:
+                        continue
+        except Exception:
+            # Swallow import errors
+            pass
 
     def list(self, story: Optional[str] = None) -> List[LoreEntry]:
-        items = list(self._read().values())
-        if story is None:
-            return items
-        return [e for e in items if getattr(e, "story", None) == story]
+        with self._lock, self._conn() as con:
+            if story is None:
+                rows = con.execute("SELECT * FROM lorebook").fetchall()
+            else:
+                rows = con.execute("SELECT * FROM lorebook WHERE story = ? ORDER BY name ASC", [story]).fetchall()
+        return [
+            LoreEntry(
+                id=r[0], story=r[1], name=r[2], kind=r[3], summary=r[4], tags=json.loads(r[5] or "[]"), keys=json.loads(r[6] or "[]"), always_on=bool(r[7])
+            )
+            for r in rows
+        ]
 
     def list_stories(self) -> list[str]:
-        stories: set[str] = set()
-        for e in self._read().values():
-            try:
-                s = getattr(e, "story", None)
-                if s:
-                    stories.add(s)
-            except Exception:
-                continue
-        return sorted(stories)
+        with self._lock, self._conn() as con:
+            rows = con.execute("SELECT DISTINCT story FROM lorebook ORDER BY story").fetchall()
+        return [r[0] for r in rows]
 
     def get(self, entry_id: str) -> Optional[LoreEntry]:
-        return self._read().get(entry_id)
+        with self._lock, self._conn() as con:
+            r = con.execute("SELECT * FROM lorebook WHERE id = ?", [entry_id]).fetchone()
+        if not r:
+            return None
+        return LoreEntry(
+            id=r[0], story=r[1], name=r[2], kind=r[3], summary=r[4], tags=json.loads(r[5] or "[]"), keys=json.loads(r[6] or "[]"), always_on=bool(r[7])
+        )
 
     def create(self, payload: LoreEntryCreate) -> LoreEntry:
-        data = self._read_raw()
         entry_id = uuid.uuid4().hex
         entry = LoreEntry(id=entry_id, **payload.model_dump())
-        data[entry_id] = entry.model_dump()
-        self._write(data)
+        with self._lock, self._conn() as con:
+            con.execute(
+                "INSERT INTO lorebook(id, story, name, kind, summary, tags, keys, always_on) VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+                [
+                    entry.id,
+                    entry.story,
+                    entry.name,
+                    entry.kind,
+                    entry.summary,
+                    json.dumps(entry.tags),
+                    json.dumps(entry.keys),
+                    bool(entry.always_on),
+                ],
+            )
         return entry
 
     def update(self, entry_id: str, patch: LoreEntryUpdate) -> Optional[LoreEntry]:
-        data = self._read_raw()
-        if entry_id not in data:
+        current = self.get(entry_id)
+        if not current:
             return None
-        current = data[entry_id]
+        data = current.model_dump()
         update = patch.model_dump(exclude_unset=True)
-        # Apply partial update into the plain dict, preserving id
-        for k, v in update.items():
-            current[k] = v
-        # Validate via model, then write back the normalized dict
-        model = LoreEntry(**current)
-        data[entry_id] = model.model_dump()
-        self._write(data)
-        return model
+        data.update({k: v for k, v in update.items() if v is not None})
+        updated = LoreEntry(**data)
+        with self._lock, self._conn() as con:
+            con.execute(
+                "UPDATE lorebook SET story = ?, name = ?, kind = ?, summary = ?, tags = ?, keys = ?, always_on = ? WHERE id = ?",
+                [
+                    updated.story,
+                    updated.name,
+                    updated.kind,
+                    updated.summary,
+                    json.dumps(updated.tags),
+                    json.dumps(updated.keys),
+                    bool(updated.always_on),
+                    entry_id,
+                ],
+            )
+        return updated
 
     def delete(self, entry_id: str) -> bool:
-        data = self._read_raw()
-        if entry_id in data:
-            del data[entry_id]
-            self._write(data)
+        with self._lock, self._conn() as con:
+            con.execute("DELETE FROM lorebook WHERE id = ?", [entry_id])
             return True
-        return False
 
     def delete_all(self, story: str) -> None:
-        data = self._read_raw()
-        kept: Dict[str, dict] = {}
-        for k, v in data.items():
-            try:
-                if v.get("story") != story:
-                    kept[k] = v
-            except Exception:
-                kept[k] = v
-        self._write(kept)
+        with self._lock, self._conn() as con:
+            con.execute("DELETE FROM lorebook WHERE story = ?", [story])
 
     def delete_all_global(self) -> None:
-        """Remove all lore entries for all stories."""
-        self._write({})
+        with self._lock, self._conn() as con:
+            con.execute("DELETE FROM lorebook")

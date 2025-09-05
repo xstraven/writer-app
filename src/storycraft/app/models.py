@@ -79,6 +79,8 @@ class ContinueRequest(BaseModel):
     lore_ids: Optional[List[str]] = None
     # When true, do not persist generated continuation even if story is provided.
     preview_only: bool = False
+    # Optional: client-specified context window; server truncates to 3x this (chars)
+    max_context_window: Optional[int] = None
 
 
 class ContinueResponse(BaseModel):
@@ -139,6 +141,11 @@ class StorySettingsUpdate(BaseModel):
     gallery: list[str] | None = None
     synopsis: str | None = None
     memory: MemoryState | None = None
+
+
+class StorySettingsPatch(StorySettingsUpdate):
+    # Optional: replace lorebook snapshot when provided
+    lorebook: list[LoreEntry] | None = None
 
 
 # --- Snippets & Branching ---
