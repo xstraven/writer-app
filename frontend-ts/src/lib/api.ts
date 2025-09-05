@@ -25,7 +25,8 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000, // 10 second timeout
+  // Increase default timeout to accommodate LLM generation latency
+  timeout: 30000, // 30 seconds
   withCredentials: false, // Disable credentials for CORS
 });
 
@@ -104,7 +105,7 @@ export const extractMemory = async (currentText: string, model?: string): Promis
 
 // Story continuation
 export const continueStory = async (request: ContinueRequest): Promise<ContinueResponse> => {
-  const response = await apiClient.post('/api/continue', request);
+  const response = await apiClient.post('/api/continue', request, { timeout: 60000 });
   return response.data;
 };
 
@@ -122,7 +123,7 @@ export const appendSnippet = async (request: AppendSnippetRequest): Promise<Snip
 };
 
 export const regenerateSnippet = async (request: RegenerateAIRequest): Promise<Snippet> => {
-  const response = await apiClient.post('/api/snippets/regenerate-ai', request);
+  const response = await apiClient.post('/api/snippets/regenerate-ai', request, { timeout: 60000 });
   return response.data;
 };
 

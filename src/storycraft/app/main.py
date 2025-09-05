@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .memory import continue_story, extract_memory_from_text, suggest_context_from_text
+import sys, traceback
 from .models import (
     AppPersistedState,
     ContinueRequest,
@@ -132,18 +133,22 @@ async def continue_endpoint(req: ContinueRequest) -> ContinueResponse:
                 if entry:
                     lore_items.append(entry)
 
-    result = await continue_story(
-        draft_text=req.draft_text,
-        instruction=_merge_instruction(req.instruction, req.story) or "",
-        mem=mem,
-        context=(req.context if req.use_context else None),
-        model=req.model,
-        max_tokens=req.max_tokens,
-        temperature=req.temperature,
-        history_text=history_text,
-        lore_items=lore_items,
-        system_prompt=req.system_prompt,
-    )
+    try:
+        result = await continue_story(
+            draft_text=req.draft_text,
+            instruction=_merge_instruction(req.instruction, req.story) or "",
+            mem=mem,
+            context=(req.context if req.use_context else None),
+            model=req.model,
+            max_tokens=req.max_tokens,
+            temperature=req.temperature,
+            history_text=history_text,
+            lore_items=lore_items,
+            system_prompt=req.system_prompt,
+        )
+    except Exception as e:
+        traceback.print_exc(file=sys.stderr)
+        raise HTTPException(status_code=502, detail=f"Generation failed: {e}")
     # Optional persistence into DuckDB if a story is provided and not preview-only.
     try:
         if req.story and not req.preview_only:
@@ -665,16 +670,20 @@ async def regenerate_ai(req: RegenerateAIRequest) -> Snippet:
             if entry:
                 lore_items.append(entry)
 
-    result = await continue_story(
-        draft_text=base_text,
-        instruction=_merge_instruction(req.instruction, req.story) or "",
-        mem=mem,
-        context=(req.context if req.use_context else None),
-        model=req.model,
-        max_tokens=req.max_tokens,
-        temperature=req.temperature,
-        lore_items=lore_items,
-    )
+    try:
+        result = await continue_story(
+            draft_text=base_text,
+            instruction=_merge_instruction(req.instruction, req.story) or "",
+            mem=mem,
+            context=(req.context if req.use_context else None),
+            model=req.model,
+            max_tokens=req.max_tokens,
+            temperature=req.temperature,
+            lore_items=lore_items,
+        )
+    except Exception as e:
+        traceback.print_exc(file=sys.stderr)
+        raise HTTPException(status_code=502, detail=f"Regeneration failed: {e}")
     # Persist as an alternative child of the same parent as target
     row = snippet_store.regenerate_snippet(
         story=req.story,
