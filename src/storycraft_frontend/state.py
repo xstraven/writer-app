@@ -113,6 +113,7 @@ class AppState(rx.State):
     show_meta_panel: bool = False
     backend_ok: bool = False
     backend_msg: str = ""
+    show_tiptap_help: bool = False
 
     # Branching state (server-backed)
     branch_path: list[Snippet] = []
@@ -122,6 +123,7 @@ class AppState(rx.State):
     last_parent_children: list[Snippet] = []
 
     chunk_edit_list: list[EditableChunk] = []
+    chunk_edit_dicts: list[dict] = []
 
     # Tree and branches
     tree_rows: list[TreeNode] = []
@@ -165,6 +167,34 @@ class AppState(rx.State):
             self.max_tokens = int(float(value))
         except Exception:
             pass
+
+    # UI helpers
+    def open_tiptap_help(self):
+        self.show_tiptap_help = True
+
+    def close_tiptap_help(self):
+        self.show_tiptap_help = False
+
+    def clear_status(self):
+        self.status = "idle"
+
+    async def dev_seed_current(self):
+        """Import sample chunks and lore for the current story if available."""
+        payload = {
+            "story": self.current_story,
+            "purge": False,
+            "clear_existing": True,
+            "split_paragraphs": True,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                r = await client.post(f"{API_BASE}/api/dev/seed", json=payload)
+                r.raise_for_status()
+            self.status = "seeded"
+            await self.reload_branch()
+            await self.load_lore()
+        except Exception as e:
+            self.status = f"error: seed failed: {e}"
 
     # --- Story switching helpers (local only) ---
     def _snapshot_state(self) -> dict:
@@ -219,6 +249,7 @@ class AppState(rx.State):
         # Clear branch-related UI and reload for the new story
         self.branch_path = []
         self.chunk_edit_list = []
+        self.chunk_edit_dicts = []
         self.joined_chunks_text = ""
         self.head_id = None
         self.last_parent_id = None
@@ -388,6 +419,9 @@ class AppState(rx.State):
         self.draft_text = data.get("text", self.draft_text)
         # Initialize editable list mirror of current path
         self.chunk_edit_list = [EditableChunk(id=s.id, kind=s.kind, content=s.content) for s in self.branch_path]
+        self.chunk_edit_dicts = [
+            {"id": s.id, "kind": s.kind, "content": s.content} for s in self.branch_path
+        ]
         # Build joined text for seamless display (kept in sync with edits)
         self.joined_chunks_text = "\n\n".join([e.content for e in self.chunk_edit_list])
         # Determine last parent (the node whose children we can switch among)
@@ -491,6 +525,9 @@ class AppState(rx.State):
                 it = EditableChunk(id=it.id, kind=it.kind, content=value)
             items.append(it)
         self.chunk_edit_list = items
+        self.chunk_edit_dicts = [
+            {"id": e.id, "kind": e.kind, "content": e.content} for e in items
+        ]
         # Update seamless joined text live as edits happen
         self.joined_chunks_text = "\n\n".join([e.content for e in items])
 
@@ -516,6 +553,9 @@ class AppState(rx.State):
             except Exception:
                 pass
         self.chunk_edit_list = out
+        self.chunk_edit_dicts = [
+            {"id": e.id, "kind": e.kind, "content": e.content} for e in out
+        ]
         self.joined_chunks_text = "\n\n".join([e.content for e in self.chunk_edit_list])
 
     async def save_chunk(self, sid: str):
@@ -554,6 +594,7 @@ class AppState(rx.State):
         # Build lookup for current server path
         path_map = {s.id: s for s in self.branch_path}
         # For each edited chunk, save if content changed
+        changed = False
         async with httpx.AsyncClient() as client:
             for e in self.chunk_edit_list:
                 s = path_map.get(e.id)
@@ -564,9 +605,76 @@ class AppState(rx.State):
                     try:
                         r = await client.put(f"{API_BASE}/api/snippets/{e.id}", json=payload)
                         r.raise_for_status()
+                        changed = True
                     except Exception:
                         # Continue best-effort; individual failures shouldn't block others
-                        pass
+                        self.status = "error: failed to save some edits"
+        if changed and not self.status.startswith("error:"):
+            self.status = "saved"
+
+    # TipTap structural ops
+    async def apply_tiptap_ops(self, ops: list[dict]):
+        for op in (ops or []):
+            t = str(op.get("type", ""))
+            if t == "merge_prev":
+                sid = str(op.get("id"))
+                await self._merge_with_previous(sid)
+            elif t == "split":
+                sid = str(op.get("id"))
+                before = str(op.get("before", ""))
+                after = str(op.get("after", ""))
+                await self._split_chunk(sid, before, after)
+        await self.reload_branch()
+
+    async def _merge_with_previous(self, sid: str):
+        if not sid:
+            return
+        idx = next((i for i, s in enumerate(self.branch_path) if s.id == sid), -1)
+        if idx <= 0:
+            return
+        prev = self.branch_path[idx - 1]
+        cur = self.branch_path[idx]
+        new_prev = (prev.content or "").rstrip()
+        add = (cur.content or "").lstrip()
+        if new_prev and add:
+            new_prev = new_prev + "\n\n" + add
+        else:
+            new_prev = new_prev + add
+        try:
+            async with httpx.AsyncClient() as client:
+                r1 = await client.put(f"{API_BASE}/api/snippets/{prev.id}", json={"content": new_prev})
+                r1.raise_for_status()
+                r2 = await client.delete(f"{API_BASE}/api/snippets/{cur.id}", params={"story": self.current_story})
+                if r2.status_code not in (200, 404):
+                    self.status = f"error: merge delete {r2.text}"
+        except Exception as e:
+            self.status = f"error: merge {e}"
+
+    async def _split_chunk(self, sid: str, before: str, after: str):
+        if not sid:
+            return
+        before = (before or "").strip()
+        after = (after or "").strip()
+        if not after:
+            return
+        try:
+            async with httpx.AsyncClient() as client:
+                if before:
+                    r1 = await client.put(f"{API_BASE}/api/snippets/{sid}", json={"content": before})
+                    r1.raise_for_status()
+                r2 = await client.post(
+                    f"{API_BASE}/api/snippets/insert-below",
+                    json={
+                        "story": self.current_story,
+                        "parent_snippet_id": sid,
+                        "content": after,
+                        "kind": "user",
+                        "set_active": True,
+                    },
+                )
+                r2.raise_for_status()
+        except Exception as e:
+            self.status = f"error: split {e}"
 
     async def commit_entire_draft_as_root(self):
         content = (self.draft_text or "").strip()

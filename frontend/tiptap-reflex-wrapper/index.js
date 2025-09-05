@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Node } from '@tiptap/core';
@@ -39,8 +39,16 @@ const Chunk = Node.create({
 });
 
 function textToParagraphs(text) {
-  const parts = String(text || '').split(/\n\n/g);
-  return parts.map(p => ({ type: 'paragraph', content: p ? [{ type: 'text', text: p }] : [] }));
+  const paras = String(text || '').split(/\n\n/g);
+  return paras.map(p => {
+    const lines = String(p).split('\n');
+    const content = [];
+    lines.forEach((line, idx) => {
+      if (line) content.push({ type: 'text', text: line });
+      if (idx < lines.length - 1) content.push({ type: 'hardBreak' });
+    });
+    return { type: 'paragraph', content };
+  });
 }
 
 function buildDocFromChunks(chunks) {
@@ -90,6 +98,29 @@ export function TipTapEditor(props) {
     style = {},
   } = props || {};
 
+  // Normalize chunks list very defensively (Reflex may provide proxies)
+  let chunkList = null;
+  if (props && props.chunks) {
+    if (Array.isArray(props.chunks)) {
+      chunkList = props.chunks;
+    } else if (typeof props.chunks.length === 'number') {
+      const len = props.chunks.length >>> 0;
+      const tmp = [];
+      for (let i = 0; i < len; i++) {
+        tmp.push(props.chunks[i] ?? props.chunks[String(i)] ?? null);
+      }
+      chunkList = tmp.filter(Boolean);
+    } else {
+      const keys = Object.keys(props.chunks || {}).filter(k => String(+k) === k);
+      if (keys.length) {
+        keys.sort((a,b) => (+a) - (+b));
+        chunkList = keys.map(k => props.chunks[k]).filter(Boolean);
+      }
+    }
+  }
+  try { console.debug('[TipTap] chunks prop normalized length=', chunkList ? chunkList.length : 0); } catch {}
+
+  const suppressInitial = useRef(true);
   const editor = useEditor(
     {
       extensions: [
@@ -97,10 +128,20 @@ export function TipTapEditor(props) {
         Chunk,
         Placeholder.configure({ placeholder: placeholder || '' }),
       ],
-      content: (props.chunks && Array.isArray(props.chunks)) ? buildDocFromChunks(props.chunks) : (value || ''),
+      content: (chunkList) ? buildDocFromChunks(chunkList) : (value || ''),
       editable: !disabled,
+      on_ops: props.on_ops,
       onUpdate({ editor }) {
         try {
+          // Suppress setContent-triggered updates and the very first init update.
+          if (editor._suppressNextUpdate) {
+            editor._suppressNextUpdate = false;
+            return;
+          }
+          if (suppressInitial.current) {
+            suppressInitial.current = false;
+            return;
+          }
           if (typeof on_change === 'function') {
             if (props.chunks && Array.isArray(props.chunks)) {
               const chunks = extractChunksFromEditor(editor);
@@ -109,6 +150,16 @@ export function TipTapEditor(props) {
               const text = editor.getText();
               on_change(text);
             }
+          }
+          // Debounced save trigger
+          if (typeof on_blur === 'function') {
+            if (!editor._saveTimer) {
+              editor._saveTimer = null;
+            }
+            if (editor._saveTimer) clearTimeout(editor._saveTimer);
+            editor._saveTimer = setTimeout(() => {
+              try { on_blur(); } catch {}
+            }, 900);
           }
         } catch {}
       },
@@ -123,26 +174,105 @@ export function TipTapEditor(props) {
     [disabled, placeholder]
   );
 
+  // Keyboard shortcuts for split/merge.
+  useEffect(() => {
+    if (!editor) return;
+    const view = editor.view;
+    function getChunkInfo() {
+      const { state } = editor;
+      const { selection } = state;
+      const $from = selection.$from;
+      // Find ancestor chunk node
+      for (let d = $from.depth; d > 0; d--) {
+        const node = $from.node(d);
+        if (node.type && node.type.name === 'chunk') {
+          const posStart = $from.before(d);
+          const posEnd = posStart + node.nodeSize;
+          const id = node.attrs?.id || '';
+          return { id, posStart, posEnd };
+        }
+      }
+      return null;
+    }
+    function atChunkStart(info) {
+      const { state } = editor;
+      if (!state.selection.empty) return false;
+      const cur = state.selection.from;
+      // Start of chunk content is posStart + 1
+      return cur === (info.posStart + 1);
+    }
+
+    function handleBackspace(e) {
+      try {
+        if (!editor.options.on_ops) return false;
+        const info = getChunkInfo();
+        if (!info) return false;
+        if (atChunkStart(info)) {
+          // Request merge with previous chunk
+          editor.options.on_ops([{ type: 'merge_prev', id: info.id }]);
+          e.preventDefault();
+          return true;
+        }
+      } catch {}
+      return false;
+    }
+
+    function handleModEnter(e) {
+      try {
+        if (!editor.options.on_ops) return false;
+        const info = getChunkInfo();
+        if (!info) return false;
+        const { state } = editor;
+        if (!state.selection.empty) return false;
+        const from = state.selection.from;
+        // Extract plain text before/after cursor within the chunk
+        const before = state.doc.textBetween(info.posStart + 1, from, '\n\n', '\n');
+        const after = state.doc.textBetween(from, info.posEnd - 1, '\n\n', '\n');
+        if ((after || '').trim().length === 0) return false;
+        editor.options.on_ops([{ type: 'split', id: info.id, before, after }]);
+        e.preventDefault();
+        return true;
+      } catch {}
+      return false;
+    }
+
+    function onKeyDown(e) {
+      if (e.key === 'Backspace' && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey) {
+        if (handleBackspace(e)) return;
+      }
+      // Mod-Enter (Command on macOS, Control on Windows/Linux)
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        if (handleModEnter(e)) return;
+      }
+    }
+    view.dom.addEventListener('keydown', onKeyDown, true);
+    return () => view.dom.removeEventListener('keydown', onKeyDown, true);
+  }, [editor]);
+
   // Keep editor content in sync when 'value' or 'chunks' prop changes.
   useEffect(() => {
     if (!editor) return;
     try {
-      if (props.chunks && Array.isArray(props.chunks)) {
+      if (chunkList) {
         const current = extractChunksFromEditor(editor);
-        const next = Array.isArray(props.chunks) ? props.chunks : [];
+        const next = chunkList || [];
         const same = (current.length === next.length) && current.every((c, i) => c.id === next[i].id && c.kind === next[i].kind && c.content === next[i].content);
         if (!same) {
+          try { console.debug('[TipTap] setContent from chunks, count=', next.length); } catch {}
+          editor._suppressNextUpdate = true;
           editor.commands.setContent(buildDocFromChunks(next));
         }
       } else {
         const current = editor.getText();
         const next = value || '';
         if (current !== next) {
+          try { console.debug('[TipTap] setContent from value, length=', (next || '').length); } catch {}
+          editor._suppressNextUpdate = true;
           editor.commands.setContent(next);
         }
       }
     } catch {}
-  }, [editor, value, props.chunks, props.version]);
+  }, [editor, value, chunkList, props.version]);
 
   const mergedStyle = {
     minHeight: min_height || '140px',
