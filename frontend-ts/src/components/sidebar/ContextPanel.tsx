@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { MapPin, Users, Package, Plus, X, Sparkles, Loader2 } from 'lucide-react'
+import { MapPin, Users, Package, Plus, X, Sparkles, Loader2, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -15,6 +15,11 @@ import type { ContextItem } from '@/lib/types'
 export function ContextPanel() {
   const { context, setContext, chunks, generationSettings } = useAppStore()
   const [isGenerating, setIsGenerating] = useState(false)
+  const [query, setQuery] = useState('')
+  const [showNew, setShowNew] = useState(false)
+  const [newType, setNewType] = useState<'npc' | 'object'>('npc')
+  const [newLabel, setNewLabel] = useState('')
+  const [newDetail, setNewDetail] = useState('')
   
   // Form states for adding new items
   const [newNpcName, setNewNpcName] = useState('')
@@ -105,11 +110,8 @@ export function ContextPanel() {
   }
 
   const clearContext = () => {
-    setContext({
-      summary: "",
-      npcs: [],
-      objects: [],
-    })
+    if (!confirm('Clear the entire scene context? This cannot be undone.')) return
+    setContext({ summary: "", npcs: [], objects: [] })
     toast.success("Context cleared")
   }
 
@@ -149,15 +151,21 @@ export function ContextPanel() {
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <MapPin className="h-4 w-4" />
-          Context
+          Scene
         </CardTitle>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setShowNew(v => !v)}
+            size="sm"
+            disabled={isGenerating}
+          >
+            <Plus className="h-3 w-3 mr-1" /> Add
+          </Button>
           <Button 
             onClick={handleAutoGenerate}
             disabled={isGenerating || chunks.length === 0}
             size="sm"
             variant="outline"
-            className="flex-1"
           >
             {isGenerating ? (
               <>
@@ -167,7 +175,7 @@ export function ContextPanel() {
             ) : (
               <>
                 <Sparkles className="h-4 w-4 mr-2" />
-                Auto-generate
+                Generate
               </>
             )}
           </Button>
@@ -179,11 +187,52 @@ export function ContextPanel() {
           >
             Clear
           </Button>
+          <div className="relative ml-auto w-56">
+            <Search className="absolute left-2 top-2.5 h-3 w-3 text-gray-400" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search..."
+              className="text-sm pl-7"
+            />
+          </div>
         </div>
       </CardHeader>
       <CardContent>
         <ScrollArea className="h-[400px]">
           <div className="space-y-4">
+            {showNew && (
+              <div className="p-3 border rounded bg-neutral-50 space-y-2">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-neutral-600">Type</label>
+                  <select
+                    value={newType}
+                    onChange={(e) => setNewType((e.target.value as 'npc' | 'object'))}
+                    className="border rounded px-2 py-1 text-sm"
+                  >
+                    <option value="npc">NPC</option>
+                    <option value="object">Object</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Name" className="text-sm" />
+                  <Input value={newDetail} onChange={(e) => setNewDetail(e.target.value)} placeholder="Detail" className="text-sm" />
+                </div>
+                <div className="flex items-center gap-2 justify-end">
+                  <Button size="sm" variant="ghost" onClick={() => { setShowNew(false); setNewLabel(''); setNewDetail('') }}>Cancel</Button>
+                  <Button size="sm" disabled={!newLabel.trim() || !newDetail.trim()} onClick={() => {
+                    if (newType === 'npc') {
+                      const newNpc: ContextItem = { label: newLabel.trim(), detail: newDetail.trim() }
+                      setContext({ ...context, npcs: [...context.npcs, newNpc] })
+                    } else {
+                      const newObj: ContextItem = { label: newLabel.trim(), detail: newDetail.trim() }
+                      setContext({ ...context, objects: [...context.objects, newObj] })
+                    }
+                    setNewLabel(''); setNewDetail(''); setShowNew(false)
+                  }}>Add</Button>
+                </div>
+              </div>
+            )}
             {/* Scene Summary */}
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-neutral-700">Scene Summary</h4>
@@ -203,37 +252,12 @@ export function ContextPanel() {
               </h4>
               
               {renderContextItems(
-                context.npcs,
+                context.npcs.filter(it => !query.trim() || it.label.toLowerCase().includes(query.toLowerCase()) || it.detail.toLowerCase().includes(query.toLowerCase())),
                 removeNpc,
                 "No NPCs added yet"
               )}
               
-              <div className="space-y-2 pt-2 border-t border-neutral-200">
-                <div className="flex gap-2">
-                  <Input
-                    value={newNpcName}
-                    onChange={(e) => setNewNpcName(e.target.value)}
-                    placeholder="Name"
-                    className="text-sm"
-                  />
-                  <Input
-                    value={newNpcDetail}
-                    onChange={(e) => setNewNpcDetail(e.target.value)}
-                    placeholder="Detail"
-                    className="text-sm"
-                  />
-                </div>
-                <Button
-                  onClick={addNpc}
-                  size="sm"
-                  variant="outline"
-                  className="w-full"
-                  disabled={!newNpcName.trim() || !newNpcDetail.trim()}
-                >
-                  <Plus className="h-3 w-3 mr-1" />
-                  Add NPC
-                </Button>
-              </div>
+              {/* New item form moved to header Add+ */}
             </div>
 
             {/* Objects */}
@@ -244,37 +268,12 @@ export function ContextPanel() {
               </h4>
               
               {renderContextItems(
-                context.objects,
+                context.objects.filter(it => !query.trim() || it.label.toLowerCase().includes(query.toLowerCase()) || it.detail.toLowerCase().includes(query.toLowerCase())),
                 removeObject,
                 "No objects added yet"
               )}
               
-              <div className="space-y-2 pt-2 border-t border-neutral-200">
-                <div className="flex gap-2">
-                  <Input
-                    value={newObjectName}
-                    onChange={(e) => setNewObjectName(e.target.value)}
-                    placeholder="Name"
-                    className="text-sm"
-                  />
-                  <Input
-                    value={newObjectDetail}
-                    onChange={(e) => setNewObjectDetail(e.target.value)}
-                    placeholder="Detail"
-                    className="text-sm"
-                  />
-                </div>
-                <Button
-                  onClick={addObject}
-                  size="sm"
-                  variant="outline"
-                  className="w-full"
-                  disabled={!newObjectName.trim() || !newObjectDetail.trim()}
-                >
-                  <Plus className="h-3 w-3 mr-1" />
-                  Add Object
-                </Button>
-              </div>
+              {/* New item form moved to header Add+ */}
             </div>
           </div>
         </ScrollArea>

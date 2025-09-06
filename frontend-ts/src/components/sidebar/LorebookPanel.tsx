@@ -20,7 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useAppStore } from '@/stores/appStore'
-import { createLoreEntry, updateLoreEntry, deleteLoreEntry, generateLorebook, getLorebook } from '@/lib/api'
+import { createLoreEntry, updateLoreEntry, deleteLoreEntry, generateLorebook, getLorebook, saveStorySettings } from '@/lib/api'
 import { toast } from 'sonner'
 import { getApiErrorMessage } from '@/lib/errors'
 import { uid } from '@/lib/utils'
@@ -321,15 +321,6 @@ export function LorebookPanel() {
     <div className="space-y-3">
       {/* Header with Search and Add Button */}
       <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-2 top-2.5 h-3 w-3 text-gray-400" />
-          <Input
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search lorebook..."
-            className="text-sm pl-7"
-          />
-        </div>
         <Button
           size="sm"
           onClick={startCreating}
@@ -341,6 +332,26 @@ export function LorebookPanel() {
         <Button size="sm" variant="outline" onClick={() => setShowGenerateModal(true)} disabled={isLoading || !!editingEntry}>
           Generate
         </Button>
+        <Button size="sm" variant="ghost" className="text-neutral-500" disabled={isLoading || !!editingEntry} onClick={async () => {
+          if (!confirm('Clear all lorebook entries for this story? This cannot be undone.')) return
+          try {
+            await saveStorySettings({ story: currentStory, lorebook: [] })
+            setLorebook([])
+          } catch (e) {
+            // silent; errors will surface via toasts elsewhere if needed
+          }
+        }}>
+          Clear
+        </Button>
+        <div className="relative ml-auto w-56">
+          <Search className="absolute left-2 top-2.5 h-3 w-3 text-gray-400" />
+          <Input
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search..."
+            className="text-sm pl-7"
+          />
+        </div>
       </div>
 
       {/* Editing Form */}
