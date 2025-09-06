@@ -63,6 +63,11 @@ export const healthCheck = async () => {
   return response.data;
 };
 
+export const llmHealthCheck = async () => {
+  const response = await apiClient.get('/health/llm');
+  return response.data;
+};
+
 // Stories
 export const getStories = async (): Promise<string[]> => {
   const response = await apiClient.get('/api/stories');

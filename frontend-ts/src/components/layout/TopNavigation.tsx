@@ -19,7 +19,7 @@ import {
 import { Modal } from '@/components/ui/modal'
 // import { GenerationSettings } from '@/components/sidebar/GenerationSettings'
 import { useAppStore } from '@/stores/appStore'
-import { getStories, healthCheck, seedStoryAI } from '@/lib/api'
+import { getStories, healthCheck, llmHealthCheck, seedStoryAI } from '@/lib/api'
 import { toast } from 'sonner'
 
 export function TopNavigation() {
@@ -27,6 +27,8 @@ export function TopNavigation() {
   const [stories, setStories] = useState<string[]>([])
   const [apiStatus, setApiStatus] = useState<'checking' | 'ok' | 'error'>('checking')
   const [apiMessage, setApiMessage] = useState('')
+  const [llmStatus, setLlmStatus] = useState<'checking' | 'ok' | 'error'>('checking')
+  const [llmMessage, setLlmMessage] = useState('')
   
   // Modal: AI seed
   const [showSeedAI, setShowSeedAI] = useState(false)
@@ -37,9 +39,13 @@ export function TopNavigation() {
   useEffect(() => {
     loadStories()
     checkApiStatus()
+    checkLlmStatus()
     
     // Check API status every 30 seconds
-    const interval = setInterval(checkApiStatus, 30000)
+    const interval = setInterval(() => {
+      checkApiStatus()
+      checkLlmStatus()
+    }, 30000)
     return () => clearInterval(interval)
   }, [])
 
@@ -66,6 +72,17 @@ export function TopNavigation() {
     } catch (error) {
       setApiStatus('error')
       setApiMessage(`API connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  const checkLlmStatus = async () => {
+    try {
+      await llmHealthCheck()
+      setLlmStatus('ok')
+      setLlmMessage('LLM connection successful')
+    } catch (error) {
+      setLlmStatus('error')
+      setLlmMessage(`LLM connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
@@ -168,7 +185,7 @@ export function TopNavigation() {
           {/* Right Side - Actions and Status */}
           <div className="flex items-center gap-3">
 
-            {/* API Status */}
+            {/* API + LLM Status */}
             <div className="flex items-center gap-2">
               <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
                 apiStatus === 'ok' 
@@ -187,9 +204,26 @@ export function TopNavigation() {
                 API {apiStatus === 'checking' ? 'Checking' : apiStatus.toUpperCase()}
               </div>
               
-              {apiMessage && (
-                <div className="hidden sm:block text-xs text-gray-500 max-w-xs truncate" title={apiMessage}>
-                  {apiMessage}
+              <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                llmStatus === 'ok' 
+                  ? 'bg-green-100 text-green-800'
+                  : llmStatus === 'error'
+                  ? 'bg-red-100 text-red-800'  
+                  : 'bg-yellow-100 text-yellow-800'
+              }`}>
+                {llmStatus === 'ok' ? (
+                  <CheckCircle className="h-3 w-3" />
+                ) : llmStatus === 'error' ? (
+                  <AlertCircle className="h-3 w-3" />
+                ) : (
+                  <div className="h-3 w-3 rounded-full bg-current animate-pulse" />
+                )}
+                LLM {llmStatus === 'checking' ? 'Checking' : llmStatus.toUpperCase()}
+              </div>
+
+              {(apiMessage || llmMessage) && (
+                <div className="hidden sm:block text-xs text-gray-500 max-w-xs truncate" title={`${apiMessage || ''} ${llmMessage ? ' • ' + llmMessage : ''}`}>
+                  {apiMessage || llmMessage}
                 </div>
               )}
             </div>
