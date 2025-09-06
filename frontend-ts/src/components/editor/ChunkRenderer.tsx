@@ -206,14 +206,10 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
       onMouseEnter={() => setHoveredId(chunk.id)}
       onMouseLeave={() => setHoveredId(null)}
       className={cn(
-        "relative group rounded-lg px-2 py-2 transition-colors",
-        isHovered ? "bg-amber-50" : "bg-white",
-        chunk.author === "llm" ? "border border-dashed" : "border"
+        "relative group transition-colors px-0 py-0",
+        isHovered ? "bg-amber-50" : "bg-transparent"
       )}
     >
-      <div className="text-sm text-neutral-500 mb-1">
-        {chunk.author === "llm" ? "LLM" : "You"} • Chunk {index + 1}
-      </div>
       
       {isEditing ? (
         <div className="space-y-2">
@@ -250,7 +246,7 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
           </div>
         </div>
       ) : (
-        <p className="leading-relaxed">{chunk.text}</p>
+        <div className="leading-relaxed whitespace-pre-wrap m-0">{chunk.text}</div>
       )}
 
       {/* Hover menu */}

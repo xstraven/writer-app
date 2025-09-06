@@ -129,7 +129,7 @@ export function StoryEditor() {
       </CardHeader>
       <CardContent>
         <ScrollArea className="h-[72vh] rounded-2xl border bg-white px-3 py-3">
-          <div className="space-y-3">
+          <div className="space-y-0">
             {isSyncing && chunks.length === 0 ? (
               <div className="flex items-center justify-center py-8">
                 <Loading text="Loading story..." />
