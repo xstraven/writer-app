@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Modal } from '@/components/ui/modal'
 import { useAppStore } from '@/stores/appStore'
 import { suggestContext } from '@/lib/api'
 import { toast } from 'sonner'
@@ -187,12 +188,14 @@ export function ContextPanel() {
           >
             Clear
           </Button>
-          <div className="relative ml-auto w-56">
+        </div>
+        <div className="mt-2">
+          <div className="relative">
             <Search className="absolute left-2 top-2.5 h-3 w-3 text-gray-400" />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search..."
+              placeholder="Search NPCs and Objects..."
               className="text-sm pl-7"
             />
           </div>
@@ -201,38 +204,6 @@ export function ContextPanel() {
       <CardContent>
         <ScrollArea className="h-[400px]">
           <div className="space-y-4">
-            {showNew && (
-              <div className="p-3 border rounded bg-neutral-50 space-y-2">
-                <div className="flex items-center gap-2">
-                  <label className="text-xs text-neutral-600">Type</label>
-                  <select
-                    value={newType}
-                    onChange={(e) => setNewType((e.target.value as 'npc' | 'object'))}
-                    className="border rounded px-2 py-1 text-sm"
-                  >
-                    <option value="npc">NPC</option>
-                    <option value="object">Object</option>
-                  </select>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Name" className="text-sm" />
-                  <Input value={newDetail} onChange={(e) => setNewDetail(e.target.value)} placeholder="Detail" className="text-sm" />
-                </div>
-                <div className="flex items-center gap-2 justify-end">
-                  <Button size="sm" variant="ghost" onClick={() => { setShowNew(false); setNewLabel(''); setNewDetail('') }}>Cancel</Button>
-                  <Button size="sm" disabled={!newLabel.trim() || !newDetail.trim()} onClick={() => {
-                    if (newType === 'npc') {
-                      const newNpc: ContextItem = { label: newLabel.trim(), detail: newDetail.trim() }
-                      setContext({ ...context, npcs: [...context.npcs, newNpc] })
-                    } else {
-                      const newObj: ContextItem = { label: newLabel.trim(), detail: newDetail.trim() }
-                      setContext({ ...context, objects: [...context.objects, newObj] })
-                    }
-                    setNewLabel(''); setNewDetail(''); setShowNew(false)
-                  }}>Add</Button>
-                </div>
-              </div>
-            )}
             {/* Scene Summary */}
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-neutral-700">Scene Summary</h4>
@@ -278,6 +249,39 @@ export function ContextPanel() {
           </div>
         </ScrollArea>
       </CardContent>
+      {/* Add New Item Modal */}
+      <Modal isOpen={showNew} onClose={() => { setShowNew(false); setNewLabel(''); setNewDetail('') }} title="Add Scene Item" size="sm">
+        <div className="p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-neutral-700">Type</label>
+            <select
+              value={newType}
+              onChange={(e) => setNewType((e.target.value as 'npc' | 'object'))}
+              className="border rounded px-2 py-1 text-sm"
+            >
+              <option value="npc">NPC</option>
+              <option value="object">Object</option>
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Name" className="text-sm" />
+            <Input value={newDetail} onChange={(e) => setNewDetail(e.target.value)} placeholder="Detail" className="text-sm" />
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="ghost" onClick={() => { setShowNew(false); setNewLabel(''); setNewDetail('') }}>Cancel</Button>
+            <Button disabled={!newLabel.trim() || !newDetail.trim()} onClick={() => {
+              if (newType === 'npc') {
+                const newNpc: ContextItem = { label: newLabel.trim(), detail: newDetail.trim() }
+                setContext({ ...context, npcs: [...context.npcs, newNpc] })
+              } else {
+                const newObj: ContextItem = { label: newLabel.trim(), detail: newDetail.trim() }
+                setContext({ ...context, objects: [...context.objects, newObj] })
+              }
+              setNewLabel(''); setNewDetail(''); setShowNew(false)
+            }}>Add</Button>
+          </div>
+        </div>
+      </Modal>
     </Card>
   )
 }

@@ -343,12 +343,14 @@ export function LorebookPanel() {
         }}>
           Clear
         </Button>
-        <div className="relative ml-auto w-56">
+      </div>
+      <div className="mt-2">
+        <div className="relative">
           <Search className="absolute left-2 top-2.5 h-3 w-3 text-gray-400" />
           <Input
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search..."
+            placeholder="Search lorebook..."
             className="text-sm pl-7"
           />
         </div>

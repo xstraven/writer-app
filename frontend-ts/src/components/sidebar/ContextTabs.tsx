@@ -22,8 +22,11 @@ export function ContextTabs() {
   const resizeSynopsis = () => {
     const el = synopsisRef.current
     if (!el) return
+    const MAX = 480 // px; allow scrolling beyond this
     el.style.height = 'auto'
-    el.style.height = `${el.scrollHeight}px`
+    const target = Math.min(el.scrollHeight, MAX)
+    el.style.height = `${target}px`
+    el.style.overflowY = el.scrollHeight > MAX ? 'auto' : 'hidden'
   }
   useEffect(() => { resizeSynopsis() }, [])
   useEffect(() => { resizeSynopsis() }, [synopsis])
@@ -87,7 +90,7 @@ export function ContextTabs() {
           ref={synopsisRef as any}
           value={synopsis}
           onChange={(e) => setSynopsis(e.target.value)}
-          className="resize-none overflow-hidden h-auto"
+          className="resize-none h-auto"
           placeholder="Short summary of the story to guide the model…"
         />
       </TabsContent>
