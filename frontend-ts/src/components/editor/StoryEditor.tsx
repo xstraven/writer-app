@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Wand2, Undo2, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -19,6 +20,7 @@ import type { Chunk } from '@/lib/types'
 export function StoryEditor() {
   const [isAddingChunk, setIsAddingChunk] = useState(false)
   const [userDraft, setUserDraft] = useState('')
+  const queryClient = useQueryClient()
   
   const {
     chunks,
@@ -109,6 +111,9 @@ export function StoryEditor() {
         text: created.content,
         timestamp: new Date(created.created_at).getTime(),
       })
+
+      // Invalidate branch to refresh any downstream consumers and ensure consistency
+      queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory] })
 
       toast.success('Chunk added')
     } catch (error) {

@@ -8,6 +8,8 @@ import { useAppStore } from '@/stores/appStore'
 import { toast } from 'sonner'
 import { uid } from '@/lib/utils'
 import type { Chunk } from '@/lib/types'
+import { deleteSnippet as apiDeleteSnippet, updateSnippet as apiUpdateSnippet } from '@/lib/api'
+import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 
 interface ChunkRendererProps {
@@ -16,6 +18,7 @@ interface ChunkRendererProps {
 }
 
 export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
+  const queryClient = useQueryClient()
   const {
     editingId,
     editingText,
@@ -28,6 +31,7 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
     setChunks,
     chunks,
     pushHistory,
+    currentStory,
   } = useAppStore()
 
   const isEditing = editingId === chunk.id
@@ -38,19 +42,37 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
     setEditingText(chunk.text)
   }
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editingId) return
-    
+
     const before = [...chunks]
-    const after = chunks.map(c => 
-      c.id === editingId 
-        ? { ...c, text: editingText, timestamp: Date.now() } 
+    const after = chunks.map(c =>
+      c.id === editingId
+        ? { ...c, text: editingText, timestamp: Date.now() }
         : c
     )
+    // Optimistic update
     pushHistory("edit", before, after)
     setChunks(after)
-    setEditingId(null)
-    setEditingText("")
+
+    try {
+      const kind = chunk.author === 'user' ? 'user' : 'ai'
+      const res = await apiUpdateSnippet(editingId, { content: editingText, kind })
+      // Ensure local matches server
+      updateChunk(editingId, {
+        text: res.content,
+        timestamp: new Date(res.created_at).getTime(),
+      })
+      // Let subscribers refresh branch data
+      queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory] })
+      toast.success('Chunk saved')
+      setEditingId(null)
+      setEditingText("")
+    } catch (error) {
+      console.error('Failed to save edit:', error)
+      setChunks(before)
+      toast.error(`Failed to save edit: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
   }
 
   const cancelEdit = () => {
@@ -58,8 +80,20 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
     setEditingText("")
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
+    // Optimistic: remove from UI immediately, rollback on failure
+    const before = [...chunks]
     deleteChunk(chunk.id)
+    try {
+      await apiDeleteSnippet(chunk.id, currentStory)
+      // Invalidate branch cache to let useStorySync refetch and reconcile
+      queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory] })
+      toast.success('Chunk deleted')
+    } catch (error) {
+      console.error('Failed to delete chunk:', error)
+      setChunks(before) // rollback
+      toast.error(`Failed to delete chunk: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
   }
 
   const handleBranchFrom = () => {

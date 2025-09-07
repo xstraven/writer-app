@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { GitBranch, TreePine, Plus, Trash2, Eye, CheckCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,6 +13,7 @@ import { toast } from 'sonner'
 import type { BranchInfo, TreeRow, Snippet } from '@/lib/types'
 
 export function BranchesPanel() {
+  const queryClient = useQueryClient()
   const { 
     currentStory, 
     branches, 
@@ -100,6 +102,8 @@ export function BranchesPanel() {
     try {
       await chooseActiveChild(currentStory, parentId, childId)
       await loadTreeData()
+      // Invalidate main path so editor updates to reflect the new active branch
+      queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory] })
       toast.success("Active branch choice updated")
     } catch (error) {
       console.error('Failed to choose active child:', error)

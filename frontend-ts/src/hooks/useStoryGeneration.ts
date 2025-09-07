@@ -1,6 +1,6 @@
 'use client'
 
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { getApiErrorMessage } from '@/lib/errors'
 import { continueStory, appendSnippet, regenerateSnippet } from '@/lib/api'
@@ -8,6 +8,7 @@ import { useAppStore } from '@/stores/appStore'
 import type { Chunk, ContinueRequest } from '@/lib/types'
 
 export function useStoryGeneration() {
+  const queryClient = useQueryClient()
   const { 
     chunks, 
     setChunks, 
@@ -71,6 +72,8 @@ export function useStoryGeneration() {
     },
     onSuccess: () => {
       toast.success("Chunk committed to story")
+      // Keep readers (like useStorySync) in sync
+      queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory] })
     },
     onError: (error) => {
       toast.error(`Failed to commit chunk: ${error.message}`)
@@ -116,6 +119,8 @@ export function useStoryGeneration() {
       }
       pushHistory('regenerate', before, after)
       setChunks(after)
+      // Ensure main path reflects server-selected child, etc.
+      queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory] })
       toast.success('Story chunk regenerated successfully')
     },
     onError: (error: any) => {
