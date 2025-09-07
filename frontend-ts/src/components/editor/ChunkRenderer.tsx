@@ -10,6 +10,7 @@ import type { Chunk } from '@/lib/types'
 import { deleteSnippet as apiDeleteSnippet, updateSnippet as apiUpdateSnippet, createBranch, getBranches } from '@/lib/api'
 import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
+import { useEffect, useRef, useState } from 'react'
 
 interface ChunkRendererProps {
   chunk: Chunk
@@ -19,11 +20,7 @@ interface ChunkRendererProps {
 export function ChunkRenderer({ chunk, index: _index }: ChunkRendererProps) {
   const queryClient = useQueryClient()
   const {
-    editingId,
-    editingText,
     hoveredId,
-    setEditingId,
-    setEditingText,
     setHoveredId,
     updateChunk,
     deleteChunk,
@@ -36,50 +33,76 @@ export function ChunkRenderer({ chunk, index: _index }: ChunkRendererProps) {
     setBranches,
   } = useAppStore()
 
-  const isEditing = editingId === chunk.id
   const isHovered = hoveredId === chunk.id
 
-  const startEdit = () => {
-    setEditingId(chunk.id)
-    setEditingText(chunk.text)
+  // Always-on editing for this chunk
+  const [localText, setLocalText] = useState<string>(chunk.text)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastSaved = useRef<string>(chunk.text)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+
+  useEffect(() => {
+    setLocalText(chunk.text)
+    lastSaved.current = chunk.text
+    // Auto-resize on external updates
+    requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto'
+        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`
+      }
+    })
+  }, [chunk.id, chunk.text])
+
+  const scheduleSave = (nextText: string) => {
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(async () => {
+      try {
+        if (nextText === lastSaved.current) return
+        const kind = chunk.author === 'user' ? 'user' : 'ai'
+        const res = await apiUpdateSnippet(chunk.id, { content: nextText, kind })
+        updateChunk(chunk.id, {
+          text: res.content,
+          timestamp: new Date(res.created_at).getTime(),
+        })
+        lastSaved.current = res.content
+      } catch (error) {
+        console.error('Failed to auto-save chunk:', error)
+        toast.error(`Failed to save edit: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+    }, 500)
   }
 
-  const saveEdit = async () => {
-    if (!editingId) return
-
-    const before = [...chunks]
-    const after = chunks.map(c =>
-      c.id === editingId
-        ? { ...c, text: editingText, timestamp: Date.now() }
-        : c
-    )
-    // Optimistic update
-    pushHistory("edit", before, after)
-    setChunks(after)
-
-    try {
-      const kind = chunk.author === 'user' ? 'user' : 'ai'
-      const res = await apiUpdateSnippet(editingId, { content: editingText, kind })
-      // Ensure local matches server
-      updateChunk(editingId, {
-        text: res.content,
-        timestamp: new Date(res.created_at).getTime(),
-      })
-      // Let subscribers refresh branch data
-      queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory, currentBranch] })
-      toast.success('Chunk saved')
-      setEditingId(null)
-      setEditingText("")
-    } catch (error) {
-      console.error('Failed to save edit:', error)
-      setChunks(before)
-      toast.error(`Failed to save edit: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  // Auto-resize on local edits
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`
     }
-  }
+  }, [localText])
 
-  const cancelEdit = () => {
-    setEditingId(null)
-    setEditingText("")
+  // Keyboard navigation across chunk boundaries
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const el = e.currentTarget
+    const pos = el.selectionStart ?? 0
+    const atStart = pos === 0
+    const atEnd = pos === el.value.length
+    const focusChunk = (id: string | undefined, toEnd: boolean) => {
+      if (!id) return
+      const next = document.querySelector(`textarea[data-chunk="${id}"]`) as HTMLTextAreaElement | null
+      if (next) {
+        e.preventDefault()
+        next.focus()
+        const p = toEnd ? next.value.length : 0
+        next.setSelectionRange(p, p)
+      }
+    }
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowLeft') && atStart) {
+      const prevId = _index > 0 ? chunks[_index - 1]?.id : undefined
+      focusChunk(prevId, true)
+    } else if ((e.key === 'ArrowDown' || e.key === 'ArrowRight') && atEnd) {
+      const nextId = _index < chunks.length - 1 ? chunks[_index + 1]?.id : undefined
+      focusChunk(nextId, false)
+    }
   }
 
   const handleDelete = async () => {
@@ -123,7 +146,6 @@ export function ChunkRenderer({ chunk, index: _index }: ChunkRendererProps) {
 
   return (
     <div
-      onDoubleClick={startEdit}
       onMouseEnter={() => setHoveredId(chunk.id)}
       onMouseLeave={() => setHoveredId(null)}
       className={cn(
@@ -131,37 +153,24 @@ export function ChunkRenderer({ chunk, index: _index }: ChunkRendererProps) {
         isHovered ? "bg-amber-50" : "bg-transparent"
       )}
     >
-      
-      {isEditing ? (
-        <div className="space-y-2">
-          <Textarea
-            autoFocus
-            value={editingText}
-            onChange={(e) => setEditingText(e.target.value)}
-            className="min-h-[96px]"
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                // Ctrl/Cmd+Enter = Save edit
-                e.preventDefault()
-                saveEdit()
-              }
-              if (e.key === "Escape") {
-                e.preventDefault()
-                cancelEdit()
-              }
-            }}
-          />
-          <div className="flex gap-2">
-            <Button size="sm" onClick={saveEdit}>Save</Button>
-            <Button size="sm" variant="ghost" onClick={cancelEdit}>Cancel</Button>
-          </div>
-        </div>
-      ) : (
-        <div className="leading-relaxed whitespace-pre-wrap m-0">{chunk.text}</div>
-      )}
+      <Textarea
+        ref={textareaRef}
+        value={localText}
+        onChange={(e) => {
+          const v = e.target.value
+          setLocalText(v)
+          updateChunk(chunk.id, { text: v, timestamp: Date.now() })
+          scheduleSave(v)
+        }}
+        onKeyDown={handleKeyDown}
+        className="min-h-[48px] resize-none border-0 focus-visible:ring-0 focus-visible:outline-none bg-transparent px-0"
+        style={{ overflow: 'hidden' }}
+        data-chunk={chunk.id}
+        placeholder="Write..."
+      />
 
       {/* Hover menu */}
-      {isHovered && !isEditing && (
+      {isHovered && (
         <div className="absolute -top-3 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
           <div className="flex items-center gap-1 bg-white border shadow-sm rounded-full px-1 py-1">
             <Popover>
@@ -172,16 +181,6 @@ export function ChunkRenderer({ chunk, index: _index }: ChunkRendererProps) {
               </PopoverTrigger>
               <PopoverContent align="end" className="w-56 p-1">
                 <div className="space-y-1">
-                  <Button 
-                    variant="ghost" 
-                    className="w-full justify-start text-sm" 
-                    onClick={startEdit}
-                  >
-                    ✏️ Edit chunk
-                  </Button>
-                  
-                  <div className="border-t border-gray-100 my-1"></div>
-                  
                   <Button 
                     variant="ghost" 
                     className="w-full justify-start text-sm" 
