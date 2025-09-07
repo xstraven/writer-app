@@ -127,6 +127,8 @@ class StorySettings(BaseModel):
     system_prompt: str | None = None
     # New: default/base instruction merged with user instruction for continuations
     base_instruction: str | None = None
+    # Maximum context window (characters ÷ 3 heuristic used elsewhere)
+    max_context_window: int | None = None
     context: ContextState | None = None
     gallery: list[str] = Field(default_factory=list)
     synopsis: str | None = None
@@ -140,6 +142,7 @@ class StorySettingsUpdate(BaseModel):
     model: str | None = None
     system_prompt: str | None = None
     base_instruction: str | None = None
+    max_context_window: int | None = None
     context: ContextState | None = None
     gallery: list[str] | None = None
     synopsis: str | None = None
@@ -148,7 +151,8 @@ class StorySettingsUpdate(BaseModel):
 
 class StorySettingsPatch(StorySettingsUpdate):
     # Optional: replace lorebook snapshot when provided
-    lorebook: list[LoreEntry] | None = None
+    # Accept raw dicts to avoid requiring IDs when replacing the snapshot.
+    lorebook: list[dict] | None = None
 
 
 # --- Snippets & Branching ---
