@@ -389,3 +389,83 @@ class SnippetStore:
     def delete_branch(self, *, story: str, name: str) -> None:
         with self._lock, self._conn() as con:
             con.execute("DELETE FROM branches WHERE story = ? AND name = ?", [story, name])
+
+    # --- Duplication helpers ---
+    def _list_all_snippets(self, story: str) -> List[SnippetRow]:
+        with self._lock, self._conn() as con:
+            cur = con.execute("SELECT * FROM snippets WHERE story = ? ORDER BY created_at ASC", [story])
+            return [self._row_to_obj(r) for r in cur.fetchall()]
+
+    def duplicate_story_all(self, *, source: str, target: str) -> dict:
+        """Duplicate all snippets and branches from source story into target story.
+
+        Generates new ids for all snippets and remaps parent/child references.
+        Returns a mapping dict with keys: id_map, head_map.
+        """
+        rows = self._list_all_snippets(source)
+        id_map: dict[str, str] = {r.id: uuid.uuid4().hex for r in rows}
+        with self._lock, self._conn() as con:
+            for r in rows:
+                con.execute(
+                    "INSERT INTO snippets(id, story, parent_id, child_id, kind, content, created_at) VALUES(?, ?, ?, ?, ?, ?, ?)",
+                    [
+                        id_map[r.id],
+                        target,
+                        (id_map.get(r.parent_id) if r.parent_id else None),
+                        (id_map.get(r.child_id) if r.child_id else None),
+                        r.kind,
+                        r.content,
+                        r.created_at,
+                    ],
+                )
+            # Copy branches
+            curb = con.execute("SELECT name, head_id FROM branches WHERE story = ?", [source])
+            for name, head_id in curb.fetchall():
+                new_head = id_map.get(head_id)
+                if new_head:
+                    con.execute(
+                        "INSERT INTO branches(story, name, head_id) VALUES(?, ?, ?) ON CONFLICT(story, name) DO UPDATE SET head_id = excluded.head_id",
+                        [target, name, new_head],
+                    )
+        return {"id_map": id_map}
+
+    def duplicate_story_main(self, *, source: str, target: str) -> dict:
+        """Duplicate only the main branch path from source to target.
+
+        Prefers branch 'main' if present; else uses legacy main_path.
+        Creates a 'main' branch in target pointing to the new head.
+        """
+        # Determine source main path
+        # Prefer branch 'main'
+        path = []
+        branches = self.list_branches(source)
+        main_branch = next((b for b in branches if b[1] == 'main'), None)
+        if main_branch:
+            path = self.path_from_head(source, main_branch[2])
+        else:
+            path = self.main_path(source)
+        if not path:
+            return {"id_map": {}}
+        id_map: dict[str, str] = {r.id: uuid.uuid4().hex for r in path}
+        with self._lock, self._conn() as con:
+            for idx, r in enumerate(path):
+                # Compute remapped parent for this path only
+                new_parent = id_map.get(r.parent_id) if r.parent_id in id_map else None
+                con.execute(
+                    "INSERT INTO snippets(id, story, parent_id, child_id, kind, content, created_at) VALUES(?, ?, ?, NULL, ?, ?, ?)",
+                    [
+                        id_map[r.id],
+                        target,
+                        new_parent,
+                        r.kind,
+                        r.content,
+                        r.created_at,
+                    ],
+                )
+            # Create branch 'main' pointing to new head
+            new_head = id_map[path[-1].id]
+            con.execute(
+                "INSERT INTO branches(story, name, head_id) VALUES(?, ?, ?) ON CONFLICT(story, name) DO UPDATE SET head_id = excluded.head_id",
+                [target, 'main', new_head],
+            )
+        return {"id_map": id_map}

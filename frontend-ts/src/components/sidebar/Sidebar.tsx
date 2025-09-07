@@ -24,7 +24,11 @@ export function Sidebar() {
   // Local modals/actions
   const [showBranches, setShowBranches] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
+  const [showDuplicate, setShowDuplicate] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [duplicating, setDuplicating] = useState(false)
+  const [dupName, setDupName] = useState('')
+  const [dupMode, setDupMode] = useState<'main' | 'all'>('all')
   const [showPrompt, setShowPrompt] = useState(false)
   const [promptMessages, setPromptMessages] = useReactState<Array<{ role: string; content: string }>>([])
   const [loadingPrompt, setLoadingPrompt] = useState(false)
@@ -86,6 +90,9 @@ export function Sidebar() {
               </div>
               <Button variant="outline" size="sm" onClick={() => setShowBranches(true)}>
                 Branches
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setShowDuplicate(true)}>
+                Duplicate Story
               </Button>
               <Button variant="destructive" size="sm" onClick={() => setShowDelete(true)}>
                 Delete Story
@@ -229,6 +236,61 @@ export function Sidebar() {
               }
             }} disabled={deleting} className="bg-red-600 hover:bg-red-700 text-white">
               {deleting ? 'Deleting…' : 'Delete'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Duplicate Modal */}
+      <Modal isOpen={showDuplicate} onClose={() => setShowDuplicate(false)} title="Duplicate Story" size="sm">
+        <div className="p-4 space-y-3">
+          <div>
+            <label className="text-sm text-gray-700">New story name</label>
+            <input
+              className="mt-1 w-full border rounded px-2 py-1 text-sm"
+              value={dupName}
+              onChange={(e) => setDupName(e.target.value)}
+              placeholder={`Copy of ${currentStory}`}
+            />
+          </div>
+          <div>
+            <label className="text-sm text-gray-700">What to duplicate?</label>
+            <div className="mt-2 flex items-center gap-3 text-sm">
+              <label className="inline-flex items-center gap-2">
+                <input type="radio" name="dup-mode" value="main" checked={dupMode==='main'} onChange={() => setDupMode('main')} />
+                Main branch only
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input type="radio" name="dup-mode" value="all" checked={dupMode==='all'} onChange={() => setDupMode('all')} />
+                All branches
+              </label>
+            </div>
+            <div className="text-xs text-neutral-500 mt-1">Lorebook and story settings (context, memory, synopsis, generation) are always duplicated.</div>
+          </div>
+          <div className="flex items-center gap-2 justify-end">
+            <Button variant="ghost" onClick={() => setShowDuplicate(false)} disabled={duplicating}>Cancel</Button>
+            <Button onClick={async () => {
+              const target = (dupName || `Copy of ${currentStory}`).trim()
+              if (!target) return
+              setDuplicating(true)
+              try {
+                await (await import('@/lib/api')).duplicateStory(currentStory, target, dupMode)
+                const updated = await (await import('@/lib/api')).getStories()
+                if (!updated.includes(target)) updated.push(target)
+                setCurrentStory(target)
+                setCurrentBranch('main')
+                setShowDuplicate(false)
+                setDupName('')
+                setDupMode('all')
+                toast.success('Story duplicated')
+              } catch (error) {
+                console.error('Failed to duplicate story:', error)
+                toast.error(`Failed to duplicate: ${error instanceof Error ? error.message : 'Unknown error'}`)
+              } finally {
+                setDuplicating(false)
+              }
+            }} disabled={duplicating}>
+              {duplicating ? 'Duplicating…' : 'Duplicate'}
             </Button>
           </div>
         </div>

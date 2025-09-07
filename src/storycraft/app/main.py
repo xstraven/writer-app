@@ -636,6 +636,52 @@ async def choose_active_child(req: ChooseActiveChildRequest) -> dict:
     return {"ok": True}
 
 
+@app.post("/api/stories/duplicate", response_model=dict)
+async def duplicate_story(req: DuplicateStoryRequest) -> dict:
+    src = (req.source or "").strip()
+    dst = (req.target or "").strip()
+    if not src or not dst:
+        raise HTTPException(status_code=400, detail="Missing source or target")
+    if src == dst:
+        raise HTTPException(status_code=400, detail="Source and target must differ")
+    # Duplicate snippets (all vs main)
+    try:
+        if req.mode == 'all':
+            snippet_store.duplicate_story_all(source=src, target=dst)
+        else:
+            snippet_store.duplicate_story_main(source=src, target=dst)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to duplicate snippets: {e}")
+    # Duplicate story settings
+    try:
+        s = story_settings_store.get(src)
+        if s:
+            story_settings_store.set(dst, s)
+    except Exception:
+        pass
+    # Duplicate lorebook
+    try:
+        entries = store.list(src)
+        for e in entries:
+            try:
+                store.create(
+                    LoreEntryCreate(
+                        story=dst,
+                        name=e.name,
+                        kind=e.kind,
+                        summary=e.summary,
+                        tags=e.tags,
+                        keys=e.keys,
+                        always_on=e.always_on,
+                    )
+                )
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return {"ok": True, "story": dst}
+
+
 @app.get("/api/snippets/path", response_model=BranchPathResponse)
 async def get_branch_path(story: str, branch: str | None = None, head_id: str | None = None) -> BranchPathResponse:
     """Get a branch path for a story.

@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useAppStore } from '@/stores/appStore'
-import { getBranches, createBranch, deleteBranch, getTreeMain, chooseActiveChild } from '@/lib/api'
+import { getBranches, createBranch, deleteBranch, getTreeMain, chooseActiveChild, getBranchPath } from '@/lib/api'
 import { toast } from 'sonner'
 import type { BranchInfo, TreeRow, Snippet } from '@/lib/types'
 
@@ -26,11 +26,14 @@ export function BranchesPanel() {
   
   const [newBranchName, setNewBranchName] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [graphLoading, setGraphLoading] = useState(false)
+  const [branchPaths, setBranchPaths] = useState<Record<string, Snippet[]>>({})
 
   // Load branches and tree data
   useEffect(() => {
     loadBranches()
     loadTreeData()
+    loadBranchGraph()
   }, [currentStory])
 
   const loadBranches = async () => {
@@ -50,6 +53,31 @@ export function BranchesPanel() {
     } catch (error) {
       console.error('Failed to load tree data:', error)
       toast.error('Failed to load tree data')
+    }
+  }
+
+  const loadBranchGraph = async () => {
+    try {
+      setGraphLoading(true)
+      // Build list of branches to fetch, include 'main' at top
+      const names = ['main', ...branches.map(b => b.name).filter(n => n !== 'main')]
+      const entries = await Promise.all(names.map(async (name) => {
+        try {
+          const res = name === 'main' 
+            ? await getBranchPath(currentStory)
+            : await getBranchPath(currentStory, { branch: name })
+          return [name, res.path || []] as const
+        } catch (e) {
+          return [name, []] as const
+        }
+      }))
+      const map: Record<string, Snippet[]> = {}
+      for (const [name, path] of entries) map[name] = path
+      setBranchPaths(map)
+    } catch (error) {
+      console.error('Failed to load branch graph:', error)
+    } finally {
+      setGraphLoading(false)
     }
   }
 
@@ -103,6 +131,7 @@ export function BranchesPanel() {
     try {
       await chooseActiveChild(currentStory, parentId, childId, currentBranch)
       await loadTreeData()
+      await loadBranchGraph()
       // Invalidate path so editor updates to reflect the new active branch
       queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory, currentBranch] })
       toast.success("Active branch choice updated")
@@ -120,6 +149,20 @@ export function BranchesPanel() {
 
   return (
     <div className="space-y-4">
+      {/* Branch Graph */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Branch Graph</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {graphLoading ? (
+            <p className="text-sm text-neutral-500">Loading…</p>
+          ) : (
+            <BranchGraph paths={branchPaths} />
+          )}
+        </CardContent>
+      </Card>
+
       {/* Branch Management */}
       <Card>
         <CardHeader className="pb-3">
@@ -266,6 +309,63 @@ export function BranchesPanel() {
           </ScrollArea>
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+// --- Lightweight Branch Graph Visualization ---
+function BranchGraph({ paths }: { paths: Record<string, Snippet[]> }) {
+  const names = Object.keys(paths)
+  if (names.length === 0) {
+    return <p className="text-sm text-neutral-500">No branches yet</p>
+  }
+  const main = paths['main'] || []
+  const maxLen = Math.max(...names.map(n => paths[n]?.length || 0))
+
+  // Compute divergence index vs main for each branch
+  const mainIds = main.map(s => s.id)
+  const rows = names.map((name) => {
+    const p = paths[name] || []
+    const ids = p.map(s => s.id)
+    let divergeAt = 0
+    const minLen = Math.min(mainIds.length, ids.length)
+    for (let i = 0; i < minLen; i++) {
+      if (mainIds[i] !== ids[i]) { divergeAt = i; break }
+      divergeAt = i + 1
+    }
+    return { name, path: p, divergeAt }
+  })
+
+  return (
+    <div className="space-y-2">
+      {rows.map(({ name, path, divergeAt }) => (
+        <div key={name} className="flex items-center gap-2">
+          <div className="w-24 shrink-0 text-xs font-medium text-neutral-700 truncate">{name}</div>
+          <div className="grid" style={{ gridTemplateColumns: `repeat(${maxLen || 1}, minmax(12px, 1fr))`, gap: '8px' }}>
+            {Array.from({ length: maxLen }).map((_, idx) => {
+              const snip = path[idx]
+              const isMain = name === 'main'
+              const sameAsMain = !!snip && mainIds[idx] === snip.id
+              const pastDiverge = idx >= divergeAt
+              const color = isMain
+                ? 'bg-blue-500'
+                : sameAsMain
+                  ? 'bg-gray-300'
+                  : 'bg-purple-500'
+              const opacity = snip ? (pastDiverge && !sameAsMain && !isMain ? 'opacity-90' : 'opacity-80') : 'opacity-30'
+              return (
+                <div key={idx} className="flex items-center justify-center">
+                  <div
+                    title={snip ? `${snip.kind}: ${snip.content.slice(0, 60).replace(/\n/g, ' ')}` : ''}
+                    className={`h-3 w-3 rounded-full ${color} ${opacity}`}
+                  />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+      <div className="text-[10px] text-neutral-500">Dots indicate snippet positions from root to head; non-main branches turn purple after they diverge from main.</div>
     </div>
   )
 }

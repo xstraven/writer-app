@@ -78,6 +78,14 @@ export const deleteStory = async (story: string): Promise<void> => {
   await apiClient.delete(`/api/stories/${encodeURIComponent(story)}`)
 };
 
+export const duplicateStory = async (
+  source: string,
+  target: string,
+  mode: 'main' | 'all' = 'all'
+): Promise<void> => {
+  await apiClient.post('/api/stories/duplicate', { source, target, mode })
+};
+
 // Lorebook
 export const getLorebook = async (story?: string): Promise<LoreEntry[]> => {
   const params = story ? { story } : {};

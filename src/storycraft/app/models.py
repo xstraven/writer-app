@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
+from typing import Literal
 
 
 class LoreEntry(BaseModel):
@@ -247,6 +248,14 @@ class DeleteSnippetResponse(BaseModel):
 class TreeRow(BaseModel):
     parent: Snippet
     children: list[Snippet] = Field(default_factory=list)
+
+
+# --- Story management ---
+
+class DuplicateStoryRequest(BaseModel):
+    source: str
+    target: str
+    mode: Literal['main', 'all'] = 'all'
 
 
 class TreeResponse(BaseModel):
