@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getBranchPath, getLorebook, loadAppState, getStorySettings } from '@/lib/api'
 import { useAppStore } from '@/stores/appStore'
@@ -18,6 +18,7 @@ const snippetToChunk = (snippet: Snippet): Chunk => ({
 export function useStorySync() {
   const { 
     currentStory, 
+    currentBranch,
     setChunks, 
     chunks,
     setLorebook,
@@ -31,9 +32,11 @@ export function useStorySync() {
 
   // Query to load story branch from backend
   const { data: branchData, isLoading: branchLoading, error: branchError, refetch: refetchBranch } = useQuery({
-    queryKey: ['story-branch', currentStory],
-    queryFn: () => getBranchPath(currentStory),
-    enabled: !!currentStory,
+    queryKey: ['story-branch', currentStory, currentBranch],
+    queryFn: () => currentBranch && currentBranch !== 'main' 
+      ? getBranchPath(currentStory, { branch: currentBranch })
+      : getBranchPath(currentStory),
+    enabled: !!currentStory && !!currentBranch,
     refetchOnWindowFocus: false,
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
@@ -66,10 +69,18 @@ export function useStorySync() {
   })
 
   // Sync backend chunks when branch data changes
+  const lastBranchRef = useRef<string | null>(null)
   useEffect(() => {
     if (!branchData) return
     const path = branchData.path || []
     const backendChunks = path.map(snippetToChunk)
+
+    // On branch switch, adopt backend entirely
+    if (currentBranch !== lastBranchRef.current) {
+      setChunks(backendChunks)
+      lastBranchRef.current = currentBranch
+      return
+    }
 
     if (backendChunks.length === 0) {
       // Do not clobber local draft when backend is empty
@@ -82,20 +93,25 @@ export function useStorySync() {
       return
     }
 
-    // If backend has extended content beyond local and shares the same prefix, adopt backend
+    // Compare prefixes
     const minLen = Math.min(chunks.length, backendChunks.length)
     const prefixesMatch = Array.from({ length: minLen }).every((_, i) => (
       chunks[i]?.id === backendChunks[i]?.id && chunks[i]?.text === backendChunks[i]?.text
     ))
 
-    if (prefixesMatch && backendChunks.length > chunks.length) {
-      console.log('Backend has additional chunks; extending local copy')
+    // If lengths differ or head id differs while sharing prefix, adopt backend
+    const localHeadId = chunks[chunks.length - 1]?.id
+    const backendHeadId = backendChunks[backendChunks.length - 1]?.id
+    if (
+      prefixesMatch && (
+        backendChunks.length !== chunks.length || localHeadId !== backendHeadId
+      )
+    ) {
       setChunks(backendChunks)
       return
     }
-
-    // Otherwise, leave local state as-is to preserve uncommitted local chunks
-  }, [branchData, setChunks, chunks])
+    // Otherwise, leave local state to preserve uncommitted drafts
+  }, [branchData, setChunks, chunks, currentBranch])
 
   // Sync lorebook when data changes
   useEffect(() => {
@@ -141,7 +157,7 @@ export function useStorySync() {
     if (currentStory) {
       refetchBranch()
     }
-  }, [currentStory, refetchBranch])
+  }, [currentStory, currentBranch, refetchBranch])
 
   const isLoading = branchLoading || lorebookLoading || storySettingsLoading
   const error = branchError || lorebookError || storySettingsError

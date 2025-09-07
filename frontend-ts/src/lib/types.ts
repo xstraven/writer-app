@@ -81,6 +81,7 @@ export interface AppendSnippetRequest {
   kind?: string;
   parent_id?: string | null;
   set_active?: boolean | null;
+  branch?: string;
 }
 
 export interface RegenerateAIRequest {
@@ -95,6 +96,7 @@ export interface RegenerateAIRequest {
   use_context?: boolean;
   set_active?: boolean;
   lore_ids?: string[] | null;
+  branch?: string;
 }
 
 export interface ContinueRequest {
@@ -194,6 +196,7 @@ export interface LoreGenerateResponse {
 
 export interface AppState {
   currentStory: string;
+  currentBranch: string;
   instruction: string;
   chunks: Chunk[];
   history: HistoryEntry[];

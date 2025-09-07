@@ -20,7 +20,8 @@ export function BranchesPanel() {
     setBranches, 
     treeRows, 
     setTreeRows, 
-    chunks 
+    chunks,
+    currentBranch,
   } = useAppStore()
   
   const [newBranchName, setNewBranchName] = useState('')
@@ -100,10 +101,10 @@ export function BranchesPanel() {
   const handleChooseActiveChild = async (parentId: string, childId: string) => {
     setIsLoading(true)
     try {
-      await chooseActiveChild(currentStory, parentId, childId)
+      await chooseActiveChild(currentStory, parentId, childId, currentBranch)
       await loadTreeData()
-      // Invalidate main path so editor updates to reflect the new active branch
-      queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory] })
+      // Invalidate path so editor updates to reflect the new active branch
+      queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory, currentBranch] })
       toast.success("Active branch choice updated")
     } catch (error) {
       console.error('Failed to choose active child:', error)

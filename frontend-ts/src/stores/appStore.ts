@@ -16,6 +16,7 @@ import { uid } from '@/lib/utils'
 interface AppState extends AppStateType {
   // Actions
   setCurrentStory: (story: string) => void
+  setCurrentBranch: (name: string) => void
   setInstruction: (instruction: string) => void
   setChunks: (chunks: Chunk[]) => void
   addChunk: (chunk: Chunk) => void
@@ -50,6 +51,7 @@ const initialState = {
   editingText: '',
   hoveredId: null,
   isGenerating: false,
+  currentBranch: 'main',
   generationSettings: {
     temperature: 0.8,
     max_tokens: 256,
@@ -112,6 +114,8 @@ export const useAppStore = create<AppState>()(
       })),
       
       setInstruction: (instruction) => set({ instruction }),
+
+      setCurrentBranch: (name: string) => set({ currentBranch: name }),
       
       setChunks: (chunks) => set({ chunks }),
       

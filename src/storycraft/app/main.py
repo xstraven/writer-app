@@ -594,6 +594,13 @@ async def append_snippet(req: AppendSnippetRequest) -> Snippet:
         parent_id=req.parent_id,
         set_active=req.set_active,
     )
+    # Update branch head for convenience; defaults to 'main' if not specified
+    try:
+        if req.set_active is not False:
+            branch_name = (req.branch or "main").strip() or "main"
+            snippet_store.upsert_branch(story=req.story, name=branch_name, head_id=row.id)
+    except Exception:
+        pass
     return Snippet(**row.__dict__)
 
 
@@ -606,6 +613,12 @@ async def regenerate_snippet(req: RegenerateSnippetRequest) -> Snippet:
         kind=req.kind,
         set_active=req.set_active,
     )
+    try:
+        if req.set_active:
+            branch_name = (req.branch or "main").strip() or "main"
+            snippet_store.upsert_branch(story=req.story, name=branch_name, head_id=row.id)
+    except Exception:
+        pass
     return Snippet(**row.__dict__)
 
 
@@ -614,17 +627,54 @@ async def choose_active_child(req: ChooseActiveChildRequest) -> dict:
     snippet_store.choose_active_child(
         story=req.story, parent_id=req.parent_id, child_id=req.child_id
     )
+    # Also update branch head to the chosen child for the given branch
+    try:
+        branch_name = (req.branch or "main").strip() or "main"
+        snippet_store.upsert_branch(story=req.story, name=branch_name, head_id=req.child_id)
+    except Exception:
+        pass
     return {"ok": True}
 
 
 @app.get("/api/snippets/path", response_model=BranchPathResponse)
-async def get_main_path(story: str) -> BranchPathResponse:
-    path = snippet_store.main_path(story)
+async def get_branch_path(story: str, branch: str | None = None, head_id: str | None = None) -> BranchPathResponse:
+    """Get a branch path for a story.
+
+    - If `head_id` is provided, returns the path from root to that head.
+    - Else if `branch` is provided and not 'main', looks up branch head and returns its path.
+    - Else returns the main path for the story.
+    """
+    path = []
+    if head_id:
+        path = snippet_store.path_from_head(story, head_id)
+    elif branch and branch.strip() and branch.strip().lower() != "main":
+        # Find branch head
+        branches = snippet_store.list_branches(story)
+        found = None
+        for b in branches:
+            if b[1] == branch:
+                found = b
+                break
+        if not found:
+            raise HTTPException(status_code=404, detail="Branch not found")
+        path = snippet_store.path_from_head(story, found[2])
+    else:
+        # Prefer branch 'main' if present; else fall back to legacy main_path
+        try:
+            branches = snippet_store.list_branches(story)
+            main_branch = next((b for b in branches if b[1] == "main"), None)
+        except Exception:
+            main_branch = None
+        if main_branch:
+            path = snippet_store.path_from_head(story, main_branch[2])
+        else:
+            path = snippet_store.main_path(story)
+
     text = snippet_store.build_text(path)
-    head_id = path[-1].id if path else None
+    out_head_id = path[-1].id if path else None
     return BranchPathResponse(
         story=story,
-        head_id=head_id,
+        head_id=out_head_id,
         path=[Snippet(**p.__dict__) for p in path],
         text=text,
     )
@@ -692,6 +742,12 @@ async def regenerate_ai(req: RegenerateAIRequest) -> Snippet:
         kind="ai",
         set_active=req.set_active,
     )
+    try:
+        if req.set_active:
+            branch_name = (req.branch or "main").strip() or "main"
+            snippet_store.upsert_branch(story=req.story, name=branch_name, head_id=row.id)
+    except Exception:
+        pass
     return Snippet(**row.__dict__)
 
 

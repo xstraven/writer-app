@@ -170,6 +170,8 @@ class AppendSnippetRequest(BaseModel):
     parent_id: Optional[str] = None
     # If None and parent has no active child, becomes active. If False, never active.
     set_active: Optional[bool] = None
+    # Optional branch name to update head for (defaults to 'main')
+    branch: Optional[str] = None
 
 
 class RegenerateSnippetRequest(BaseModel):
@@ -178,12 +180,14 @@ class RegenerateSnippetRequest(BaseModel):
     content: str
     kind: str = "ai"
     set_active: bool = True
+    branch: Optional[str] = None
 
 
 class ChooseActiveChildRequest(BaseModel):
     story: str
     parent_id: str
     child_id: str
+    branch: Optional[str] = None
 
 
 class BranchPathResponse(BaseModel):
@@ -207,6 +211,8 @@ class RegenerateAIRequest(BaseModel):
     set_active: bool = True
     # Optional lorebook items to include (IDs from lorebook)
     lore_ids: Optional[List[str]] = None
+    # Optional branch to update head for (defaults to 'main')
+    branch: Optional[str] = None
 
 
 class UpdateSnippetRequest(BaseModel):

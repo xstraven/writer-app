@@ -115,10 +115,14 @@ export const continueStory = async (request: ContinueRequest): Promise<ContinueR
 };
 
 // Snippets
-export const getBranchPath = async (story: string): Promise<BranchPathResponse> => {
-  const response = await apiClient.get('/api/snippets/path', {
-    params: { story },
-  });
+export const getBranchPath = async (
+  story: string,
+  opts?: { branch?: string; headId?: string }
+): Promise<BranchPathResponse> => {
+  const params: any = { story }
+  if (opts?.headId) params.head_id = opts.headId
+  if (opts?.branch) params.branch = opts.branch
+  const response = await apiClient.get('/api/snippets/path', { params });
   return response.data;
 };
 
@@ -204,11 +208,12 @@ export const getTreeMain = async (story: string) => {
   return response.data;
 };
 
-export const chooseActiveChild = async (story: string, parentId: string, childId: string) => {
+export const chooseActiveChild = async (story: string, parentId: string, childId: string, branch?: string) => {
   const response = await apiClient.post('/api/snippets/choose-active', {
     story,
     parent_id: parentId,
     child_id: childId,
+    branch,
   });
   return response.data;
 };

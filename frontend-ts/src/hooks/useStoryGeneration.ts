@@ -14,6 +14,7 @@ export function useStoryGeneration() {
     setChunks, 
     pushHistory, 
     currentStory,
+    currentBranch,
     generationSettings,
     synopsis,
     lorebook,
@@ -68,12 +69,13 @@ export function useStoryGeneration() {
         kind: 'user',
         parent_id: parentId,
         set_active: true,
+        branch: currentBranch,
       })
     },
     onSuccess: () => {
       toast.success("Chunk committed to story")
       // Keep readers (like useStorySync) in sync
-      queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory] })
+      queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory, currentBranch] })
     },
     onError: (error) => {
       toast.error(`Failed to commit chunk: ${error.message}`)
@@ -105,6 +107,7 @@ export function useStoryGeneration() {
         use_context: true,
         set_active: true,
         lore_ids: lorebook.filter(l => l.always_on).map(l => l.id),
+        branch: currentBranch,
       })
       return created
     },
@@ -119,8 +122,8 @@ export function useStoryGeneration() {
       }
       pushHistory('regenerate', before, after)
       setChunks(after)
-      // Ensure main path reflects server-selected child, etc.
-      queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory] })
+      // Ensure main/branch path reflects server-selected child, etc.
+      queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory, currentBranch] })
       toast.success('Story chunk regenerated successfully')
     },
     onError: (error: any) => {

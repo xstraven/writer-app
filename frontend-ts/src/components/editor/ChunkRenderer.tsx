@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useAppStore } from '@/stores/appStore'
 import { toast } from 'sonner'
 import type { Chunk } from '@/lib/types'
-import { deleteSnippet as apiDeleteSnippet, updateSnippet as apiUpdateSnippet } from '@/lib/api'
+import { deleteSnippet as apiDeleteSnippet, updateSnippet as apiUpdateSnippet, createBranch, getBranches } from '@/lib/api'
 import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 
@@ -31,6 +31,9 @@ export function ChunkRenderer({ chunk, index: _index }: ChunkRendererProps) {
     chunks,
     pushHistory,
     currentStory,
+    currentBranch,
+    setCurrentBranch,
+    setBranches,
   } = useAppStore()
 
   const isEditing = editingId === chunk.id
@@ -63,7 +66,7 @@ export function ChunkRenderer({ chunk, index: _index }: ChunkRendererProps) {
         timestamp: new Date(res.created_at).getTime(),
       })
       // Let subscribers refresh branch data
-      queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory] })
+      queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory, currentBranch] })
       toast.success('Chunk saved')
       setEditingId(null)
       setEditingText("")
@@ -86,7 +89,7 @@ export function ChunkRenderer({ chunk, index: _index }: ChunkRendererProps) {
     try {
       await apiDeleteSnippet(chunk.id, currentStory)
       // Invalidate branch cache to let useStorySync refetch and reconcile
-      queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory] })
+      queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory, currentBranch] })
       toast.success('Chunk deleted')
     } catch (error) {
       console.error('Failed to delete chunk:', error)
@@ -95,13 +98,27 @@ export function ChunkRenderer({ chunk, index: _index }: ChunkRendererProps) {
     }
   }
 
-  const handleBranchFrom = () => {
-    const chunkIndex = chunks.findIndex(c => c.id === chunk.id)
-    const before = [...chunks]
-    const after = before.slice(0, chunkIndex + 1)
-    pushHistory("branch", before, after)
-    setChunks(after)
-    toast.success("Branched from chunk - story trimmed to this point")
+  const handleBranchFrom = async () => {
+    const name = window.prompt('Enter new branch name')?.trim()
+    if (!name) {
+      toast.error('Branch name is required')
+      return
+    }
+    try {
+      await createBranch(currentStory, name, chunk.id)
+      setCurrentBranch(name)
+      // Refresh branches list in store
+      try {
+        const list = await getBranches(currentStory)
+        setBranches(list)
+      } catch {}
+      // Refresh to load the selected branch path
+      queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory, name] })
+      toast.success(`Created branch "${name}"`)
+    } catch (error) {
+      console.error('Failed to create branch:', error)
+      toast.error(`Failed to create branch: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
   }
 
   return (

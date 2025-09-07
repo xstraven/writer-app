@@ -33,6 +33,7 @@ export function StoryEditor() {
     revertFromHistory,
     pushHistory,
     currentStory,
+    currentBranch,
   } = useAppStore()
 
   const { 
@@ -103,6 +104,7 @@ export function StoryEditor() {
         kind: 'user',
         parent_id: parentId,
         set_active: true,
+        branch: currentBranch,
       })
 
       // Replace optimistic ID/timestamp with server values without refetching
@@ -113,7 +115,7 @@ export function StoryEditor() {
       })
 
       // Invalidate branch to refresh any downstream consumers and ensure consistency
-      queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory] })
+      queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory, currentBranch] })
 
       toast.success('Chunk added')
     } catch (error) {

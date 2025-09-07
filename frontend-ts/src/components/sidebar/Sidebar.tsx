@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
@@ -8,9 +8,10 @@ import { GenerationSettings } from './GenerationSettings'
 import { ContextTabs } from './ContextTabs'
 import { InspirationGallery } from './InspirationGallery'
 import { ChevronDown } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { BranchesPanel } from './BranchesPanel'
 import { useAppStore } from '@/stores/appStore'
-import { getPromptPreview, deleteStory as apiDeleteStory, getStories } from '@/lib/api'
+import { getPromptPreview, deleteStory as apiDeleteStory, getStories, getBranches } from '@/lib/api'
 import { useState as useReactState } from 'react'
 import { toast } from 'sonner'
 
@@ -28,7 +29,28 @@ export function Sidebar() {
   const [promptMessages, setPromptMessages] = useReactState<Array<{ role: string; content: string }>>([])
   const [loadingPrompt, setLoadingPrompt] = useState(false)
 
-  const { currentStory, setCurrentStory } = useAppStore()
+  const { currentStory, setCurrentStory, currentBranch, setCurrentBranch, branches, setBranches } = useAppStore()
+
+  // Load branches list for current story to populate selector
+  const [loadingBranches, setLoadingBranches] = useState(false)
+  const loadBranchesForStory = async (story: string) => {
+    if (!story) return
+    setLoadingBranches(true)
+    try {
+      const list = await getBranches(story)
+      setBranches(list)
+    } catch (e) {
+      // non-fatal
+    } finally {
+      setLoadingBranches(false)
+    }
+  }
+
+  // When story changes, fetch branches and reset to 'main' if not set
+  useEffect(() => {
+    loadBranchesForStory(currentStory)
+    if (!currentBranch) setCurrentBranch('main')
+  }, [currentStory])
 
   return (
     <div className="space-y-4 sticky top-24 max-h-[calc(100vh-6rem)] overflow-y-auto pr-1">
@@ -48,6 +70,20 @@ export function Sidebar() {
         {openStory && (
           <CardContent>
             <div className="flex flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">Branch:</span>
+                <Select value={currentBranch || 'main'} onValueChange={(name) => setCurrentBranch(name)}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="main">main</SelectItem>
+                    {branches.map(b => (
+                      <SelectItem key={b.name} value={b.name}>{b.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <Button variant="outline" size="sm" onClick={() => setShowBranches(true)}>
                 Branches
               </Button>
