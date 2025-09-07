@@ -1,12 +1,11 @@
 'use client'
 
-import { Settings, Trash2, GitBranch, Split, Merge, ArrowUp, ArrowDown } from 'lucide-react'
+import { Settings, Trash2, GitBranch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useAppStore } from '@/stores/appStore'
 import { toast } from 'sonner'
-import { uid } from '@/lib/utils'
 import type { Chunk } from '@/lib/types'
 import { deleteSnippet as apiDeleteSnippet, updateSnippet as apiUpdateSnippet } from '@/lib/api'
 import { useQueryClient } from '@tanstack/react-query'
@@ -17,7 +16,7 @@ interface ChunkRendererProps {
   index: number
 }
 
-export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
+export function ChunkRenderer({ chunk, index: _index }: ChunkRendererProps) {
   const queryClient = useQueryClient()
   const {
     editingId,
@@ -105,135 +104,6 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
     toast.success("Branched from chunk - story trimmed to this point")
   }
 
-  const handleSplitChunk = () => {
-    if (!isEditing || !editingText) return
-    
-    // Get cursor position from the textarea
-    const textarea = document.activeElement as HTMLTextAreaElement
-    const cursorPosition = textarea?.selectionStart || Math.floor(editingText.length / 2)
-    
-    const beforeText = editingText.substring(0, cursorPosition).trim()
-    const afterText = editingText.substring(cursorPosition).trim()
-    
-    if (!beforeText || !afterText) {
-      toast.error("Cannot split - both parts must have content")
-      return
-    }
-    
-    const chunkIndex = chunks.findIndex(c => c.id === chunk.id)
-    const before = [...chunks]
-    
-    // Create new chunk for the second part
-    const newChunk: Chunk = {
-      id: uid(),
-      text: afterText,
-      author: chunk.author,
-      timestamp: Date.now(),
-    }
-    
-    // Update current chunk with first part and insert new chunk after
-    const updatedChunks = [...chunks]
-    updatedChunks[chunkIndex] = { ...chunk, text: beforeText, timestamp: Date.now() }
-    updatedChunks.splice(chunkIndex + 1, 0, newChunk)
-    
-    pushHistory("edit", before, updatedChunks)
-    setChunks(updatedChunks)
-    setEditingId(null)
-    setEditingText("")
-    
-    toast.success("Chunk split successfully")
-  }
-
-  const handleMergeWithNext = () => {
-    const chunkIndex = chunks.findIndex(c => c.id === chunk.id)
-    if (chunkIndex >= chunks.length - 1) {
-      toast.error("Cannot merge - no next chunk")
-      return
-    }
-    
-    const nextChunk = chunks[chunkIndex + 1]
-    const mergedText = chunk.text + " " + nextChunk.text
-    
-    const before = [...chunks]
-    const after = chunks.filter((_, i) => i !== chunkIndex + 1)
-    after[chunkIndex] = {
-      ...chunk,
-      text: mergedText,
-      timestamp: Date.now(),
-    }
-    
-    pushHistory("edit", before, after)
-    setChunks(after)
-    
-    toast.success("Merged with next chunk")
-  }
-
-  const handleMergeWithPrevious = () => {
-    const chunkIndex = chunks.findIndex(c => c.id === chunk.id)
-    if (chunkIndex <= 0) {
-      toast.error("Cannot merge - no previous chunk")
-      return
-    }
-    
-    const previousChunk = chunks[chunkIndex - 1]
-    const mergedText = previousChunk.text + " " + chunk.text
-    
-    const before = [...chunks]
-    const after = chunks.filter((_, i) => i !== chunkIndex)
-    after[chunkIndex - 1] = {
-      ...previousChunk,
-      text: mergedText,
-      timestamp: Date.now(),
-    }
-    
-    pushHistory("edit", before, after)
-    setChunks(after)
-    
-    toast.success("Merged with previous chunk")
-  }
-
-  const handleMoveUp = () => {
-    const chunkIndex = chunks.findIndex(c => c.id === chunk.id)
-    if (chunkIndex <= 0) {
-      toast.error("Cannot move up - already at top")
-      return
-    }
-    
-    const before = [...chunks]
-    const after = [...chunks]
-    
-    // Swap with previous chunk
-    const temp = after[chunkIndex]
-    after[chunkIndex] = after[chunkIndex - 1]
-    after[chunkIndex - 1] = temp
-    
-    pushHistory("edit", before, after)
-    setChunks(after)
-    
-    toast.success("Moved chunk up")
-  }
-
-  const handleMoveDown = () => {
-    const chunkIndex = chunks.findIndex(c => c.id === chunk.id)
-    if (chunkIndex >= chunks.length - 1) {
-      toast.error("Cannot move down - already at bottom")
-      return
-    }
-    
-    const before = [...chunks]
-    const after = [...chunks]
-    
-    // Swap with next chunk
-    const temp = after[chunkIndex]
-    after[chunkIndex] = after[chunkIndex + 1]
-    after[chunkIndex + 1] = temp
-    
-    pushHistory("edit", before, after)
-    setChunks(after)
-    
-    toast.success("Moved chunk down")
-  }
-
   return (
     <div
       onDoubleClick={startEdit}
@@ -254,15 +124,9 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
             className="min-h-[96px]"
             onKeyDown={(e) => {
               if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                if (e.shiftKey) {
-                  // Ctrl+Shift+Enter = Split chunk
-                  e.preventDefault()
-                  handleSplitChunk()
-                } else {
-                  // Ctrl+Enter = Save edit
-                  e.preventDefault()
-                  saveEdit()
-                }
+                // Ctrl/Cmd+Enter = Save edit
+                e.preventDefault()
+                saveEdit()
               }
               if (e.key === "Escape") {
                 e.preventDefault()
@@ -272,10 +136,6 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
           />
           <div className="flex gap-2">
             <Button size="sm" onClick={saveEdit}>Save</Button>
-            <Button size="sm" variant="outline" onClick={handleSplitChunk} title="Split at cursor (Ctrl+Shift+Enter)">
-              <Split className="h-3 w-3 mr-1" />
-              Split
-            </Button>
             <Button size="sm" variant="ghost" onClick={cancelEdit}>Cancel</Button>
           </div>
         </div>
@@ -301,44 +161,6 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
                     onClick={startEdit}
                   >
                     ✏️ Edit chunk
-                  </Button>
-                  
-                  <div className="border-t border-gray-100 my-1"></div>
-                  
-                  <Button 
-                    variant="ghost" 
-                    className="w-full justify-start text-sm" 
-                    onClick={handleMergeWithPrevious}
-                    disabled={index === 0}
-                  >
-                    <Merge className="h-4 w-4 mr-2" /> Merge with previous
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    className="w-full justify-start text-sm" 
-                    onClick={handleMergeWithNext}
-                    disabled={index >= chunks.length - 1}
-                  >
-                    <Merge className="h-4 w-4 mr-2" /> Merge with next
-                  </Button>
-                  
-                  <div className="border-t border-gray-100 my-1"></div>
-                  
-                  <Button 
-                    variant="ghost" 
-                    className="w-full justify-start text-sm" 
-                    onClick={handleMoveUp}
-                    disabled={index === 0}
-                  >
-                    <ArrowUp className="h-4 w-4 mr-2" /> Move up
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    className="w-full justify-start text-sm" 
-                    onClick={handleMoveDown}
-                    disabled={index >= chunks.length - 1}
-                  >
-                    <ArrowDown className="h-4 w-4 mr-2" /> Move down
                   </Button>
                   
                   <div className="border-t border-gray-100 my-1"></div>
