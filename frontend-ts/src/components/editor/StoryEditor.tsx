@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { TipTapComposer } from './TipTapComposer'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ChunkRenderer } from './ChunkRenderer'
+import { ContinuousEditor } from './ContinuousEditor'
 import { Loading } from '@/components/ui/loading'
 import { useAppStore } from '@/stores/appStore'
 import { useStoryGeneration } from '@/hooks/useStoryGeneration'
@@ -58,12 +59,18 @@ export function StoryEditor() {
       const continuation = await generateContinuationAsync(payloadInstr)
       // Clear instruction box after generate (placeholder shows default)
       setInstruction('')
-      // Append to the active user draft (with a space if needed)
-      setUserDraft((prev) => {
-        if (!prev) return continuation
-        const needsSpace = /\S$/.test(prev)
-        return needsSpace ? prev + ' ' + continuation : prev + continuation
-      })
+      // Append continuation to the last chunk directly in continuous editor mode
+      if (chunks.length > 0) {
+        const last = chunks[chunks.length - 1]
+        const needsBreak = last.text && !/\n\n$/.test(last.text)
+        const newText = needsBreak ? last.text + '\n\n' + continuation : last.text + continuation
+        updateChunk(last.id, { text: newText, timestamp: Date.now() })
+        // Best-effort persist
+        try {
+          const { updateSnippet } = await import('@/lib/api')
+          await updateSnippet(last.id, { content: newText, kind: last.author === 'user' ? 'user' : 'ai' })
+        } catch {}
+      }
     } catch (e) {
       // Error toast is handled in hook
     }
@@ -143,54 +150,9 @@ export function StoryEditor() {
               </div>
             ) : (
               <>
-                {chunks.map((chunk, idx) => (
-                  <ChunkRenderer
-                    key={chunk.id}
-                    chunk={chunk}
-                    index={idx}
-                  />
-                ))}
+                <ContinuousEditor />
 
-                {chunks.length === 0 && (
-                  <div className="text-center py-8 text-neutral-500">
-                    <p>No story content yet.</p>
-                    <p className="text-sm">Start writing below or load an existing story.</p>
-                  </div>
-                )}
-
-                {/* Active user draft chunk */}
-                <div className="mt-3">
-                  <label className="text-sm text-neutral-600">
-                    Your next chunk (Cmd/Ctrl+Enter to save)
-                  </label>
-                  <div className="mt-2 relative" aria-busy={isGenerating}>
-                    {isGenerating && (
-                      <div className="absolute inset-0 rounded-md bg-white/60 backdrop-blur-[1px] z-10 flex items-center justify-center" aria-hidden="true">
-                        <Loading size="md" text="Generating..." />
-                      </div>
-                    )}
-                    <TipTapComposer
-                      value={userDraft}
-                      onChange={setUserDraft}
-                      onSubmit={handleSubmitUserChunk}
-                      placeholder="Write your next chunk..."
-                      disabled={isGenerating || isAddingChunk}
-                      className="min-h-[96px]"
-                    />
-                  </div>
-                  {/* Inline status: saving or generating */}
-                  <div className="mt-2 h-5 text-xs text-neutral-500 flex items-center gap-2" aria-live="polite">
-                    {isAddingChunk ? (
-                      <>
-                        <Loading size="sm" className="mr-1" /> Saving...
-                      </>
-                    ) : isGenerating ? (
-                      <>
-                        <Loading size="sm" className="mr-1" /> Generating...
-                      </>
-                    ) : null}
-                  </div>
-                </div>
+        {/* Continuous mode: no separate draft composer */}
               </>
             )}
           </div>
