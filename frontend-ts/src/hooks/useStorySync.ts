@@ -38,7 +38,9 @@ export function useStorySync() {
       : getBranchPath(currentStory),
     enabled: !!currentStory && !!currentBranch,
     refetchOnWindowFocus: false,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    // Always refetch when story/branch changes, even if cache is fresh
+    refetchOnMount: 'always',
+    staleTime: 5 * 60 * 1000, // cache for back/forward nav within a story
   })
 
   // Query to load lorebook for current story
@@ -47,7 +49,8 @@ export function useStorySync() {
     queryFn: () => getLorebook(currentStory),
     enabled: !!currentStory,
     refetchOnWindowFocus: false,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnMount: 'always',
+    staleTime: 5 * 60 * 1000,
   })
 
   // Query to load per-story settings (preferred)
@@ -56,6 +59,7 @@ export function useStorySync() {
     queryFn: () => getStorySettings(currentStory),
     enabled: !!currentStory,
     refetchOnWindowFocus: false,
+    refetchOnMount: 'always',
     staleTime: 5 * 60 * 1000,
   })
 

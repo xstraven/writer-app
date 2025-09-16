@@ -105,22 +105,30 @@ export const useAppStore = create<AppState>()(
       ...initialState,
 
       setCurrentStory: (story) => {
-        // Attempt to flush any pending edits before switching
-        void saveQueue.flush()
-        set((state) => ({ 
-          currentStory: story,
-          // Reset per-story draft data so sync adopts backend for the selected story
-          chunks: [],
-          history: [],
-          editingId: null,
-          editingText: '',
-          hoveredId: null,
-        }))
+        // Ensure pending edits are persisted before switching stories
+        (async () => {
+          try { await saveQueue.flush() } catch {}
+          set((state) => ({ 
+            currentStory: story,
+            // Reset per-story draft data so sync adopts backend for the selected story
+            chunks: [],
+            history: [],
+            editingId: null,
+            editingText: '',
+            hoveredId: null,
+          }))
+        })()
       },
       
       setInstruction: (instruction) => set({ instruction }),
 
-      setCurrentBranch: (name: string) => set({ currentBranch: name }),
+      setCurrentBranch: (name: string) => {
+        // Persist edits before switching active branch
+        (async () => {
+          try { await saveQueue.flush() } catch {}
+          set({ currentBranch: name })
+        })()
+      },
       
       setChunks: (chunks) => set({ chunks }),
       
