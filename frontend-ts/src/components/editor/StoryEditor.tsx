@@ -4,7 +4,6 @@ import { useState, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Wand2, Undo2, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { TipTapComposer } from './TipTapComposer'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -137,15 +136,12 @@ export function StoryEditor() {
   }
 
   return (
-    <Card className="shadow-sm">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-lg">Draft</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ScrollArea className="h-[72vh] rounded-2xl border bg-white px-3 py-3">
-          <div className="space-y-2">
+    <div className="space-y-5">
+      <div>
+        <ScrollArea className="h-[74vh] rounded-2xl border border-neutral-200 bg-white px-5 py-5">
+          <div className="space-y-3">
             {isSyncing && chunks.length === 0 ? (
-              <div className="flex items-center justify-center py-8">
+              <div className="flex items-center justify-center py-10">
                 <Loading text="Loading story..." />
               </div>
             ) : (
@@ -157,84 +153,74 @@ export function StoryEditor() {
             )}
           </div>
         </ScrollArea>
+      </div>
 
-        {/* Instruction Box with TipTap */}
-        <div className="mt-4">
-          <label htmlFor="instruction" className="text-sm text-neutral-600">
-            Instruction to model (Press Cmd/Ctrl+Enter to generate)
-          </label>
-          <div className="mt-2 relative" aria-busy={isGenerating}>
-            {isGenerating && (
-              <div className="absolute inset-0 rounded-md bg-white/60 backdrop-blur-[1px] z-10 flex items-center justify-center" aria-hidden="true">
-                <Loading size="md" text="Generating..." />
-              </div>
-            )}
-            <TipTapComposer
-              value={instruction}
-              onChange={setInstruction}
-              onSubmit={handleGenerate}
-              placeholder={DEFAULT_INSTRUCTION}
-              disabled={isGenerating}
-              className="min-h-[72px]"
-            />
-          </div>
-        </div>
-
-        {/* Command Bar */}
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button 
-            onClick={() => handleGenerate()}
+      {/* Instruction Box with TipTap */}
+      <div>
+        <label htmlFor="instruction" className="block mb-2 text-sm text-neutral-600">
+          Instruction to model (Press Cmd/Ctrl+Enter to generate)
+        </label>
+        <div className="relative" aria-busy={isGenerating}>
+          {isGenerating && (
+            <div className="absolute inset-0 rounded-md bg-white/60 backdrop-blur-[1px] z-10 flex items-center justify-center" aria-hidden="true">
+              <Loading size="md" text="Generating..." />
+            </div>
+          )}
+          <TipTapComposer
+            value={instruction}
+            onChange={setInstruction}
+            onSubmit={handleGenerate}
+            placeholder={DEFAULT_INSTRUCTION}
             disabled={isGenerating}
-          >
-            {isGenerating ? (
-              <>
-                <Loading size="sm" className="mr-2" />
-                Generating...
-              </>
-            ) : (
-              <>
-                <Wand2 className="h-4 w-4 mr-2" />
-                Generate continuation
-              </>
-            )}
-          </Button>
-          {/* Regenerate button hidden for now */}
-          <Button 
-            variant="ghost" 
-            onClick={handleRevert} 
-            disabled={history.length === 0 || isGenerating}
-          >
-            <Undo2 className="h-4 w-4 mr-2" /> Revert last action
-          </Button>
+            className="min-h-[84px]"
+          />
         </div>
+      </div>
 
-        {/* Error Display */}
-        {(generationError || syncError) && (
-          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
-              <div>
-                {generationError && (
-                  <>
-                    <p className="text-sm font-medium text-red-800">Generation failed</p>
-                    <p className="text-xs text-red-600 mt-1">
-                      {generationError.message}
-                    </p>
-                  </>
-                )}
-                {syncError && (
-                  <>
-                    <p className="text-sm font-medium text-red-800">Story sync failed</p>
-                    <p className="text-xs text-red-600 mt-1">
-                      {syncError instanceof Error ? syncError.message : 'Failed to load story data'}
-                    </p>
-                  </>
-                )}
-              </div>
+      {/* Command Bar */}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button onClick={() => handleGenerate()} disabled={isGenerating}>
+          {isGenerating ? (
+            <>
+              <Loading size="sm" className="mr-2" />
+              Generating...
+            </>
+          ) : (
+            <>
+              <Wand2 className="h-4 w-4 mr-2" />
+              Generate continuation
+            </>
+          )}
+        </Button>
+        <Button variant="ghost" onClick={handleRevert} disabled={history.length === 0 || isGenerating}>
+          <Undo2 className="h-4 w-4 mr-2" /> Revert last action
+        </Button>
+      </div>
+
+      {/* Error Display */}
+      {(generationError || syncError) && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
+            <div>
+              {generationError && (
+                <>
+                  <p className="text-sm font-medium text-red-800">Generation failed</p>
+                  <p className="text-xs text-red-600 mt-1">{generationError.message}</p>
+                </>
+              )}
+              {syncError && (
+                <>
+                  <p className="text-sm font-medium text-red-800">Story sync failed</p>
+                  <p className="text-xs text-red-600 mt-1">
+                    {syncError instanceof Error ? syncError.message : 'Failed to load story data'}
+                  </p>
+                </>
+              )}
             </div>
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </div>
   )
 }
