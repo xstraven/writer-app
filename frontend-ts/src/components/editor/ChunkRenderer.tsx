@@ -7,7 +7,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useAppStore } from '@/stores/appStore'
 import { toast } from 'sonner'
 import type { Chunk } from '@/lib/types'
-import { deleteSnippet as apiDeleteSnippet, updateSnippet as apiUpdateSnippet, createBranch, getBranches } from '@/lib/api'
+import { deleteSnippet as apiDeleteSnippet, createBranch, getBranches } from '@/lib/api'
+import { saveQueue } from '@/lib/saveQueue'
 import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { useEffect, useRef, useState } from 'react'
@@ -34,16 +35,11 @@ export function ChunkRenderer({ chunk, index: _index }: ChunkRendererProps) {
   } = useAppStore()
 
   const isHovered = hoveredId === chunk.id
-
-  // Always-on editing for this chunk
   const [localText, setLocalText] = useState<string>(chunk.text)
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const lastSaved = useRef<string>(chunk.text)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
     setLocalText(chunk.text)
-    lastSaved.current = chunk.text
     // Auto-resize on external updates
     requestAnimationFrame(() => {
       if (textareaRef.current) {
@@ -53,24 +49,7 @@ export function ChunkRenderer({ chunk, index: _index }: ChunkRendererProps) {
     })
   }, [chunk.id, chunk.text])
 
-  const scheduleSave = (nextText: string) => {
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(async () => {
-      try {
-        if (nextText === lastSaved.current) return
-        const kind = chunk.author === 'user' ? 'user' : 'ai'
-        const res = await apiUpdateSnippet(chunk.id, { content: nextText, kind })
-        updateChunk(chunk.id, {
-          text: res.content,
-          timestamp: new Date(res.created_at).getTime(),
-        })
-        lastSaved.current = res.content
-      } catch (error) {
-        console.error('Failed to auto-save chunk:', error)
-        toast.error(`Failed to save edit: ${error instanceof Error ? error.message : 'Unknown error'}`)
-      }
-    }, 500)
-  }
+  // No separate debounce here; saveQueue deduplicates with its own debounce.
 
   // Auto-resize on local edits
   useEffect(() => {
@@ -149,7 +128,7 @@ export function ChunkRenderer({ chunk, index: _index }: ChunkRendererProps) {
       onMouseEnter={() => setHoveredId(chunk.id)}
       onMouseLeave={() => setHoveredId(null)}
       className={cn(
-        "relative group transition-colors px-0 py-0",
+        "relative group transition-colors px-0 py-0 hover:bg-amber-50",
         isHovered ? "bg-amber-50" : "bg-transparent"
       )}
     >
@@ -160,7 +139,8 @@ export function ChunkRenderer({ chunk, index: _index }: ChunkRendererProps) {
           const v = e.target.value
           setLocalText(v)
           updateChunk(chunk.id, { text: v, timestamp: Date.now() })
-          scheduleSave(v)
+          const kind = chunk.author === 'user' ? 'user' : 'ai'
+          saveQueue.queue(chunk.id, v, kind)
         }}
         onKeyDown={handleKeyDown}
         className="min-h-[48px] resize-none border-0 focus-visible:ring-0 focus-visible:outline-none bg-transparent px-0"
@@ -169,38 +149,36 @@ export function ChunkRenderer({ chunk, index: _index }: ChunkRendererProps) {
         placeholder="Write..."
       />
 
-      {/* Hover menu */}
-      {isHovered && (
-        <div className="absolute -top-3 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <div className="flex items-center gap-1 bg-white border shadow-sm rounded-full px-1 py-1">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7" title="More">
-                  <Settings className="h-4 w-4" />
+      {/* Hover menu always rendered; visibility via CSS */}
+      <div className="absolute -top-3 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-1 bg-white border shadow-sm rounded-full px-1 py-1">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-7 w-7" title="More">
+                <Settings className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-56 p-1">
+              <div className="space-y-1">
+                <Button 
+                  variant="ghost" 
+                  className="w-full justify-start text-sm" 
+                  onClick={handleBranchFrom}
+                >
+                  <GitBranch className="h-4 w-4 mr-2" /> Branch from here
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-56 p-1">
-                <div className="space-y-1">
-                  <Button 
-                    variant="ghost" 
-                    className="w-full justify-start text-sm" 
-                    onClick={handleBranchFrom}
-                  >
-                    <GitBranch className="h-4 w-4 mr-2" /> Branch from here
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    className="w-full justify-start text-sm text-red-600 hover:text-red-700 hover:bg-red-50" 
-                    onClick={handleDelete}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" /> Delete chunk
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
+                <Button 
+                  variant="ghost" 
+                  className="w-full justify-start text-sm text-red-600 hover:text-red-700 hover:bg-red-50" 
+                  onClick={handleDelete}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" /> Delete chunk
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
-      )}
+      </div>
     </div>
   )
 }

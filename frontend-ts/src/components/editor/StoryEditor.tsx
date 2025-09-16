@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { TipTapComposer } from './TipTapComposer'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ChunkRenderer } from './ChunkRenderer'
-import { ContinuousEditor } from './ContinuousEditor'
+// import { ContinuousEditor } from './ContinuousEditor'
 import { Loading } from '@/components/ui/loading'
 import { useAppStore } from '@/stores/appStore'
 import { useStoryGeneration } from '@/hooks/useStoryGeneration'
@@ -143,16 +143,16 @@ export function StoryEditor() {
       </CardHeader>
       <CardContent>
         <ScrollArea className="h-[72vh] rounded-2xl border bg-white px-3 py-3">
-          <div className="space-y-0">
+          <div className="space-y-2">
             {isSyncing && chunks.length === 0 ? (
               <div className="flex items-center justify-center py-8">
                 <Loading text="Loading story..." />
               </div>
             ) : (
               <>
-                <ContinuousEditor />
-
-        {/* Continuous mode: no separate draft composer */}
+                {chunks.map((chunk, index) => (
+                  <ChunkRenderer key={chunk.id} chunk={chunk} index={index} />
+                ))}
               </>
             )}
           </div>

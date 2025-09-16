@@ -12,6 +12,7 @@ import type {
   AppState as AppStateType
 } from '@/lib/types'
 import { uid } from '@/lib/utils'
+import { saveQueue } from '@/lib/saveQueue'
 
 interface AppState extends AppStateType {
   // Actions
@@ -103,15 +104,19 @@ export const useAppStore = create<AppState>()(
     (set, get) => ({
       ...initialState,
 
-      setCurrentStory: (story) => set((state) => ({ 
-        currentStory: story,
-        // Reset per-story draft data so sync adopts backend for the selected story
-        chunks: [],
-        history: [],
-        editingId: null,
-        editingText: '',
-        hoveredId: null,
-      })),
+      setCurrentStory: (story) => {
+        // Attempt to flush any pending edits before switching
+        void saveQueue.flush()
+        set((state) => ({ 
+          currentStory: story,
+          // Reset per-story draft data so sync adopts backend for the selected story
+          chunks: [],
+          history: [],
+          editingId: null,
+          editingText: '',
+          hoveredId: null,
+        }))
+      },
       
       setInstruction: (instruction) => set({ instruction }),
 
