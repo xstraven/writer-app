@@ -4,7 +4,7 @@ Storycraft — AI-Assisted Novel Writing
 An opinionated starter template for an AI-assisted story writing app.
 
 - Backend: FastAPI with Pydantic for structured models
-- Frontend: Reflex (Python-native UI) calling the FastAPI API
+- Frontend: (TBD) — this repository currently focuses on the FastAPI API
 - LLM: OpenRouter chat completions (pluggable model)
 - Package manager: uv
 
@@ -24,15 +24,14 @@ Quick Start
 
    - Copy `.env.example` to `.env` and set your OpenRouter key
 
-3) Run the FastAPI backend (use 8001 to avoid Reflex dev backend on 8000):
+3) Run the FastAPI backend:
 
    - `uv run uvicorn storycraft.app.main:app --reload --port 8001`
    - Check health: `http://127.0.0.1:8001/health`
 
-4) Run the Reflex frontend (separate terminal):
+4) Frontend
 
-   - `uv run reflex run` (first run will set up the web build)
-   - App opens at `http://127.0.0.1:3000`
+   - A frontend is not included in this repository. You can consume the API from any client.
 
 Environment Variables
 ---------------------
@@ -71,18 +70,13 @@ Project Layout
   - `openrouter.py` — OpenRouter client wrapper
   - `lorebook_store.py` — simple JSON file store for lore entries
   - `config.py` — settings via pydantic-settings
-- `src/storycraft_frontend/` — Reflex UI
-  - `pages/index.py` — main UI page
-  - `state.py` — Reflex state, API calls to backend
-- `rxconfig.py` — Reflex configuration
 - `pyproject.toml` — project and dependencies (uv-compatible)
 
 Troubleshooting
 ---------------
 
-- CORS: The API allows localhost ports 3000 and 8000. Adjust in `app/config.py` if needed.
-- Ports: Frontend on 3000, Reflex event backend on 8000, FastAPI API on 8001.
-  - The frontend reads the API base from `STORYCRAFT_API_BASE`. Default is `http://127.0.0.1:8001`.
+- CORS: Allowed origins are configurable in `app/config.py`.
+- Default API base: `http://127.0.0.1:8001`.
 - Models: Update `AppState.model` or set `STORYCRAFT_OPENROUTER_DEFAULT_MODEL`.
 
 Next Steps
