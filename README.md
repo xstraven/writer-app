@@ -1,93 +1,76 @@
 Storycraft — AI-Assisted Novel Writing
 ======================================
 
-An opinionated starter template for an AI-assisted story writing app.
+Storycraft is a full-stack starter kit for collaborative fiction writing with LLM assist.
 
-- Backend: FastAPI with Pydantic for structured models
-- Frontend: (TBD) — this repository currently focuses on the FastAPI API
-- LLM: OpenRouter chat completions (pluggable model)
-- Package manager: uv
+- **Backend**: FastAPI + Pydantic, modular routers under `src/storycraft/app/routes/`
+- **Frontend**: Next.js + React + Tailwind located in `frontend-ts/`
+- **LLM**: OpenRouter chat completions (stubs enabled when no API key is present)
+- **Package managers**: `uv` for Python, `npm` for the frontend
 
 Quick Start
 -----------
 
-1) Install dependencies (managed by uv):
+### Backend
+1. Install uv (see https://docs.astral.sh/uv/) and sync dependencies:
+   ```bash
+   uv sync
+   ```
+2. Create a `.env` in the repo root and set `STORYCRAFT_OPENROUTER_API_KEY` (optional during local dev).
+3. Run the API:
+   ```bash
+   uv run uvicorn storycraft.app.main:app --reload --port 8000
+   ```
+   Visit `http://127.0.0.1:8000/health` to confirm.
 
-   - Install uv: https://docs.astral.sh/uv/
-   - Ensure Python 3.13 is available. With uv you can install it via:
-     - `uv python install 3.13`
-     - Optionally set as default for this project: `uv python pin 3.13`
-   - Then in this folder run: `uv sync`
-   - Install the package (editable): `uv pip install -e .`
-
-2) Configure environment:
-
-   - Copy `.env.example` to `.env` and set your OpenRouter key
-
-3) Run the FastAPI backend:
-
-   - `uv run uvicorn storycraft.app.main:app --reload --port 8001`
-   - Check health: `http://127.0.0.1:8001/health`
-
-4) Frontend
-
-   - A frontend is not included in this repository. You can consume the API from any client.
+### Frontend
+1. Install Node dependencies:
+   ```bash
+   cd frontend-ts
+   npm install
+   ```
+2. Start the dev server:
+   ```bash
+   npm run dev
+   ```
+   The app is available at `http://localhost:3000` (expects the API on port 8000).
 
 Environment Variables
 ---------------------
 
-Prefix all variables with `STORYCRAFT_` to match Settings.
+All variables use the `STORYCRAFT_` prefix.
 
-- `STORYCRAFT_OPENROUTER_API_KEY`: Your OpenRouter API key.
-- `STORYCRAFT_OPENROUTER_BASE_URL` (optional): Defaults to `https://openrouter.ai/api/v1`.
-- `STORYCRAFT_OPENROUTER_DEFAULT_MODEL` (optional): Defaults to `openrouter/auto`.
+- `STORYCRAFT_OPENROUTER_API_KEY` — OpenRouter key; omit to use stubbed responses.
+- `STORYCRAFT_OPENROUTER_BASE_URL` — override base URL (default `https://openrouter.ai/api/v1`).
+- `STORYCRAFT_OPENROUTER_DEFAULT_MODEL` — default chat model (default `deepseek/deepseek-chat-v3-0324`).
+- Frontend envs go in `frontend-ts/.env.local` (e.g., `NEXT_PUBLIC_STORYCRAFT_API_BASE`).
 
-Endpoints
----------
+Key Endpoints
+-------------
 
-- `GET /health` — basic health check.
-- `GET /api/lorebook` — list lore entries.
-- `POST /api/lorebook` — add entry `{name, kind, summary, tags?}`.
-- `PUT /api/lorebook/{id}` — update entry.
-- `DELETE /api/lorebook/{id}` — delete entry.
-- `POST /api/extract-memory` — extract MemoryState from text `{current_text, max_items?, model?}`.
-- `POST /api/continue` — continue story `{draft_text, instruction?, model?, temperature?, max_tokens?, use_memory?}`.
+- `GET /health` — API readiness probe.
+- `GET /api/stories` — list stories across stores.
+- `GET /api/snippets/path?story=...` — fetch the active branch text and metadata.
+- `POST /api/continue` — request an LLM continuation for the active draft.
+- `POST /api/prompt-preview` — inspect the prompt payload before sending to OpenRouter.
+- `GET/POST/PUT/DELETE /api/lorebook` — manage lore entries scoped per story.
 
-Notes
------
+Testing & Tooling
+-----------------
 
-- If `STORYCRAFT_OPENROUTER_API_KEY` is not set, the backend returns stubbed responses for development.
-- Lorebook is persisted to `data/lorebook.json`. This is a simple JSON store; switch to a DB if needed.
-- The memory extractor uses Pydantic JSON schema as `response_format` for structured output.
+- Run backend tests: `UV_CACHE_DIR=.uv-cache uv run pytest -q`
+- Lint / format Python: `uv run ruff check .` and `uv run ruff format .`
+- Frontend lint: `cd frontend-ts && npm run lint`
 
 Project Layout
 --------------
 
-- `src/storycraft/app/` — FastAPI backend
-  - `main.py` — API routes and CORS
-  - `models.py` — Pydantic models and schemas
-  - `memory.py` — LLM-powered memory extraction and continuation
-  - `openrouter.py` — OpenRouter client wrapper
-  - `lorebook_store.py` — simple JSON file store for lore entries
-  - `config.py` — settings via pydantic-settings
-- `pyproject.toml` — project and dependencies (uv-compatible)
-
-Troubleshooting
----------------
-
-- CORS: Allowed origins are configurable in `app/config.py`.
-- Default API base: `http://127.0.0.1:8001`.
-- Models: Update `AppState.model` or set `STORYCRAFT_OPENROUTER_DEFAULT_MODEL`.
-
-Next Steps
-----------
-
-- Add user auth and per-user lorebooks.
-- Add scene/chapters with autosave.
-- Add export to Markdown/EPUB.
-- Add tool for style calibration from sample chapters.
+- `src/storycraft/app/` — FastAPI app (routers, services, stores, models)
+- `frontend-ts/` — Next.js app (components, hooks, Zustand store)
+- `tests/` — Pytest coverage for health, generation, snippets, and settings APIs
+- `data/` — Sample lore and DuckDB persistence
 
 Contributing
 ------------
 
-See AGENTS.md for contributor guidelines, project structure, and commands. Before opening a PR, run: `uv run pytest -q`, `uv run ruff check .`, and `uv run ruff format .`.
+Review `AGENTS.md` for conventions, commit message style (Conventional Commits), and PR expectations. Always run the pytest and ruff commands listed above before submitting changes.
