@@ -4,14 +4,17 @@ from pathlib import Path
 
 from storycraft.app.main import app as fastapi_app
 from storycraft.app import main as main_mod
+from storycraft.app import runtime as runtime_mod
 from storycraft.app.snippet_store import SnippetStore
 from storycraft.app.lorebook_store import LorebookStore
 
 
 def test_prompt_preview_default_prompt_order(tmp_path):
     # Use temp stores to avoid touching real data
-    main_mod.snippet_store = SnippetStore(path=tmp_path / "pp_story.duckdb")
-    main_mod.store = LorebookStore(path=tmp_path / "pp_lore.json")
+    runtime_mod.snippet_store = SnippetStore(path=tmp_path / "pp_story.duckdb")
+    runtime_mod.lorebook_store = LorebookStore(path=tmp_path / "pp_lore.json")
+    main_mod.snippet_store = runtime_mod.snippet_store
+    main_mod.store = runtime_mod.lorebook_store
 
     from fastapi.testclient import TestClient
 
@@ -39,10 +42,48 @@ def test_prompt_preview_default_prompt_order(tmp_path):
     assert "Continue the story" in last["content"]
 
 
+def test_prompt_preview_includes_context_details(tmp_path):
+    runtime_mod.snippet_store = SnippetStore(path=tmp_path / "ctx_story.duckdb")
+    runtime_mod.lorebook_store = LorebookStore(path=tmp_path / "ctx_lore.json")
+    main_mod.snippet_store = runtime_mod.snippet_store
+    main_mod.store = runtime_mod.lorebook_store
+
+    from fastapi.testclient import TestClient
+
+    client = TestClient(fastapi_app)
+    payload = {
+        "draft_text": "The courtyard buzzed with intrigue.",
+        "use_memory": False,
+        "use_context": True,
+        "context": {
+            "summary": "A tense meeting in the palace courtyard.",
+            "npcs": [
+                {"label": "Captain Rhea", "detail": "Head of the royal guard, fiercely loyal."}
+            ],
+            "objects": [
+                {"label": "Sealed Scroll", "detail": "Contains secret orders from the queen."}
+            ],
+        },
+    }
+    r = client.post("/api/prompt-preview", json=payload)
+    assert r.status_code == 200
+    data = r.json()
+    msgs = data.get("messages", [])
+    assert msgs and msgs[-1]["role"] == "user"
+    meta = msgs[-1]["content"]
+    assert "[Story Description]" in meta
+    assert "palace courtyard" in meta
+    assert "[Context]" in meta
+    assert "Captain Rhea" in meta
+    assert "Sealed Scroll" in meta
+
+
 def test_continue_returns_stub_and_persists_when_story_given(tmp_path):
     # Attach temporary stores
-    main_mod.snippet_store = SnippetStore(path=tmp_path / "cont_story.duckdb")
-    main_mod.store = LorebookStore(path=tmp_path / "cont_lore.json")
+    runtime_mod.snippet_store = SnippetStore(path=tmp_path / "cont_story.duckdb")
+    runtime_mod.lorebook_store = LorebookStore(path=tmp_path / "cont_lore.json")
+    main_mod.snippet_store = runtime_mod.snippet_store
+    main_mod.store = runtime_mod.lorebook_store
 
     from fastapi.testclient import TestClient
 
@@ -78,8 +119,10 @@ def test_continue_returns_stub_and_persists_when_story_given(tmp_path):
 
 def test_seed_and_continue_test_story_1(tmp_path):
     # Point stores at temp files so seeding reads samples but writes into tmp DB/JSON
-    main_mod.snippet_store = SnippetStore(path=tmp_path / "seed_story.duckdb")
-    main_mod.store = LorebookStore(path=tmp_path / "seed_lore.json")
+    runtime_mod.snippet_store = SnippetStore(path=tmp_path / "seed_story.duckdb")
+    runtime_mod.lorebook_store = LorebookStore(path=tmp_path / "seed_lore.json")
+    main_mod.snippet_store = runtime_mod.snippet_store
+    main_mod.store = runtime_mod.lorebook_store
 
     from fastapi.testclient import TestClient
 

@@ -70,6 +70,10 @@ class PromptBuilder:
         # Story description from context summary
         if self._context and getattr(self._context, "summary", "").strip():
             meta_parts.append("[Story Description]\n" + self._context.summary.strip())
+        # Rich context details (NPCs, objects, etc.)
+        context_block = _format_context(self._context)
+        if context_block:
+            meta_parts.append(context_block)
         # Selected lorebook entries
         lore_block = _format_lore(self._lore)
         if lore_block:
@@ -120,9 +124,6 @@ def _format_context(ctx: Optional[ContextState]) -> str:
     if not ctx:
         return ""
     lines: List[str] = ["[Context]"]
-    if ctx.summary:
-        lines.append("Summary:")
-        lines.append(ctx.summary.strip())
     if ctx.npcs:
         lines.append("NPCs:")
         for it in ctx.npcs:
@@ -131,6 +132,8 @@ def _format_context(ctx: Optional[ContextState]) -> str:
         lines.append("Objects:")
         for it in ctx.objects:
             lines.append(f"- {it.label}: {it.detail}")
+    if len(lines) == 1:
+        return ""
     return "\n".join(lines)
 
 

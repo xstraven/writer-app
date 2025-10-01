@@ -64,10 +64,19 @@ export function usePersistAppState(delayMs: number = 600) {
 
   // Best-effort flush on unload (no blocking call here; rely on debounce normally)
   useEffect(() => {
-    const handler = () => {
-      // Intentionally no sync request; consider navigator.sendBeacon with a dedicated endpoint.
+    const flush = () => {
+      const payload = latest.current.payload
+      const story = latest.current.story
+      if (!story || !payload) return
+      saveStorySettings(payload, { keepalive: true }).catch((err) => {
+        console.warn('Failed to flush story settings before unload', err)
+      })
     }
-    window.addEventListener('beforeunload', handler)
-    return () => window.removeEventListener('beforeunload', handler)
+    window.addEventListener('beforeunload', flush)
+    window.addEventListener('pagehide', flush)
+    return () => {
+      window.removeEventListener('beforeunload', flush)
+      window.removeEventListener('pagehide', flush)
+    }
   }, [])
 }

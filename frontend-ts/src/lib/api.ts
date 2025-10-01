@@ -16,6 +16,7 @@ import type {
   SeedStoryResponse,
   LoreGenerateRequest,
   LoreGenerateResponse,
+  PromptPreviewRequest,
 } from './types';
 
 export const API_BASE = process.env.NEXT_PUBLIC_STORYCRAFT_API_BASE || 'http://localhost:8000';
@@ -227,16 +228,8 @@ export const chooseActiveChild = async (story: string, parentId: string, childId
 };
 
 // Prompt preview
-export const getPromptPreview = async (
-  story: string,
-  instruction?: string,
-  model?: string
-) => {
-  const response = await apiClient.post('/api/prompt-preview', {
-    story,
-    instruction,
-    model,
-  });
+export const getPromptPreview = async (payload: PromptPreviewRequest) => {
+  const response = await apiClient.post('/api/prompt-preview', payload);
   return response.data;
 };
 
@@ -269,11 +262,43 @@ export const getStorySettings = async (story: string): Promise<StorySettingsPayl
   }
 };
 
-export const saveStorySettings = async (payload: StorySettingsPayload): Promise<void> => {
+export const saveStorySettings = async (
+  payload: StorySettingsPayload,
+  opts?: { keepalive?: boolean }
+): Promise<void> => {
+  if (opts?.keepalive) {
+    const url = `${API_BASE}/api/story-settings`
+    const body = JSON.stringify(payload)
+    if (typeof navigator !== 'undefined' && 'sendBeacon' in navigator) {
+      try {
+        const blob = new Blob([body], { type: 'application/json' })
+        const ok = (navigator as any).sendBeacon(url, blob)
+        if (ok) {
+          return
+        }
+        console.warn('Story settings sendBeacon returned false; falling back to keepalive fetch')
+      } catch (err) {
+        console.warn('Story settings sendBeacon failed', err)
+      }
+    }
+    try {
+      await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        keepalive: true,
+        mode: 'cors',
+        credentials: 'omit',
+      })
+      return
+    } catch (err) {
+      console.warn('Story settings keepalive fetch failed', err)
+    }
+  }
+
   try {
     await apiClient.put('/api/story-settings', payload);
   } catch (err: any) {
-    // If endpoint missing, try legacy /api/state without story scoping
     if (err?.response?.status === 404) {
       const legacy: any = {};
       if (payload.temperature !== undefined) legacy.temperature = payload.temperature;

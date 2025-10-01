@@ -32,7 +32,9 @@ class SaveQueue {
             const blob = new Blob([JSON.stringify({ content, kind })], { type: 'application/json' })
             const ok = (navigator as any).sendBeacon(url, blob)
             if (ok) continue
+            console.warn('saveQueue sendBeacon returned false for snippet', id)
           } catch {
+            console.warn('saveQueue sendBeacon threw for snippet', id)
             // fall through to fetch/axios
           }
         }
@@ -47,7 +49,8 @@ class SaveQueue {
               credentials: 'omit',
             })
             continue
-          } catch {
+          } catch (err) {
+            console.warn('saveQueue keepalive fetch failed', err)
             // fall through to axios
           }
         }
@@ -60,4 +63,3 @@ class SaveQueue {
 }
 
 export const saveQueue = new SaveQueue()
-

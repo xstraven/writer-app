@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from storycraft.app.main import app
+from storycraft.app import runtime as runtime_mod
 
 
 def test_snippets_api_flow(tmp_path, monkeypatch):
@@ -8,7 +9,8 @@ def test_snippets_api_flow(tmp_path, monkeypatch):
     from storycraft.app import main as main_mod
     from storycraft.app.snippet_store import SnippetStore
 
-    main_mod.snippet_store = SnippetStore(path=tmp_path / "api_story.duckdb")
+    runtime_mod.snippet_store = SnippetStore(path=tmp_path / "api_story.duckdb")
+    main_mod.snippet_store = runtime_mod.snippet_store
 
     story = "API Story"
     with TestClient(app) as client:
@@ -67,7 +69,8 @@ def test_update_snippet_content(tmp_path, monkeypatch):
     from storycraft.app.snippet_store import SnippetStore
     from fastapi.testclient import TestClient
 
-    main_mod.snippet_store = SnippetStore(path=tmp_path / "api_edit.duckdb")
+    runtime_mod.snippet_store = SnippetStore(path=tmp_path / "api_edit.duckdb")
+    main_mod.snippet_store = runtime_mod.snippet_store
     story = "Edit Story"
     client = TestClient(main_mod.app)
 
@@ -99,7 +102,8 @@ def test_insert_and_delete_endpoints(tmp_path, monkeypatch):
     from storycraft.app.snippet_store import SnippetStore
     from fastapi.testclient import TestClient
 
-    main_mod.snippet_store = SnippetStore(path=tmp_path / "api_edit2.duckdb")
+    runtime_mod.snippet_store = SnippetStore(path=tmp_path / "api_edit2.duckdb")
+    main_mod.snippet_store = runtime_mod.snippet_store
     story = "Edit Story 2"
     client = TestClient(main_mod.app)
 

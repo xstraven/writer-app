@@ -1,16 +1,21 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from ..models import AppPersistedState
-from ..runtime import state_store, base_settings_store
+from ..dependencies import get_state_store, get_base_settings_store
+from ..state_store import StateStore
+from ..base_settings_store import BaseSettingsStore
 
 
 router = APIRouter()
 
 
 @router.get("/api/state", response_model=AppPersistedState)
-async def get_state() -> AppPersistedState:
+async def get_state(
+    state_store: StateStore = Depends(get_state_store),
+    base_settings_store: BaseSettingsStore = Depends(get_base_settings_store),
+) -> AppPersistedState:
     data = state_store.get()
     try:
         base_defaults = base_settings_store.get()
@@ -25,7 +30,9 @@ async def get_state() -> AppPersistedState:
 
 
 @router.put("/api/state", response_model=dict)
-async def put_state(payload: AppPersistedState) -> dict:
+async def put_state(
+    payload: AppPersistedState,
+    state_store: StateStore = Depends(get_state_store),
+) -> dict:
     state_store.set(payload.model_dump())
     return {"ok": True}
-

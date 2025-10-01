@@ -1,16 +1,27 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from ..models import LoreEntryCreate, StorySettings, StorySettingsPatch
-from ..runtime import story_settings_store, state_store, base_settings_store, lorebook_store
+from ..dependencies import (
+    get_story_settings_store,
+    get_base_settings_store,
+    get_lorebook_store,
+)
+from ..story_settings_store import StorySettingsStore
+from ..base_settings_store import BaseSettingsStore
+from ..lorebook_store import LorebookStore
 
 
 router = APIRouter()
 
 
 @router.get("/api/story-settings", response_model=StorySettings)
-async def get_story_settings(story: str):
+async def get_story_settings(
+    story: str,
+    story_settings_store: StorySettingsStore = Depends(get_story_settings_store),
+    base_settings_store: BaseSettingsStore = Depends(get_base_settings_store),
+) -> StorySettings:
     story = (story or "").strip()
     if not story:
         raise HTTPException(status_code=400, detail="Missing story")
@@ -48,7 +59,11 @@ async def get_story_settings(story: str):
 
 
 @router.put("/api/story-settings", response_model=dict)
-async def put_story_settings(payload: StorySettingsPatch):
+async def put_story_settings(
+    payload: StorySettingsPatch,
+    story_settings_store: StorySettingsStore = Depends(get_story_settings_store),
+    lorebook_store: LorebookStore = Depends(get_lorebook_store),
+) -> dict:
     story = (payload.story or "").strip()
     if not story:
         raise HTTPException(status_code=400, detail="Missing story")

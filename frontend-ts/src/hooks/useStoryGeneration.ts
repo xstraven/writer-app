@@ -18,7 +18,7 @@ export function useStoryGeneration() {
     generationSettings,
     synopsis,
     lorebook,
-    memory,
+    context,
   } = useAppStore()
 
   // Mutation for generating story continuation (preview-only; UI decides what to do)
@@ -29,6 +29,18 @@ export function useStoryGeneration() {
       if (windowChars > 0 && draftText.length > windowChars) {
         draftText = draftText.slice(-windowChars)
       }
+
+      const effectiveContext = context
+        ? {
+            summary: (context.summary && context.summary.trim()) || synopsis,
+            npcs: [...context.npcs],
+            objects: [...context.objects],
+          }
+        : {
+            summary: synopsis,
+            npcs: [],
+            objects: [],
+          }
 
       const request: ContinueRequest = {
         draft_text: draftText,
@@ -43,11 +55,7 @@ export function useStoryGeneration() {
         use_context: true,
         // Preview-only: do not persist on backend; UI handles results
         preview_only: true,
-        context: {
-          summary: synopsis,
-          npcs: [],
-          objects: [],
-        },
+        context: effectiveContext,
         lore_ids: lorebook.filter(l => l.always_on).map(l => l.id),
       }
 
@@ -88,6 +96,18 @@ export function useStoryGeneration() {
       const last = chunks[chunks.length - 1]
       if (!last) throw new Error('No chunk to regenerate')
 
+      const effectiveContext = context
+        ? {
+            summary: (context.summary && context.summary.trim()) || synopsis,
+            npcs: [...context.npcs],
+            objects: [...context.objects],
+          }
+        : {
+            summary: synopsis,
+            npcs: [],
+            objects: [],
+          }
+
       const created = await regenerateSnippet({
         story: currentStory,
         target_snippet_id: last.id,
@@ -99,11 +119,7 @@ export function useStoryGeneration() {
         temperature: generationSettings.temperature,
         // Pass window to backend so it can truncate server-side
         max_context_window: generationSettings.max_context_window,
-        context: {
-          summary: synopsis,
-          npcs: [],
-          objects: [],
-        },
+        context: effectiveContext,
         use_context: true,
         set_active: true,
         lore_ids: lorebook.filter(l => l.always_on).map(l => l.id),

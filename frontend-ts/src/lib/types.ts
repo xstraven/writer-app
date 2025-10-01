@@ -163,6 +163,18 @@ export interface PromptPreviewResponse {
   messages: PromptMessage[];
 }
 
+export interface PromptPreviewRequest {
+  story?: string | null;
+  draft_text?: string;
+  instruction?: string;
+  model?: string | null;
+  use_memory?: boolean;
+  use_context?: boolean;
+  lore_ids?: string[] | null;
+  system_prompt?: string | null;
+  context?: ContextState | null;
+}
+
 // --- AI Seed Story ---
 export interface SeedStoryRequest {
   story: string;

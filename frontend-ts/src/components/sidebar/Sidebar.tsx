@@ -33,7 +33,19 @@ export function Sidebar() {
   const [promptMessages, setPromptMessages] = useReactState<Array<{ role: string; content: string }>>([])
   const [loadingPrompt, setLoadingPrompt] = useState(false)
 
-  const { currentStory, setCurrentStory, currentBranch, setCurrentBranch, branches, setBranches } = useAppStore()
+  const {
+    currentStory,
+    setCurrentStory,
+    currentBranch,
+    setCurrentBranch,
+    branches,
+    setBranches,
+    context,
+    generationSettings,
+    synopsis,
+    lorebook,
+    chunks,
+  } = useAppStore()
 
   // Load branches list for current story to populate selector
   const [loadingBranches, setLoadingBranches] = useState(false)
@@ -125,7 +137,34 @@ export function Sidebar() {
                 onClick={async () => {
                   setLoadingPrompt(true)
                   try {
-                    const res = await getPromptPreview(currentStory, '', undefined)
+                    let draftText = chunks.map(c => c.text).join('\n\n')
+                    const windowChars = Math.max(0, Math.floor((generationSettings.max_context_window ?? 0) * 3))
+                    if (windowChars > 0 && draftText.length > windowChars) {
+                      draftText = draftText.slice(-windowChars)
+                    }
+                    const effectiveContext = context
+                      ? {
+                          summary: (context.summary && context.summary.trim()) || synopsis,
+                          npcs: [...context.npcs],
+                          objects: [...context.objects],
+                        }
+                      : {
+                          summary: synopsis,
+                          npcs: [],
+                          objects: [],
+                        }
+
+                    const res = await getPromptPreview({
+                      story: currentStory,
+                      instruction: '',
+                      model: generationSettings.model,
+                      system_prompt: generationSettings.system_prompt,
+                      draft_text: draftText,
+                      use_memory: true,
+                      use_context: true,
+                      context: effectiveContext,
+                      lore_ids: lorebook.filter(l => l.always_on).map(l => l.id),
+                    })
                     setPromptMessages(res.messages || [])
                     setShowPrompt(true)
                   } finally {
