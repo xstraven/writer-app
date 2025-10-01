@@ -19,7 +19,7 @@ import {
 import { Modal } from '@/components/ui/modal'
 // import { GenerationSettings } from '@/components/sidebar/GenerationSettings'
 import { useAppStore } from '@/stores/appStore'
-import { getStories, healthCheck, llmHealthCheck, seedStoryAI } from '@/lib/api'
+import { getStories, healthCheck, llmHealthCheck, seedStoryAI, appendSnippet } from '@/lib/api'
 import { toast } from 'sonner'
 
 export function TopNavigation() {
@@ -86,13 +86,19 @@ export function TopNavigation() {
     }
   }
 
-  const handleCreateStory = () => {
+  const handleCreateStory = async () => {
     const storyName = prompt('Enter new story name:')
-    if (storyName && storyName.trim()) {
-      const newStoryName = storyName.trim()
-      setStories([...stories, newStoryName])
+    if (!storyName || !storyName.trim()) return
+    const newStoryName = storyName.trim()
+    try {
+      // Touch backend so the story appears in lists (create an empty root snippet)
+      await appendSnippet({ story: newStoryName, content: '', kind: 'user', parent_id: null, set_active: true, branch: 'main' })
+      await loadStories()
       setCurrentStory(newStoryName)
       toast.success(`Story "${newStoryName}" created`)
+    } catch (error) {
+      console.error('Failed to create story:', error)
+      toast.error(`Failed to create story: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 

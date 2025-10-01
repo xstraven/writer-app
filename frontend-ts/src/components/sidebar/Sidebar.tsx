@@ -82,7 +82,7 @@ export function Sidebar() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="main">main</SelectItem>
-                    {branches.map(b => (
+                    {branches.filter(b => b.name !== 'main').map(b => (
                       <SelectItem key={b.name} value={b.name}>{b.name}</SelectItem>
                     ))}
                   </SelectContent>

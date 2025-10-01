@@ -173,7 +173,17 @@ export const useAppStore = create<AppState>()(
       
       setContext: (context) => set({ context }),
       
-      setBranches: (branches) => set({ branches }),
+      setBranches: (branches) => set(() => {
+        const seen = new Set<string>()
+        const filtered = [] as BranchInfo[]
+        for (const b of branches) {
+          const name = (b.name || '').trim()
+          if (seen.has(name)) continue
+          seen.add(name)
+          filtered.push(b)
+        }
+        return { branches: filtered }
+      }),
       
       setTreeRows: (treeRows) => set({ treeRows }),
       
