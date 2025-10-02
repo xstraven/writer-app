@@ -1,25 +1,12 @@
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
 
-from storycraft.app.main import app as fastapi_app
-from storycraft.app import main as main_mod
-from storycraft.app.story_settings_store import StorySettingsStore
-from storycraft.app.lorebook_store import LorebookStore
-
-
-def test_story_settings_roundtrip(tmp_path):
-    # Point settings and lorebook stores at temp DuckDB/JSON
-    main_mod.story_settings_store = StorySettingsStore(path=tmp_path / "settings.duckdb")
-    main_mod.store = LorebookStore(path=tmp_path / "lore.json")
-
-    client = TestClient(fastapi_app)
+def test_story_settings_roundtrip(client):
     story = "Settings Story"
 
-    # Initial GET returns defaults (no crash)
-    r = client.get("/api/story-settings", params={"story": story})
-    assert r.status_code == 200
-    data = r.json()
+    response = client.get("/api/story-settings", params={"story": story})
+    assert response.status_code == 200
+    data = response.json()
     assert data["story"] == story
     assert "gallery" in data
 
@@ -37,6 +24,7 @@ def test_story_settings_roundtrip(tmp_path):
     }
     r = client.put("/api/story-settings", json=payload)
     assert r.status_code == 200
+    assert r.json()["ok"] is True
 
     r2 = client.get("/api/story-settings", params={"story": story})
     assert r2.status_code == 200
@@ -54,14 +42,9 @@ def test_story_settings_roundtrip(tmp_path):
     assert s["context"]["summary"] == "scene"
 
 
-def test_story_settings_lorebook_replace(tmp_path):
-    main_mod.story_settings_store = StorySettingsStore(path=tmp_path / "settings2.duckdb")
-    main_mod.store = LorebookStore(path=tmp_path / "lore2.json")
-
-    client = TestClient(fastapi_app)
+def test_story_settings_lorebook_replace(client):
     story = "Lore Replace"
 
-    # Seed two entries via standard CRUD
     r = client.post(
         "/api/lorebook",
         json={
@@ -89,7 +72,6 @@ def test_story_settings_lorebook_replace(tmp_path):
     )
     assert r.status_code == 200
 
-    # Replace with a single item via PUT /api/story-settings (lorebook snapshot)
     new_lore = [
         {
             "story": story,
@@ -106,11 +88,10 @@ def test_story_settings_lorebook_replace(tmp_path):
         json={"story": story, "lorebook": new_lore},
     )
     assert r.status_code == 200
+    assert r.json()["ok"] is True
 
-    # Only the new item should remain
     r = client.get("/api/lorebook", params={"story": story})
     assert r.status_code == 200
     items = r.json()
     assert len(items) == 1
     assert items[0]["name"] == "Gamma"
-

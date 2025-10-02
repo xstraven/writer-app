@@ -1,25 +1,10 @@
 from __future__ import annotations
 
-from pathlib import Path
-
-from storycraft.app.main import app as fastapi_app
-from storycraft.app import main as main_mod
-from storycraft.app import runtime as runtime_mod
-from storycraft.app.snippet_store import SnippetStore
-from storycraft.app.lorebook_store import LorebookStore
+from storycraft.app import config as config_mod
+from storycraft.app.models import LoreEntryCreate
 
 
-def test_prompt_preview_default_prompt_order(tmp_path):
-    # Use temp stores to avoid touching real data
-    runtime_mod.snippet_store = SnippetStore(path=tmp_path / "pp_story.duckdb")
-    runtime_mod.lorebook_store = LorebookStore(path=tmp_path / "pp_lore.json")
-    main_mod.snippet_store = runtime_mod.snippet_store
-    main_mod.store = runtime_mod.lorebook_store
-
-    from fastapi.testclient import TestClient
-
-    client = TestClient(fastapi_app)
-    # No instruction provided, should inject default [Prompt] at the end
+def test_prompt_preview_default_prompt_order(client):
     payload = {
         "draft_text": "A short draft.",
         "instruction": "",
@@ -29,28 +14,18 @@ def test_prompt_preview_default_prompt_order(tmp_path):
         "lore_ids": [],
         "system_prompt": None,
     }
-    r = client.post("/api/prompt-preview", json=payload)
-    assert r.status_code == 200
-    data = r.json()
-    msgs = data.get("messages", [])
-    # Should contain at least system + story + meta
-    assert len(msgs) >= 2
-    # Last user message should contain [Prompt] with default text
-    last = msgs[-1]
+    response = client.post("/api/prompt-preview", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    messages = data["messages"]
+    assert len(messages) >= 2
+    last = messages[-1]
     assert last["role"] == "user"
     assert "[Prompt]" in last["content"]
     assert "Continue the story" in last["content"]
 
 
-def test_prompt_preview_includes_context_details(tmp_path):
-    runtime_mod.snippet_store = SnippetStore(path=tmp_path / "ctx_story.duckdb")
-    runtime_mod.lorebook_store = LorebookStore(path=tmp_path / "ctx_lore.json")
-    main_mod.snippet_store = runtime_mod.snippet_store
-    main_mod.store = runtime_mod.lorebook_store
-
-    from fastapi.testclient import TestClient
-
-    client = TestClient(fastapi_app)
+def test_prompt_preview_includes_context_details(client):
     payload = {
         "draft_text": "The courtyard buzzed with intrigue.",
         "use_memory": False,
@@ -65,12 +40,12 @@ def test_prompt_preview_includes_context_details(tmp_path):
             ],
         },
     }
-    r = client.post("/api/prompt-preview", json=payload)
-    assert r.status_code == 200
-    data = r.json()
-    msgs = data.get("messages", [])
-    assert msgs and msgs[-1]["role"] == "user"
-    meta = msgs[-1]["content"]
+    response = client.post("/api/prompt-preview", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    messages = data["messages"]
+    assert messages and messages[-1]["role"] == "user"
+    meta = messages[-1]["content"]
     assert "[Story Description]" in meta
     assert "palace courtyard" in meta
     assert "[Context]" in meta
@@ -78,17 +53,7 @@ def test_prompt_preview_includes_context_details(tmp_path):
     assert "Sealed Scroll" in meta
 
 
-def test_continue_returns_stub_and_persists_when_story_given(tmp_path):
-    # Attach temporary stores
-    runtime_mod.snippet_store = SnippetStore(path=tmp_path / "cont_story.duckdb")
-    runtime_mod.lorebook_store = LorebookStore(path=tmp_path / "cont_lore.json")
-    main_mod.snippet_store = runtime_mod.snippet_store
-    main_mod.store = runtime_mod.lorebook_store
-
-    from fastapi.testclient import TestClient
-
-    client = TestClient(fastapi_app)
-
+def test_continue_persists_snippets_when_preview_only_false(client):
     story = "Unit Test Story"
     payload = {
         "draft_text": "Anna-Lena stood by the door.",
@@ -101,55 +66,76 @@ def test_continue_returns_stub_and_persists_when_story_given(tmp_path):
         "story": story,
         "system_prompt": None,
         "lore_ids": [],
+        "preview_only": False,
     }
-    r = client.post("/api/continue", json=payload)
-    assert r.status_code == 200
-    data = r.json()
-    # Continuation should be a non-empty string (stubbed or real)
+    response = client.post("/api/continue", json=payload)
+    assert response.status_code == 200
+    data = response.json()
     assert isinstance(data.get("continuation"), str)
-    assert data.get("continuation")
+    assert data["continuation"]
 
-    # Verify snippets path now contains at least root + continuation
-    r2 = client.get("/api/snippets/path", params={"story": story})
-    assert r2.status_code == 200
-    p = r2.json()
-    path = p.get("path", [])
-    assert len(path) >= 1
+    path_response = client.get("/api/snippets/path", params={"story": story})
+    assert path_response.status_code == 200
+    path_payload = path_response.json()
+    path = path_payload["path"]
+    assert len(path) == 2
+    assert path[0]["kind"] == "user"
+    assert path[0]["content"] == "Anna-Lena stood by the door."
+    assert path[1]["kind"] == "ai"
+    assert path[1]["content"] == data["continuation"]
+    assert data["continuation"] in path_payload["text"]
 
 
-def test_seed_and_continue_test_story_1(tmp_path):
-    # Point stores at temp files so seeding reads samples but writes into tmp DB/JSON
-    runtime_mod.snippet_store = SnippetStore(path=tmp_path / "seed_story.duckdb")
-    runtime_mod.lorebook_store = LorebookStore(path=tmp_path / "seed_lore.json")
-    main_mod.snippet_store = runtime_mod.snippet_store
-    main_mod.store = runtime_mod.lorebook_store
-
-    from fastapi.testclient import TestClient
-
-    client = TestClient(fastapi_app)
-
-    # Seed using default filenames derived from story slug
-    r = client.post("/api/dev/seed", json={"story": "Test Story 1", "purge": True})
-    assert r.status_code == 200
-    stats = r.json()
-    # Expect to import both chunks and lore from repo samples
-    assert stats.get("chunks_imported", 0) > 0
-    assert stats.get("lore_imported", 0) > 0
-
-    # Continue from the seeded story's branch using stub LLM
-    r2 = client.post(
-        "/api/continue",
-        json={
-            "draft_text": "",  # rely on history_text from snippets
-            "instruction": "",
-            "max_tokens": 64,
-            "temperature": 0.2,
-            "use_memory": False,
-            "use_context": False,
-            "story": "Test Story 1",
-        },
+def test_prompt_preview_auto_selects_lore(client, lore_store):
+    story = "Lore Story"
+    entry = lore_store.create(
+        LoreEntryCreate(
+            story=story,
+            name="Ancient Wyrm",
+            kind="creature",
+            summary="An elder dragon that wakes when the wyrm-song plays.",
+            tags=["dragon"],
+            keys=["wyrm"],
+            always_on=False,
+        )
     )
-    assert r2.status_code == 200
-    cont = r2.json()
-    assert isinstance(cont.get("continuation"), str)
-    assert cont.get("continuation")
+
+    payload = {
+        "draft_text": "The wyrm-song echoed through the caverns.",
+        "instruction": "",
+        "use_memory": False,
+        "use_context": False,
+        "story": story,
+        "lore_ids": [],
+        "system_prompt": None,
+    }
+    response = client.post("/api/prompt-preview", json=payload)
+    assert response.status_code == 200
+    meta = response.json()["messages"][-1]["content"]
+    assert "[Lorebook]" in meta
+    assert entry.name in meta
+    assert "elder dragon" in meta.lower()
+
+
+def test_continue_returns_stub_without_api_key(client, monkeypatch):
+    monkeypatch.delenv("STORYCRAFT_OPENROUTER_API_KEY", raising=False)
+    config_mod.get_settings.cache_clear()
+
+    payload = {
+        "draft_text": "Testing stub behavior.",
+        "instruction": "",
+        "max_tokens": 16,
+        "temperature": 0.1,
+        "model": None,
+        "use_memory": False,
+        "use_context": False,
+        "story": None,
+        "preview_only": True,
+    }
+    response = client.post("/api/continue", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "[DEV MODE]" in data["continuation"]
+    assert data["model"]
+
+    config_mod.get_settings.cache_clear()
