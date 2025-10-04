@@ -1,9 +1,14 @@
+from storycraft.app.services.supabase_client import (
+    get_supabase_client,
+    reset_supabase_client,
+)
 from storycraft.app.snippet_store import SnippetStore
 
 
 def test_snippet_store_branching(tmp_path):
-    db_path = tmp_path / "story.duckdb"
-    store = SnippetStore(path=db_path)
+    reset_supabase_client()
+    client = get_supabase_client()
+    store = SnippetStore(client=client)
     story = "Test Story"
 
     # Create root (user input)

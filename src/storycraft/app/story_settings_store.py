@@ -1,78 +1,55 @@
 from __future__ import annotations
 
 import json
-import threading
-from pathlib import Path
 from typing import Any, Dict, Optional
+
+from supabase import Client
+
+from .services.supabase_client import get_supabase_client
 
 
 class StorySettingsStore:
-    """DuckDB-backed per-story settings store.
+    """Supabase-backed per-story settings store."""
 
-    Schema:
-      - story TEXT PRIMARY KEY
-      - data  TEXT (JSON payload)
-    """
+    def __init__(self, *, client: Client | None = None, table: str = "story_settings") -> None:
+        self._client = client or get_supabase_client()
+        self._table_name = table
 
-    def __init__(self, path: str | Path = "data/story.duckdb") -> None:
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
-        self._init_db()
-
-    def _conn(self):
-        import duckdb  # type: ignore
-
-        return duckdb.connect(self.path.as_posix())
-
-    def _init_db(self) -> None:
-        with self._conn() as con:
-            con.execute(
-                """
-                CREATE TABLE IF NOT EXISTS story_settings (
-                    story TEXT PRIMARY KEY,
-                    data TEXT
-                )
-                """
-            )
+    def _table(self):
+        return self._client.table(self._table_name)
 
     def get(self, story: str) -> Optional[Dict[str, Any]]:
         story = (story or "").strip()
         if not story:
             return None
-        with self._lock, self._conn() as con:
-            cur = con.execute("SELECT data FROM story_settings WHERE story = ?", [story])
-            row = cur.fetchone()
-            if not row:
-                return None
-            try:
-                return json.loads(row[0] or "{}")
-            except Exception:
-                return None
+        res = self._table().select("data").eq("story", story).limit(1).execute()
+        rows = res.data or []
+        if not rows:
+            return None
+        raw = rows[0].get("data") or "{}"
+        try:
+            return json.loads(raw)
+        except Exception:
+            return None
 
     def set(self, story: str, data: Dict[str, Any]) -> None:
         story = (story or "").strip()
         if not story:
             return
         payload = json.dumps(data, ensure_ascii=False)
-        with self._lock, self._conn() as con:
-            con.execute(
-                "INSERT INTO story_settings(story, data) VALUES(?, ?) ON CONFLICT(story) DO UPDATE SET data = excluded.data",
-                [story, payload],
-            )
+        self._table().upsert(
+            {"story": story, "data": payload},
+            on_conflict="story",
+        ).execute()
 
     def update(self, story: str, partial: Dict[str, Any]) -> Dict[str, Any]:
         current = self.get(story) or {}
-        # Shallow merge only for known keys; nested context can be replaced entirely by client
         merged = {**current, **partial}
         self.set(story, merged)
         return merged
 
     def delete_story(self, story: str) -> None:
-        with self._lock, self._conn() as con:
-            con.execute("DELETE FROM story_settings WHERE story = ?", [story])
+        self._table().delete().eq("story", story).execute()
 
     def delete_all(self) -> None:
-        with self._lock, self._conn() as con:
-            con.execute("DELETE FROM story_settings")
-
+        self._table().delete().execute()

@@ -12,7 +12,9 @@ dependencies = [
   "pydantic-settings>=2.4",
   "httpx>=0.27",
   "python-multipart>=0.0.9",
-  "duckdb>=0.10",
+  "supabase>=2.21.1",
+  "psycopg[binary]>=3.2",
+  "modal>=1.1.4",
 ]
 
 

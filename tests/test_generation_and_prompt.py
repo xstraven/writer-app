@@ -119,6 +119,7 @@ def test_prompt_preview_auto_selects_lore(client, lore_store):
 
 def test_continue_returns_stub_without_api_key(client, monkeypatch):
     monkeypatch.delenv("STORYCRAFT_OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setenv("STORYCRAFT_OPENROUTER_API_KEY", "")
     config_mod.get_settings.cache_clear()
 
     payload = {

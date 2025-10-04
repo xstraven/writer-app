@@ -11,16 +11,23 @@ from storycraft.app import runtime as runtime_mod
 from storycraft.app.base_settings_store import BaseSettingsStore
 from storycraft.app.lorebook_store import LorebookStore
 from storycraft.app.main import app as fastapi_app
+from storycraft.app.services.supabase_client import (
+    get_supabase_client,
+    reset_supabase_client,
+)
 from storycraft.app.snippet_store import SnippetStore
 from storycraft.app.story_settings_store import StorySettingsStore
 
 
 @pytest.fixture
 def isolated_stores(tmp_path) -> Generator[Dict[str, Any], None, None]:
-    snippet = SnippetStore(path=tmp_path / "snippets.duckdb")
-    lore = LorebookStore(path=tmp_path / "lore.json")
-    story_settings = StorySettingsStore(path=tmp_path / "story_settings.duckdb")
-    base_settings = BaseSettingsStore(path=tmp_path / "base_settings.duckdb")
+    reset_supabase_client()
+    client = get_supabase_client()
+
+    snippet = SnippetStore(client=client)
+    lore = LorebookStore(client=client, legacy_json=tmp_path / "lore.json")
+    story_settings = StorySettingsStore(client=client)
+    base_settings = BaseSettingsStore(path=tmp_path / "base_settings.json")
 
     original = {
         "snippet": runtime_mod.snippet_store,

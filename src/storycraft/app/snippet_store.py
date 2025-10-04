@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
-from typing import Iterable, List, Optional, Tuple
+from typing import Iterable, List, Optional
+
+from supabase import Client
+
+from .services.supabase_client import get_supabase_client
 
 
 @dataclass
@@ -19,116 +21,95 @@ class SnippetRow:
     created_at: datetime
 
 
+def _parse_datetime(value: datetime | str) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        text = value.replace("Z", "+00:00") if value.endswith("Z") else value
+        return datetime.fromisoformat(text)
+    raise TypeError(f"Unsupported datetime value: {value!r}")
+
+
 class SnippetStore:
-    """DuckDB-backed persistent store for story snippets with branching.
+    def __init__(
+        self,
+        *,
+        client: Client | None = None,
+        table: str = "snippets",
+        branches_table: str = "branches",
+    ) -> None:
+        self._client = client or get_supabase_client()
+        self._table_name = table
+        self._branches_table = branches_table
 
-    Table schema:
-      - id TEXT PRIMARY KEY
-      - story TEXT NOT NULL
-      - parent_id TEXT NULL
-      - child_id TEXT NULL  (the selected active child in the mainline)
-      - kind TEXT NOT NULL  (e.g., 'user', 'ai')
-      - content TEXT NOT NULL
-      - created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    def _table(self):
+        return self._client.table(self._table_name)
 
-    Notes on branching:
-      - Multiple children can exist for the same (story, parent_id). The parent's child_id points
-        to the currently selected child in the "main" branch.
-      - The main branch path is computed by starting at the root (parent_id IS NULL) and following
-        child_id pointers until there is no child.
-    """
+    def _branches(self):
+        return self._client.table(self._branches_table)
 
-    def __init__(self, path: str | Path = "data/story.duckdb") -> None:
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
-        self._init_db()
-
-    def _conn(self):
-        # Lazy import to avoid test-time import issues if duckdb is missing.
-        import duckdb  # type: ignore
-
-        return duckdb.connect(self.path.as_posix())
-
-    def _init_db(self) -> None:
-        with self._conn() as con:
-            con.execute(
-                """
-                CREATE TABLE IF NOT EXISTS snippets (
-                    id TEXT PRIMARY KEY,
-                    story TEXT NOT NULL,
-                    parent_id TEXT,
-                    child_id TEXT,
-                    kind TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-            con.execute("CREATE INDEX IF NOT EXISTS idx_snippets_story ON snippets(story)")
-            con.execute(
-                "CREATE INDEX IF NOT EXISTS idx_snippets_story_parent ON snippets(story, parent_id)"
-            )
-            con.execute(
-                """
-                CREATE TABLE IF NOT EXISTS branches (
-                    story TEXT NOT NULL,
-                    name TEXT NOT NULL,
-                    head_id TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (story, name)
-                )
-                """
-            )
-
-    def _row_to_obj(self, row: Tuple) -> SnippetRow:
+    def _row_to_obj(self, row: dict) -> SnippetRow:
         return SnippetRow(
-            id=row[0],
-            story=row[1],
-            parent_id=row[2],
-            child_id=row[3],
-            kind=row[4],
-            content=row[5],
-            created_at=row[6],
+            id=row["id"],
+            story=row["story"],
+            parent_id=row.get("parent_id"),
+            child_id=row.get("child_id"),
+            kind=row["kind"],
+            content=row["content"],
+            created_at=_parse_datetime(row["created_at"]),
         )
 
+    def _fetch_snippet(self, snippet_id: str) -> Optional[dict]:
+        res = (
+            self._table()
+            .select("*")
+            .eq("id", snippet_id)
+            .limit(1)
+            .execute()
+        )
+        data = res.data or []
+        return data[0] if data else None
+
+    def _fetch_story_snippets(self, story: str) -> List[dict]:
+        res = self._table().select("*").eq("story", story).execute()
+        return res.data or []
+
     def get(self, snippet_id: str) -> Optional[SnippetRow]:
-        with self._lock, self._conn() as con:
-            cur = con.execute("SELECT * FROM snippets WHERE id = ?", [snippet_id])
-            row = cur.fetchone()
-            return self._row_to_obj(row) if row else None
+        row = self._fetch_snippet(snippet_id)
+        return self._row_to_obj(row) if row else None
 
     def list_children(self, story: str, parent_id: str) -> List[SnippetRow]:
-        with self._lock, self._conn() as con:
-            cur = con.execute(
-                "SELECT * FROM snippets WHERE story = ? AND parent_id = ? ORDER BY created_at ASC",
-                [story, parent_id],
-            )
-            return [self._row_to_obj(r) for r in cur.fetchall()]
+        res = (
+            self._table()
+            .select("*")
+            .eq("story", story)
+            .eq("parent_id", parent_id)
+            .order("created_at", desc=False)
+            .execute()
+        )
+        return [self._row_to_obj(r) for r in res.data or []]
 
     def has_children(self, story: str, parent_id: str) -> bool:
-        with self._lock, self._conn() as con:
-            cur = con.execute(
-                "SELECT 1 FROM snippets WHERE story = ? AND parent_id = ? LIMIT 1",
-                [story, parent_id],
-            )
-            return cur.fetchone() is not None
+        res = (
+            self._table()
+            .select("id")
+            .eq("story", story)
+            .eq("parent_id", parent_id)
+            .limit(1)
+            .execute()
+        )
+        return bool(res.data)
 
     def _get_root(self, story: str) -> Optional[SnippetRow]:
-        with self._lock, self._conn() as con:
-            cur = con.execute(
-                "SELECT * FROM snippets WHERE story = ? AND parent_id IS NULL ORDER BY created_at DESC LIMIT 1",
-                [story],
-            )
-            row = cur.fetchone()
-            return self._row_to_obj(row) if row else None
+        rows = self._fetch_story_snippets(story)
+        roots = [r for r in rows if r.get("parent_id") is None]
+        if not roots:
+            return None
+        roots.sort(key=lambda r: _parse_datetime(r["created_at"]), reverse=True)
+        return self._row_to_obj(roots[0])
 
-    def _set_active_child(self, story: str, parent_id: str, child_id: str) -> None:
-        with self._lock, self._conn() as con:
-            con.execute(
-                "UPDATE snippets SET child_id = ? WHERE story = ? AND id = ?",
-                [child_id, story, parent_id],
-            )
+    def _set_active_child(self, story: str, parent_id: str, child_id: Optional[str]) -> None:
+        self._table().update({"child_id": child_id}).eq("story", story).eq("id", parent_id).execute()
 
     def create_snippet(
         self,
@@ -140,22 +121,25 @@ class SnippetStore:
         set_active: Optional[bool] = None,
     ) -> SnippetRow:
         snippet_id = uuid.uuid4().hex
-        with self._lock, self._conn() as con:
-            con.execute(
-                "INSERT INTO snippets(id, story, parent_id, child_id, kind, content) VALUES (?, ?, ?, NULL, ?, ?)",
-                [snippet_id, story, parent_id, kind, content],
-            )
-        # Determine active selection behavior.
+        payload = {
+            "id": snippet_id,
+            "story": story,
+            "parent_id": parent_id,
+            "child_id": None,
+            "kind": kind,
+            "content": content,
+        }
+        self._table().insert(payload).execute()
         if parent_id:
             parent = self.get(parent_id)
             if parent:
-                # If caller didn't specify, set active only if no active child exists yet.
-                should_activate = (
-                    (set_active is None and not parent.child_id) or (set_active is True)
-                )
+                should_activate = (set_active is None and not parent.child_id) or (set_active is True)
                 if should_activate:
                     self._set_active_child(story, parent_id, snippet_id)
-        return self.get(snippet_id)  # type: ignore
+        row = self._fetch_snippet(snippet_id)
+        if not row:
+            raise RuntimeError("Failed to fetch inserted snippet")
+        return self._row_to_obj(row)
 
     def regenerate_snippet(
         self,
@@ -169,13 +153,11 @@ class SnippetStore:
         target = self.get(target_snippet_id)
         if not target:
             raise ValueError("target snippet not found")
-        parent_id = target.parent_id
-        # Create sibling (another child of the same parent)
         return self.create_snippet(
             story=story,
             content=content,
             kind=kind,
-            parent_id=parent_id,
+            parent_id=target.parent_id,
             set_active=set_active,
         )
 
@@ -186,19 +168,15 @@ class SnippetStore:
         self._set_active_child(story, parent_id, child_id)
 
     def main_path(self, story: str) -> List[SnippetRow]:
-        """Return the list of snippets along the main branch (root -> head)."""
         root = self._get_root(story)
         if not root:
             return []
         path: List[SnippetRow] = [root]
         cursor = root
-        visited = set([root.id])
+        visited = {root.id}
         while cursor.child_id:
             child = self.get(cursor.child_id)
-            if not child or child.story != story:
-                break
-            if child.id in visited:
-                # Safety against cycles
+            if not child or child.story != story or child.id in visited:
                 break
             path.append(child)
             visited.add(child.id)
@@ -206,7 +184,6 @@ class SnippetStore:
         return path
 
     def path_from_head(self, story: str, head_id: str) -> List[SnippetRow]:
-        """Return the chain from root to the given head by following parents backwards."""
         head = self.get(head_id)
         if not head or head.story != story:
             return []
@@ -235,211 +212,193 @@ class SnippetStore:
     def update_snippet(
         self, *, snippet_id: str, content: Optional[str] = None, kind: Optional[str] = None
     ) -> Optional[SnippetRow]:
-        if content is None and kind is None:
-            return self.get(snippet_id)
-        sets = []
-        vals: List[object] = []
+        updates = {}
         if content is not None:
-            sets.append("content = ?")
-            vals.append(content)
+            updates["content"] = content
         if kind is not None:
-            sets.append("kind = ?")
-            vals.append(kind)
-        vals.extend([snippet_id])
-        sql = f"UPDATE snippets SET {', '.join(sets)} WHERE id = ?"
-        with self._lock, self._conn() as con:
-            con.execute(sql, vals)
+            updates["kind"] = kind
+        if not updates:
+            return self.get(snippet_id)
+        self._table().update(updates).eq("id", snippet_id).execute()
         return self.get(snippet_id)
 
     def insert_above(
-        self, *, story: str, target_snippet_id: str, content: str, kind: str = "user", set_active: bool = True
+        self,
+        *,
+        story: str,
+        target_snippet_id: str,
+        content: str,
+        kind: str = "user",
+        set_active: bool = True,
     ) -> SnippetRow:
         target = self.get(target_snippet_id)
         if not target or target.story != story:
             raise ValueError("target snippet not found")
         old_parent_id = target.parent_id
         new_id = uuid.uuid4().hex
-        with self._lock, self._conn() as con:
-            # Insert new between target.parent and target
-            con.execute(
-                "INSERT INTO snippets(id, story, parent_id, child_id, kind, content) VALUES (?, ?, ?, ?, ?, ?)",
-                [new_id, story, old_parent_id, target.id, kind, content],
-            )
-            # Update target to point to new as parent
-            con.execute("UPDATE snippets SET parent_id = ? WHERE id = ?", [new_id, target.id])
-            # If parent pointed to target on mainline and we should activate, switch to new
-            if old_parent_id and set_active:
-                cur = con.execute("SELECT child_id FROM snippets WHERE id = ?", [old_parent_id])
-                row = cur.fetchone()
-                if row and row[0] == target.id:
-                    con.execute("UPDATE snippets SET child_id = ? WHERE id = ?", [new_id, old_parent_id])
-        return self.get(new_id)  # type: ignore
+        self._table().insert(
+            {
+                "id": new_id,
+                "story": story,
+                "parent_id": old_parent_id,
+                "child_id": target.id,
+                "kind": kind,
+                "content": content,
+            }
+        ).execute()
+        self._table().update({"parent_id": new_id}).eq("id", target.id).execute()
+        if old_parent_id and set_active:
+            parent = self.get(old_parent_id)
+            if parent and parent.child_id == target.id:
+                self._set_active_child(story, old_parent_id, new_id)
+        new_row = self._fetch_snippet(new_id)
+        if not new_row:
+            raise RuntimeError("Failed to fetch inserted snippet")
+        return self._row_to_obj(new_row)
 
     def insert_below(
-        self, *, story: str, parent_snippet_id: str, content: str, kind: str = "user", set_active: bool = True
+        self,
+        *,
+        story: str,
+        parent_snippet_id: str,
+        content: str,
+        kind: str = "user",
+        set_active: bool = True,
     ) -> SnippetRow:
         parent = self.get(parent_snippet_id)
         if not parent or parent.story != story:
             raise ValueError("parent snippet not found")
         new_id = uuid.uuid4().hex
-        with self._lock, self._conn() as con:
-            # Insert new as child of parent
-            con.execute(
-                "INSERT INTO snippets(id, story, parent_id, child_id, kind, content) VALUES (?, ?, ?, NULL, ?, ?)",
-                [new_id, story, parent.id, kind, content],
-            )
-            # If parent had an active child, chain it under new
-            if parent.child_id:
-                con.execute(
-                    "UPDATE snippets SET parent_id = ? WHERE id = ?",
-                    [new_id, parent.child_id],
-                )
-                con.execute(
-                    "UPDATE snippets SET child_id = ? WHERE id = ?",
-                    [parent.child_id, new_id],
-                )
-            # Set new as active child if requested
-            if set_active:
-                con.execute("UPDATE snippets SET child_id = ? WHERE id = ?", [new_id, parent.id])
-        return self.get(new_id)  # type: ignore
+        self._table().insert(
+            {
+                "id": new_id,
+                "story": story,
+                "parent_id": parent.id,
+                "child_id": None,
+                "kind": kind,
+                "content": content,
+            }
+        ).execute()
+        if parent.child_id:
+            self._table().update({"parent_id": new_id}).eq("id", parent.child_id).execute()
+            self._table().update({"child_id": parent.child_id}).eq("id", new_id).execute()
+        if set_active:
+            self._set_active_child(story, parent.id, new_id)
+        new_row = self._fetch_snippet(new_id)
+        if not new_row:
+            raise RuntimeError("Failed to fetch inserted snippet")
+        return self._row_to_obj(new_row)
 
     def delete_snippet(self, *, story: str, snippet_id: str) -> bool:
         target = self.get(snippet_id)
         if not target or target.story != story:
             return False
-        # Root cannot be deleted
         if target.parent_id is None:
             raise ValueError("cannot delete the root snippet")
-
-        with self._lock, self._conn() as con:
-            # Fetch parent and children
-            parent_id = target.parent_id
-            # Determine children of target
-            cur = con.execute(
-                "SELECT id FROM snippets WHERE story = ? AND parent_id = ? ORDER BY created_at ASC",
-                [story, target.id],
-            )
-            children_ids = [row[0] for row in cur.fetchall()]
-
-            # If there are children, reparent them to target's parent.
-            if children_ids:
-                # Promote the active child on the mainline if parent currently points to target
-                # Choose active if target.child_id set; else pick the most recent child
-                active_child_id = target.child_id if target.child_id else children_ids[-1]
-
-                # Update each child to point to target's parent
-                for cid in children_ids:
-                    con.execute(
-                        "UPDATE snippets SET parent_id = ? WHERE id = ?",
-                        [parent_id, cid],
-                    )
-
-                # If parent currently selects target as active, switch to the chosen child
-                curp = con.execute("SELECT child_id FROM snippets WHERE id = ?", [parent_id])
-                prow = curp.fetchone()
-                if prow and prow[0] == target.id:
-                    con.execute(
-                        "UPDATE snippets SET child_id = ? WHERE id = ?",
-                        [active_child_id, parent_id],
-                    )
-            else:
-                # Leaf: if parent points to this as active, clear pointer
-                curp = con.execute("SELECT child_id FROM snippets WHERE id = ?", [parent_id])
-                prow = curp.fetchone()
-                if prow and prow[0] == target.id:
-                    con.execute("UPDATE snippets SET child_id = NULL WHERE id = ?", [parent_id])
-
-            # Finally, delete the target snippet
-            con.execute("DELETE FROM snippets WHERE id = ?", [snippet_id])
+        children = self.list_children(story, target.id)
+        if children:
+            active_child_id = target.child_id or children[-1].id
+            for child in children:
+                self._table().update({"parent_id": target.parent_id}).eq("id", child.id).execute()
+            parent = self.get(target.parent_id)
+            if parent and parent.child_id == target.id:
+                self._set_active_child(story, parent.id, active_child_id)
+        else:
+            parent = self.get(target.parent_id)
+            if parent and parent.child_id == target.id:
+                self._set_active_child(story, parent.id, None)
+        self._table().delete().eq("id", snippet_id).execute()
         return True
 
     def delete_story(self, story: str) -> None:
-        """Delete all snippets and branches for a story."""
-        with self._lock, self._conn() as con:
-            con.execute("DELETE FROM branches WHERE story = ?", [story])
-            con.execute("DELETE FROM snippets WHERE story = ?", [story])
+        self._branches().delete().eq("story", story).execute()
+        self._table().delete().eq("story", story).execute()
 
     def list_stories(self) -> list[str]:
-        with self._lock, self._conn() as con:
-            cur = con.execute("SELECT DISTINCT story FROM snippets ORDER BY story ASC")
-            return [r[0] for r in cur.fetchall()]
+        res = self._table().select("story").execute()
+        stories = {row["story"] for row in res.data or [] if row.get("story")}
+        return sorted(stories)
 
     def delete_all(self) -> None:
-        """Delete all snippets and branches across all stories."""
-        with self._lock, self._conn() as con:
-            con.execute("DELETE FROM branches")
-            con.execute("DELETE FROM snippets")
+        self._branches().delete().execute()
+        self._table().delete().execute()
 
-    # Branch name helpers
     def upsert_branch(self, *, story: str, name: str, head_id: str) -> None:
-        with self._lock, self._conn() as con:
-            con.execute(
-                "INSERT INTO branches(story, name, head_id) VALUES(?, ?, ?) ON CONFLICT(story, name) DO UPDATE SET head_id = excluded.head_id",
-                [story, name, head_id],
-            )
+        self._branches().upsert(
+            {"story": story, "name": name, "head_id": head_id},
+            on_conflict="story,name",
+        ).execute()
 
     def list_branches(self, story: str) -> List[tuple]:
-        with self._lock, self._conn() as con:
-            cur = con.execute(
-                "SELECT story, name, head_id, created_at FROM branches WHERE story = ? ORDER BY created_at DESC",
-                [story],
+        res = (
+            self._branches()
+            .select("story,name,head_id,created_at")
+            .eq("story", story)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        rows = res.data or []
+        return [
+            (
+                r["story"],
+                r["name"],
+                r["head_id"],
+                _parse_datetime(r["created_at"]),
             )
-            return list(cur.fetchall())
+            for r in rows
+        ]
 
     def delete_branch(self, *, story: str, name: str) -> None:
-        with self._lock, self._conn() as con:
-            con.execute("DELETE FROM branches WHERE story = ? AND name = ?", [story, name])
+        self._branches().delete().eq("story", story).eq("name", name).execute()
 
-    # --- Duplication helpers ---
     def _list_all_snippets(self, story: str) -> List[SnippetRow]:
-        with self._lock, self._conn() as con:
-            cur = con.execute("SELECT * FROM snippets WHERE story = ? ORDER BY created_at ASC", [story])
-            return [self._row_to_obj(r) for r in cur.fetchall()]
+        res = (
+            self._table()
+            .select("*")
+            .eq("story", story)
+            .order("created_at", desc=False)
+            .execute()
+        )
+        return [self._row_to_obj(r) for r in res.data or []]
 
     def duplicate_story_all(self, *, source: str, target: str) -> dict:
-        """Duplicate all snippets and branches from source story into target story.
-
-        Generates new ids for all snippets and remaps parent/child references.
-        Returns a mapping dict with keys: id_map, head_map.
-        """
         rows = self._list_all_snippets(source)
+        if not rows:
+            return {"id_map": {}}
         id_map: dict[str, str] = {r.id: uuid.uuid4().hex for r in rows}
-        with self._lock, self._conn() as con:
-            for r in rows:
-                con.execute(
-                    "INSERT INTO snippets(id, story, parent_id, child_id, kind, content, created_at) VALUES(?, ?, ?, ?, ?, ?, ?)",
-                    [
-                        id_map[r.id],
-                        target,
-                        (id_map.get(r.parent_id) if r.parent_id else None),
-                        (id_map.get(r.child_id) if r.child_id else None),
-                        r.kind,
-                        r.content,
-                        r.created_at,
-                    ],
-                )
-            # Copy branches
-            curb = con.execute("SELECT name, head_id FROM branches WHERE story = ?", [source])
-            for name, head_id in curb.fetchall():
-                new_head = id_map.get(head_id)
-                if new_head:
-                    con.execute(
-                        "INSERT INTO branches(story, name, head_id) VALUES(?, ?, ?) ON CONFLICT(story, name) DO UPDATE SET head_id = excluded.head_id",
-                        [target, name, new_head],
-                    )
+        inserts = []
+        for r in rows:
+            inserts.append(
+                {
+                    "id": id_map[r.id],
+                    "story": target,
+                    "parent_id": id_map.get(r.parent_id) if r.parent_id else None,
+                    "child_id": id_map.get(r.child_id) if r.child_id else None,
+                    "kind": r.kind,
+                    "content": r.content,
+                    "created_at": r.created_at.isoformat(),
+                }
+            )
+        self._table().insert(inserts).execute()
+        branch_resp = (
+            self._branches()
+            .select("name,head_id")
+            .eq("story", source)
+            .execute()
+        )
+        for row in branch_resp.data or []:
+            head_id = row.get("head_id")
+            new_head = id_map.get(head_id) if head_id else None
+            if new_head:
+                self._branches().upsert(
+                    {"story": target, "name": row["name"], "head_id": new_head},
+                    on_conflict="story,name",
+                ).execute()
         return {"id_map": id_map}
 
     def duplicate_story_main(self, *, source: str, target: str) -> dict:
-        """Duplicate only the main branch path from source to target.
-
-        Prefers branch 'main' if present; else uses legacy main_path.
-        Creates a 'main' branch in target pointing to the new head.
-        """
-        # Determine source main path
-        # Prefer branch 'main'
-        path = []
         branches = self.list_branches(source)
-        main_branch = next((b for b in branches if b[1] == 'main'), None)
+        main_branch = next((b for b in branches if b[1] == "main"), None)
         if main_branch:
             path = self.path_from_head(source, main_branch[2])
         else:
@@ -447,25 +406,22 @@ class SnippetStore:
         if not path:
             return {"id_map": {}}
         id_map: dict[str, str] = {r.id: uuid.uuid4().hex for r in path}
-        with self._lock, self._conn() as con:
-            for idx, r in enumerate(path):
-                # Compute remapped parent for this path only
-                new_parent = id_map.get(r.parent_id) if r.parent_id in id_map else None
-                con.execute(
-                    "INSERT INTO snippets(id, story, parent_id, child_id, kind, content, created_at) VALUES(?, ?, ?, NULL, ?, ?, ?)",
-                    [
-                        id_map[r.id],
-                        target,
-                        new_parent,
-                        r.kind,
-                        r.content,
-                        r.created_at,
-                    ],
-                )
-            # Create branch 'main' pointing to new head
-            new_head = id_map[path[-1].id]
-            con.execute(
-                "INSERT INTO branches(story, name, head_id) VALUES(?, ?, ?) ON CONFLICT(story, name) DO UPDATE SET head_id = excluded.head_id",
-                [target, 'main', new_head],
+        inserts = []
+        for r in path:
+            inserts.append(
+                {
+                    "id": id_map[r.id],
+                    "story": target,
+                    "parent_id": id_map.get(r.parent_id) if r.parent_id else None,
+                    "child_id": None,
+                    "kind": r.kind,
+                    "content": r.content,
+                    "created_at": r.created_at.isoformat(),
+                }
             )
+        self._table().insert(inserts).execute()
+        self._branches().upsert(
+            {"story": target, "name": "main", "head_id": id_map[path[-1].id]},
+            on_conflict="story,name",
+        ).execute()
         return {"id_map": id_map}

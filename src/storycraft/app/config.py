@@ -24,6 +24,10 @@ class Settings(BaseSettings):
         "http://127.0.0.1:8000",
     ]
 
+    # Storage
+    supabase_url: Optional[str] = None
+    supabase_service_key: Optional[str] = None
+
 
 @lru_cache
 def get_settings() -> Settings:
