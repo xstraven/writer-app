@@ -22,6 +22,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3001",
         "http://localhost:8000",
         "http://127.0.0.1:8000",
+        "https://writer-app-one.vercel.app",
     ]
     cors_origin_regex: Optional[str] = r"https://.*\\.vercel\\.app"
 
