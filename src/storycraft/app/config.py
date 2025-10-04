@@ -23,6 +23,7 @@ class Settings(BaseSettings):
         "http://localhost:8000",
         "http://127.0.0.1:8000",
     ]
+    cors_origin_regex: Optional[str] = r"https://.*\.vercel\.app"
 
     # Storage
     supabase_url: Optional[str] = None

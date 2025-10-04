@@ -23,13 +23,17 @@ from .routes.story_settings import router as story_settings_router
 settings = get_settings()
 app = FastAPI(title="Storycraft API", version="0.1.0")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+cors_config = {
+    "allow_origins": settings.cors_origins,
+    "allow_credentials": True,
+    "allow_methods": ["*"],
+    "allow_headers": ["*"],
+}
+
+if settings.cors_origin_regex:
+    cors_config["allow_origin_regex"] = settings.cors_origin_regex
+
+app.add_middleware(CORSMiddleware, **cors_config)
 
 app.include_router(health_router)
 app.include_router(state_router)
