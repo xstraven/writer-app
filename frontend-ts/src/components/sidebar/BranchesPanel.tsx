@@ -61,16 +61,18 @@ export function BranchesPanel() {
       setGraphLoading(true)
       // Build list of branches to fetch, include 'main' at top
       const names = ['main', ...branches.map(b => b.name).filter(n => n !== 'main')]
-      const entries = await Promise.all(names.map(async (name) => {
-        try {
-          const res = name === 'main' 
-            ? await getBranchPath(currentStory)
-            : await getBranchPath(currentStory, { branch: name })
-          return [name, res.path || []] as const
-        } catch (e) {
-          return [name, []] as const
-        }
-      }))
+      const entries = await Promise.all(
+        names.map(async (name): Promise<[string, Snippet[]]> => {
+          try {
+            const res = name === 'main'
+              ? await getBranchPath(currentStory)
+              : await getBranchPath(currentStory, { branch: name })
+            return [name, res.path ?? []]
+          } catch (error) {
+            return [name, []]
+          }
+        }),
+      )
       const map: Record<string, Snippet[]> = {}
       for (const [name, path] of entries) map[name] = path
       setBranchPaths(map)

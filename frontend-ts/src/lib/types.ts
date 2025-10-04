@@ -97,6 +97,7 @@ export interface RegenerateAIRequest {
   set_active?: boolean;
   lore_ids?: string[] | null;
   branch?: string;
+  max_context_window?: number;
 }
 
 export interface ContinueRequest {
@@ -198,6 +199,7 @@ export interface LoreGenerateRequest {
   model?: string | null;
   max_items?: number;
   strategy?: 'append' | 'replace';
+  names?: string[] | null;
 }
 
 export interface LoreGenerateResponse {
