@@ -231,6 +231,7 @@ class InsertAboveRequest(BaseModel):
     content: str
     kind: str = "user"
     set_active: bool = True
+    branch: Optional[str] = None
 
 
 class InsertBelowRequest(BaseModel):
@@ -239,6 +240,7 @@ class InsertBelowRequest(BaseModel):
     content: str
     kind: str = "user"
     set_active: bool = True
+    branch: Optional[str] = None
 
 
 class DeleteSnippetResponse(BaseModel):

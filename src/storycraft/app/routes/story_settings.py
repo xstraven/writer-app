@@ -58,11 +58,10 @@ async def get_story_settings(
     )
 
 
-@router.put("/api/story-settings", response_model=dict)
-async def put_story_settings(
+async def _write_story_settings(
     payload: StorySettingsPatch,
-    story_settings_store: StorySettingsStore = Depends(get_story_settings_store),
-    lorebook_store: LorebookStore = Depends(get_lorebook_store),
+    story_settings_store: StorySettingsStore,
+    lorebook_store: LorebookStore,
 ) -> dict:
     story = (payload.story or "").strip()
     if not story:
@@ -95,3 +94,21 @@ async def put_story_settings(
             # Ignore lore replacement errors to not block settings update
             pass
     return {"ok": True, "story": story, "updated_keys": list(allowed.keys())}
+
+
+@router.put("/api/story-settings", response_model=dict)
+async def put_story_settings(
+    payload: StorySettingsPatch,
+    story_settings_store: StorySettingsStore = Depends(get_story_settings_store),
+    lorebook_store: LorebookStore = Depends(get_lorebook_store),
+) -> dict:
+    return await _write_story_settings(payload, story_settings_store, lorebook_store)
+
+
+@router.post("/api/story-settings", response_model=dict)
+async def post_story_settings(
+    payload: StorySettingsPatch,
+    story_settings_store: StorySettingsStore = Depends(get_story_settings_store),
+    lorebook_store: LorebookStore = Depends(get_lorebook_store),
+) -> dict:
+    return await _write_story_settings(payload, story_settings_store, lorebook_store)

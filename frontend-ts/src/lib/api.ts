@@ -6,6 +6,8 @@ import type {
   MemoryState,
   BranchPathResponse,
   AppendSnippetRequest,
+  InsertAboveRequest,
+  InsertBelowRequest,
   RegenerateAIRequest,
   ContinueRequest,
   ContinueResponse,
@@ -139,6 +141,16 @@ export const appendSnippet = async (request: AppendSnippetRequest): Promise<Snip
   const response = await apiClient.post('/api/snippets/append', request);
   return response.data;
 };
+
+export const insertSnippetAbove = async (request: InsertAboveRequest): Promise<Snippet> => {
+  const response = await apiClient.post('/api/snippets/insert-above', request)
+  return response.data
+}
+
+export const insertSnippetBelow = async (request: InsertBelowRequest): Promise<Snippet> => {
+  const response = await apiClient.post('/api/snippets/insert-below', request)
+  return response.data
+}
 
 export const regenerateSnippet = async (request: RegenerateAIRequest): Promise<Snippet> => {
   const response = await apiClient.post('/api/snippets/regenerate-ai', request, { timeout: 60000 });

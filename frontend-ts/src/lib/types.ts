@@ -84,6 +84,24 @@ export interface AppendSnippetRequest {
   branch?: string;
 }
 
+export interface InsertAboveRequest {
+  story: string;
+  target_snippet_id: string;
+  content: string;
+  kind?: string;
+  set_active?: boolean;
+  branch?: string;
+}
+
+export interface InsertBelowRequest {
+  story: string;
+  parent_snippet_id: string;
+  content: string;
+  kind?: string;
+  set_active?: boolean;
+  branch?: string;
+}
+
 export interface RegenerateAIRequest {
   story: string;
   target_snippet_id: string;

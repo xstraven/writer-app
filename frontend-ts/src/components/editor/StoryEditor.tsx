@@ -37,7 +37,6 @@ export function StoryEditor() {
   } = useAppStore()
 
   const { 
-    generateContinuation, 
     generateContinuationAsync,
     isGenerating, 
     generationError 
@@ -52,26 +51,53 @@ export function StoryEditor() {
   const handleGenerate = async (maybeText?: string) => {
     const raw = (maybeText ?? instruction)
     const text = raw.trim() || DEFAULT_INSTRUCTION
+    // If user didn't provide custom instruction, pass empty so backend applies base instruction
+    const payloadInstr = (text === DEFAULT_INSTRUCTION) ? '' : text
+
+    let continuation: string
     try {
-      // If user didn't provide custom instruction, pass empty so backend applies base instruction
-      const payloadInstr = (text === DEFAULT_INSTRUCTION) ? '' : text
-      const continuation = await generateContinuationAsync(payloadInstr)
-      // Clear instruction box after generate (placeholder shows default)
-      setInstruction('')
-      // Append continuation to the last chunk directly in continuous editor mode
-      if (chunks.length > 0) {
-        const last = chunks[chunks.length - 1]
-        const needsBreak = last.text && !/\n\n$/.test(last.text)
-        const newText = needsBreak ? last.text + '\n\n' + continuation : last.text + continuation
-        updateChunk(last.id, { text: newText, timestamp: Date.now() })
-        // Best-effort persist
-        try {
-          const { updateSnippet } = await import('@/lib/api')
-          await updateSnippet(last.id, { content: newText, kind: last.author === 'user' ? 'user' : 'ai' })
-        } catch {}
+      continuation = await generateContinuationAsync(payloadInstr)
+    } catch (error) {
+      // Hook already emitted an error toast
+      return
+    }
+
+    if (!continuation.trim()) {
+      toast.error('Model returned empty continuation')
+      return
+    }
+
+    setInstruction('')
+
+    const { chunks: currentChunks } = useAppStore.getState()
+    const parentId = currentChunks.length > 0 ? currentChunks[currentChunks.length - 1].id : null
+
+    try {
+      const created = await appendSnippet({
+        story: currentStory,
+        content: continuation,
+        kind: 'ai',
+        parent_id: parentId,
+        set_active: true,
+        branch: currentBranch,
+      })
+
+      const before = useAppStore.getState().chunks.map(item => ({ ...item }))
+      const newChunk: Chunk = {
+        id: created.id,
+        text: created.content,
+        author: 'llm',
+        timestamp: new Date(created.created_at).getTime(),
       }
-    } catch (e) {
-      // Error toast is handled in hook
+      const after = [...before, newChunk]
+      pushHistory('generate', before, after.map(item => ({ ...item })))
+      setChunks(after)
+
+      queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory, currentBranch] })
+      toast.success('Generated new chunk')
+    } catch (error) {
+      console.error('Failed to append generated chunk:', error)
+      toast.error(`Failed to save generated chunk: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
