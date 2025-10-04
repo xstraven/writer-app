@@ -53,9 +53,9 @@ Modal Deployment
      STORYCRAFT_SUPABASE_SERVICE_KEY="..." \
      STORYCRAFT_OPENROUTER_API_KEY="sk-..."   # optional
    ```
-2. Deploy the FastAPI app to Modal (uses `modal_app.py`). The `--force-image-build` flag ensures a fresh container image for each deploy:
+2. Deploy the FastAPI app to Modal (uses `modal_app.py`). Modal rebuilds the image automatically when local sources change; you can add a `--tag $(git rev-parse --short HEAD)` if you want to version deployments explicitly:
    ```bash
-   modal deploy modal_app.py --force-image-build
+   modal deploy modal_app.py
    ```
 3. Keep an interactive dev server running with hot reloads when needed:
    ```bash
