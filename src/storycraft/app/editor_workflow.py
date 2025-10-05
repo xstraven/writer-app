@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any, Dict, List, Optional
 
@@ -16,7 +17,7 @@ JUDGE_SYSTEM_PROMPT = (
 CANDIDATE_COUNT = 4
 _STORY_PREVIEW_CHARS = 2500
 _DRAFT_PREVIEW_CHARS = 1200
-_GENERATION_TIMEOUT = 180
+_GENERATION_TIMEOUT = 240
 
 
 async def run_internal_editor_workflow(
@@ -31,10 +32,13 @@ async def run_internal_editor_workflow(
     """Generate several candidates and pick the best one via an LLM judge."""
 
     count = max(1, candidate_count)
-    candidates: List[Dict[str, Any]] = []
-    for _ in range(count):
-        result = await continue_story(**generation_kwargs, request_timeout=_GENERATION_TIMEOUT)
-        candidates.append(result)
+    tasks = [
+        asyncio.create_task(
+            continue_story(**generation_kwargs, request_timeout=_GENERATION_TIMEOUT)
+        )
+        for _ in range(count)
+    ]
+    candidates: List[Dict[str, Any]] = list(await asyncio.gather(*tasks))
 
     if len(candidates) == 1:
         return candidates[0]
@@ -47,6 +51,7 @@ async def run_internal_editor_workflow(
         story_so_far=story_so_far,
         draft_segment=draft_segment,
         model=judge_model,
+        system_prompt=generation_kwargs.get("system_prompt"),
     )
 
     winner = selection.get("winner")
@@ -62,6 +67,7 @@ async def _select_best_candidate(
     story_so_far: str,
     draft_segment: str,
     model: Optional[str],
+    system_prompt: Optional[str],
 ) -> Dict[str, Any]:
     client = OpenRouterClient()
     messages = [
@@ -74,6 +80,7 @@ async def _select_best_candidate(
                 merged_instruction=merged_instruction,
                 story_so_far=story_so_far,
                 draft_segment=draft_segment,
+                system_prompt=system_prompt,
             ),
         },
     ]
@@ -133,9 +140,11 @@ def _build_judge_prompt(
     merged_instruction: str,
     story_so_far: str,
     draft_segment: str,
+    system_prompt: Optional[str],
 ) -> str:
     user_instruction = (user_instruction or "").strip()
     merged_instruction = (merged_instruction or "").strip()
+    system_prompt = (system_prompt or "").strip()
     story_excerpt = _tail(story_so_far, _STORY_PREVIEW_CHARS)
     draft_excerpt = _tail(draft_segment, _DRAFT_PREVIEW_CHARS)
 
@@ -146,6 +155,10 @@ def _build_judge_prompt(
     lines.append("Draft segment to continue:")
     lines.append(draft_excerpt or "[empty draft segment]")
     lines.append("")
+    if system_prompt:
+        lines.append("Story system prompt applied to generation:")
+        lines.append(system_prompt)
+        lines.append("")
     lines.append("User instruction / requested actions:")
     lines.append(user_instruction or "[no extra user instruction]")
     lines.append("")
