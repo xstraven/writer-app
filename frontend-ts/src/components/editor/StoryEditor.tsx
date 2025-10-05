@@ -16,10 +16,13 @@ import { useStorySync } from '@/hooks/useStorySync'
 import { appendSnippet } from '@/lib/api'
 import { uid } from '@/lib/utils'
 import type { Chunk } from '@/lib/types'
+import { Input } from '@/components/ui/input'
 
 export function StoryEditor() {
   const [isAddingChunk, setIsAddingChunk] = useState(false)
   const [userDraft, setUserDraft] = useState('')
+  const [ideaQuestion, setIdeaQuestion] = useState('')
+  const [ideaLog, setIdeaLog] = useState<Array<{ id: string; question: string; answer: string }>>([])
   const queryClient = useQueryClient()
   
   const {
@@ -39,7 +42,9 @@ export function StoryEditor() {
   const { 
     generateContinuationAsync,
     isGenerating, 
-    generationError 
+    generationError,
+    askForIdea,
+    isThinkingIdea,
   } = useStoryGeneration()
 
   // Sync with backend story data
@@ -161,6 +166,25 @@ export function StoryEditor() {
     }
   }
 
+  const handleAskIdea = async () => {
+    const prompt = ideaQuestion.trim()
+    if (!prompt) {
+      toast.error('Please enter a question')
+      return
+    }
+    try {
+      const answer = await askForIdea(prompt)
+      if (answer && answer.trim()) {
+        setIdeaLog((prev) => [...prev, { id: uid(), question: prompt, answer: answer.trim() }])
+      } else {
+        toast.error('The assistant did not return an answer')
+      }
+      setIdeaQuestion('')
+    } catch (error) {
+      // Error toast already handled inside hook
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div>
@@ -221,6 +245,52 @@ export function StoryEditor() {
         <Button variant="ghost" onClick={handleRevert} disabled={history.length === 0 || isGenerating}>
           <Undo2 className="h-4 w-4 mr-2" /> Revert last action
         </Button>
+      </div>
+
+      {/* Idea Assistant */}
+      <div className="rounded-md border border-neutral-200 bg-neutral-50 p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold text-neutral-700">Need ideas on what happens next?</p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input
+            value={ideaQuestion}
+            onChange={(e) => setIdeaQuestion(e.target.value)}
+            placeholder="Ask for suggestions, e.g. How should the hero confront the villain?"
+            className="text-sm"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                handleAskIdea()
+              }
+            }}
+            disabled={isThinkingIdea}
+          />
+          <Button
+            onClick={handleAskIdea}
+            disabled={isThinkingIdea || !ideaQuestion.trim()}
+            className="shrink-0"
+          >
+            {isThinkingIdea ? (
+              <>
+                <Loading size="sm" className="mr-2" />
+                Thinking...
+              </>
+            ) : (
+              'Ask'
+            )}
+          </Button>
+        </div>
+        {ideaLog.length > 0 && (
+          <div className="space-y-3 text-sm">
+            {ideaLog.map((entry) => (
+              <div key={entry.id} className="rounded-md border border-neutral-200 bg-white p-3 shadow-sm">
+                <p className="font-medium text-neutral-800">Q: {entry.question}</p>
+                <p className="mt-2 whitespace-pre-wrap text-neutral-700">{entry.answer}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Error Display */}

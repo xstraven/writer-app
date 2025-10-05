@@ -21,26 +21,35 @@ export function useStoryGeneration() {
     context,
   } = useAppStore()
 
+  const buildEffectiveContext = () => {
+    if (context) {
+      return {
+        summary: (context.summary && context.summary.trim()) || synopsis,
+        npcs: [...context.npcs],
+        objects: [...context.objects],
+      }
+    }
+    return {
+      summary: synopsis,
+      npcs: [],
+      objects: [],
+    }
+  }
+
+  const buildDraftText = () => {
+    let draftText = chunks.map(c => c.text).join('\n\n')
+    const windowChars = Math.max(0, Math.floor((generationSettings.max_context_window ?? 0) * 3))
+    if (windowChars > 0 && draftText.length > windowChars) {
+      draftText = draftText.slice(-windowChars)
+    }
+    return draftText
+  }
+
   // Mutation for generating story continuation (preview-only; UI decides what to do)
   const generateMutation = useMutation({
     mutationFn: async ({ instruction }: { instruction: string }) => {
-      let draftText = chunks.map(c => c.text).join('\n\n')
-      const windowChars = Math.max(0, Math.floor((generationSettings.max_context_window ?? 0) * 3))
-      if (windowChars > 0 && draftText.length > windowChars) {
-        draftText = draftText.slice(-windowChars)
-      }
-
-      const effectiveContext = context
-        ? {
-            summary: (context.summary && context.summary.trim()) || synopsis,
-            npcs: [...context.npcs],
-            objects: [...context.objects],
-          }
-        : {
-            summary: synopsis,
-            npcs: [],
-            objects: [],
-          }
+      const draftText = buildDraftText()
+      const effectiveContext = buildEffectiveContext()
 
       const request: ContinueRequest = {
         draft_text: draftText,
@@ -96,17 +105,7 @@ export function useStoryGeneration() {
       const last = chunks[chunks.length - 1]
       if (!last) throw new Error('No chunk to regenerate')
 
-      const effectiveContext = context
-        ? {
-            summary: (context.summary && context.summary.trim()) || synopsis,
-            npcs: [...context.npcs],
-            objects: [...context.objects],
-          }
-        : {
-            summary: synopsis,
-            npcs: [],
-            objects: [],
-          }
+      const effectiveContext = buildEffectiveContext()
 
       const created = await regenerateSnippet({
         story: currentStory,
@@ -147,6 +146,35 @@ export function useStoryGeneration() {
     },
   })
 
+  const ideaMutation = useMutation({
+    mutationFn: async (question: string) => {
+      const prompt = question.trim()
+      if (!prompt) throw new Error('Question is required')
+      const draftText = buildDraftText()
+      const effectiveContext = buildEffectiveContext()
+
+      const response = await continueStory({
+        draft_text: draftText,
+        instruction: `Answer the user's question about the story. Respond with helpful ideas, not narrative. Question: ${prompt}`,
+        story: currentStory,
+        max_tokens: Math.max(128, generationSettings.max_tokens),
+        temperature: generationSettings.temperature,
+        model: generationSettings.model,
+        system_prompt: generationSettings.system_prompt,
+        use_memory: true,
+        use_context: true,
+        preview_only: true,
+        context: effectiveContext,
+        lore_ids: lorebook.filter(l => l.always_on).map(l => l.id),
+      })
+
+      return response.continuation
+    },
+    onError: (error: any) => {
+      toast.error(`Idea generation failed: ${getApiErrorMessage(error)}`)
+    },
+  })
+
   const generateContinuation = (instruction: string) => {
     generateMutation.mutate({ instruction })
   }
@@ -163,6 +191,10 @@ export function useStoryGeneration() {
     commitChunkMutation.mutate(content)
   }
 
+  const askForIdea = (question: string) => {
+    return ideaMutation.mutateAsync(question)
+  }
+
   return {
     generateContinuation,
     generateContinuationAsync,
@@ -170,5 +202,8 @@ export function useStoryGeneration() {
     commitChunk,
     isGenerating: generateMutation.isPending || regenerateMutation.isPending,
     generationError: generateMutation.error || regenerateMutation.error,
+    askForIdea,
+    isThinkingIdea: ideaMutation.isPending,
+    ideaError: ideaMutation.error,
   }
 }
