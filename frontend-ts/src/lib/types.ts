@@ -237,6 +237,8 @@ export interface AppState {
   hoveredId: string | null;
   isGenerating: boolean;
   generationSettings: GenerationSettings;
+  // UI-only flag; not persisted to backend legacy state
+  generationSettingsHydrated?: boolean;
   synopsis: string;
   lorebook: LoreEntry[];
   memory: MemoryState;

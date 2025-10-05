@@ -15,6 +15,7 @@ import { uid } from '@/lib/utils'
 import { saveQueue } from '@/lib/saveQueue'
 
 interface AppState extends AppStateType {
+  generationSettingsHydrated: boolean
   // Actions
   setCurrentStory: (story: string) => void
   setCurrentBranch: (name: string) => void
@@ -28,6 +29,7 @@ interface AppState extends AppStateType {
   setHoveredId: (id: string | null) => void
   setIsGenerating: (isGenerating: boolean) => void
   updateGenerationSettings: (settings: Partial<GenerationSettings>) => void
+  setGenerationSettingsHydrated: (hydrated: boolean) => void
   setSynopsis: (synopsis: string) => void
   setLorebook: (lorebook: LoreEntry[]) => void
   setMemory: (memory: MemoryState) => void
@@ -61,6 +63,7 @@ const initialState = {
     max_context_window: 1000,
     base_instruction: 'Continue the story, matching established voice, tone, and point of view. Maintain continuity with prior events and details.',
   },
+  generationSettingsHydrated: false,
   synopsis: "Mira, a courier in a rain-soaked coastal city, discovers a message that could end a quiet war.",
   lorebook: [
     {
@@ -108,7 +111,7 @@ export const useAppStore = create<AppState>()(
         // Ensure pending edits are persisted before switching stories
         (async () => {
           try { await saveQueue.flush() } catch {}
-          set((state) => ({ 
+          set((state) => ({
             currentStory: story,
             // Reset per-story draft data so sync adopts backend for the selected story
             chunks: [],
@@ -116,6 +119,7 @@ export const useAppStore = create<AppState>()(
             editingId: null,
             editingText: '',
             hoveredId: null,
+            generationSettingsHydrated: false,
           }))
         })()
       },
@@ -164,6 +168,8 @@ export const useAppStore = create<AppState>()(
       updateGenerationSettings: (settings) => set((state) => ({
         generationSettings: { ...state.generationSettings, ...settings }
       })),
+
+      setGenerationSettingsHydrated: (hydrated) => set({ generationSettingsHydrated: hydrated }),
       
       setSynopsis: (synopsis) => set({ synopsis }),
       

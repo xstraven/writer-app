@@ -7,7 +7,15 @@ import { useAppStore } from '@/stores/appStore'
 
 // Debounced persistence of app-level settings (context, synopsis, gen settings).
 export function usePersistAppState(delayMs: number = 600) {
-  const { currentStory, generationSettings, context, gallery, synopsis, memory } = useAppStore()
+  const {
+    currentStory,
+    generationSettings,
+    context,
+    gallery,
+    synopsis,
+    memory,
+    generationSettingsHydrated,
+  } = useAppStore()
   const queryClient = useQueryClient()
   const timer = useRef<NodeJS.Timeout | null>(null)
   const latest = useRef<{ story: string; payload: any }>({ story: '', payload: {} })
@@ -28,6 +36,8 @@ export function usePersistAppState(delayMs: number = 600) {
         timer.current = null
       }
     }
+
+    if (!generationSettingsHydrated) return
 
     if (timer.current) clearTimeout(timer.current)
     // Cache latest payload for potential flush
@@ -60,7 +70,16 @@ export function usePersistAppState(delayMs: number = 600) {
     return () => {
       if (timer.current) clearTimeout(timer.current)
     }
-  }, [currentStory, generationSettings, context, gallery, synopsis, memory, delayMs])
+  }, [
+    currentStory,
+    generationSettings,
+    context,
+    gallery,
+    synopsis,
+    memory,
+    generationSettingsHydrated,
+    delayMs,
+  ])
 
   // Best-effort flush on unload (no blocking call here; rely on debounce normally)
   useEffect(() => {
