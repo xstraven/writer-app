@@ -16,18 +16,18 @@ const snippetToChunk = (snippet: Snippet): Chunk => ({
 })
 
 export function useStorySync() {
-  const { 
-    currentStory, 
+  const {
+    currentStory,
     currentBranch,
-    setChunks, 
+    setChunks,
     chunks,
     setLorebook,
     setSynopsis,
     setContext,
     setMemory,
     updateGenerationSettings,
-    context,
     setGallery,
+    setGenerationSettingsHydrated,
   } = useAppStore()
 
   // Query to load story branch from backend
@@ -127,6 +127,8 @@ export function useStorySync() {
 
   // Apply per-story settings when available
   useEffect(() => {
+    if (storySettingsLoading) return
+
     if (storySettings) {
       const s = storySettings
       if (s.context) setContext(s.context)
@@ -144,6 +146,7 @@ export function useStorySync() {
       if (Array.isArray(s.gallery)) setGallery(s.gallery)
       // Lorebook (if provided)
       if (Array.isArray((s as any).lorebook)) setLorebook((s as any).lorebook)
+      setGenerationSettingsHydrated(true)
     } else if (!storySettings && appStateData) {
       // Legacy fallback path
       if (appStateData.context) setContext(appStateData.context)
@@ -153,8 +156,23 @@ export function useStorySync() {
       if (appStateData.model) settingsToUpdate.model = appStateData.model
       if (appStateData.system_prompt) settingsToUpdate.system_prompt = appStateData.system_prompt
       if (Object.keys(settingsToUpdate).length > 0) updateGenerationSettings(settingsToUpdate)
+      setGenerationSettingsHydrated(true)
+    } else if (!storySettings) {
+      // No story-specific data and no legacy fallback; mark hydration to enable persistence
+      setGenerationSettingsHydrated(true)
     }
-  }, [storySettings, appStateData, setContext, updateGenerationSettings])
+  }, [
+    storySettings,
+    storySettingsLoading,
+    appStateData,
+    setContext,
+    updateGenerationSettings,
+    setGenerationSettingsHydrated,
+    setSynopsis,
+    setMemory,
+    setGallery,
+    setLorebook,
+  ])
 
   // Auto-sync when story changes
   useEffect(() => {
