@@ -213,12 +213,12 @@ export function Sidebar() {
               <label className="flex items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">Internal editor workflow</span>
-                    <span className="text-[10px] uppercase tracking-wide text-amber-600 bg-amber-100 px-2 py-0.5 rounded">
+                    <span className="text-sm font-medium text-foreground">Internal editor workflow</span>
+                    <span className="text-[10px] uppercase tracking-wide text-amber-600 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 rounded">
                       Beta
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-neutral-500 max-w-xs">
+                  <p className="mt-1 text-xs text-muted-foreground max-w-xs">
                     Generate four continuations and let an internal LLM judge pick the version that best follows your requested actions and story beats.
                   </p>
                 </div>
@@ -228,6 +228,27 @@ export function Sidebar() {
                   checked={!!experimental.internal_editor_workflow}
                   onChange={(event) => updateExperimental({ internal_editor_workflow: event.target.checked })}
                   aria-label="Toggle internal editor workflow"
+                />
+              </label>
+
+              <label className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-foreground">Dark mode</span>
+                    <span className="text-[10px] uppercase tracking-wide text-sky-600 dark:text-sky-300 bg-sky-100 dark:bg-sky-900/40 px-2 py-0.5 rounded">
+                      Experimental
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground max-w-xs">
+                    Switch to a darker theme that&apos;s easier on the eyes during late-night writing sessions.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4"
+                  checked={!!experimental.dark_mode}
+                  onChange={(event) => updateExperimental({ dark_mode: event.target.checked })}
+                  aria-label="Toggle dark mode"
                 />
               </label>
             </div>

@@ -212,7 +212,7 @@ export function StoryEditor() {
         </label>
         <div className="relative" aria-busy={isGenerating}>
           {isGenerating && (
-            <div className="absolute inset-0 rounded-md bg-white/60 backdrop-blur-[1px] z-10 flex items-center justify-center" aria-hidden="true">
+            <div className="absolute inset-0 rounded-md bg-white/60 dark:bg-neutral-900/70 backdrop-blur-[1px] z-10 flex items-center justify-center" aria-hidden="true">
               <Loading size="md" text="Generating..." />
             </div>
           )}

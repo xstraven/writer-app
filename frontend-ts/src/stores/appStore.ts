@@ -48,6 +48,11 @@ interface AppState extends AppStateType {
   removeGalleryImage: (url: string) => void
 }
 
+const defaultExperimental: ExperimentalFeatures = {
+  internal_editor_workflow: false,
+  dark_mode: false,
+}
+
 const initialState = {
   currentStory: 'default',
   instruction: '',
@@ -103,9 +108,7 @@ const initialState = {
   branches: [],
   treeRows: [],
   gallery: [],
-  experimental: {
-    internal_editor_workflow: false,
-  },
+  experimental: { ...defaultExperimental },
 }
 
 export const useAppStore = create<AppState>()(
@@ -126,7 +129,7 @@ export const useAppStore = create<AppState>()(
             editingText: '',
             hoveredId: null,
             generationSettingsHydrated: false,
-            experimental: { ...initialState.experimental },
+            experimental: { ...defaultExperimental },
           }))
         })()
       },
@@ -200,7 +203,8 @@ export const useAppStore = create<AppState>()(
 
       setTreeRows: (treeRows) => set({ treeRows }),
 
-      setExperimental: (experimental) => set({ experimental: experimental ?? { internal_editor_workflow: false } }),
+      setExperimental: (experimental) =>
+        set({ experimental: experimental ? { ...defaultExperimental, ...experimental } : { ...defaultExperimental } }),
 
       updateExperimental: (experimental) => set((state) => ({
         experimental: { ...state.experimental, ...experimental },

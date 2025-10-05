@@ -4,12 +4,14 @@ import { StoryEditor } from '@/components/editor/StoryEditor'
 import { Sidebar } from '@/components/sidebar/Sidebar'
 import { TopNavigation } from '@/components/layout/TopNavigation'
 import { usePersistAppState } from '@/hooks/usePersistAppState'
+import { useExperimentalDarkMode } from '@/hooks/useExperimentalDarkMode'
 
 export default function Home() {
   // Persist context + generation settings to backend
   usePersistAppState()
+  useExperimentalDarkMode()
   return (
-    <div className="w-full min-h-screen bg-neutral-50 text-neutral-900">
+    <div className="w-full min-h-screen bg-background text-foreground transition-colors">
       {/* Top Navigation */}
       <TopNavigation />
 

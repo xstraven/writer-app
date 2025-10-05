@@ -158,6 +158,7 @@ export interface GenerationSettings {
 
 export interface ExperimentalFeatures {
   internal_editor_workflow?: boolean;
+  dark_mode?: boolean;
 }
 
 export interface BranchInfo {

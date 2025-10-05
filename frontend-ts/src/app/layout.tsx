@@ -5,6 +5,7 @@ import { QueryProvider } from '@/components/providers/QueryProvider'
 import { SaveLifecycle } from '@/components/providers/SaveLifecycle'
 import { ToastProvider } from '@/components/providers/ToastProvider'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { cn } from '@/lib/utils'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -20,7 +21,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body className={cn(inter.className, 'bg-background text-foreground transition-colors')}>
         <ErrorBoundary>
           <QueryProvider>
             <SaveLifecycle />
