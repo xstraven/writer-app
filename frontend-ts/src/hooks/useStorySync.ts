@@ -72,6 +72,9 @@ export function useStorySync() {
     staleTime: 5 * 60 * 1000,
   })
 
+  const appliedStorySettingsFor = useRef<string | null>(null)
+  const appliedLegacyAppState = useRef<boolean>(false)
+
   // Sync backend chunks when branch data changes
   const lastBranchRef = useRef<string | null>(null)
   useEffect(() => {
@@ -129,8 +132,8 @@ export function useStorySync() {
   useEffect(() => {
     if (storySettingsLoading) return
 
-    if (storySettings) {
-      const s = storySettings
+    const applyStorySettings = (s: typeof storySettings) => {
+      if (!s) return
       if (s.context) setContext(s.context)
       if (typeof s.synopsis === 'string') setSynopsis(s.synopsis)
       if (s.memory) setMemory(s.memory)
@@ -142,29 +145,49 @@ export function useStorySync() {
       if ((s as any).base_instruction !== undefined && (s as any).base_instruction !== null) settingsToUpdate.base_instruction = (s as any).base_instruction || undefined
       if (s.max_context_window !== undefined && s.max_context_window !== null) settingsToUpdate.max_context_window = s.max_context_window
       if (Object.keys(settingsToUpdate).length > 0) updateGenerationSettings(settingsToUpdate)
-      // Gallery (UI-only, local state)
       if (Array.isArray(s.gallery)) setGallery(s.gallery)
-      // Lorebook (if provided)
       if (Array.isArray((s as any).lorebook)) setLorebook((s as any).lorebook)
-      setGenerationSettingsHydrated(true)
-    } else if (!storySettings && appStateData) {
-      // Legacy fallback path
-      if (appStateData.context) setContext(appStateData.context)
-      const settingsToUpdate: any = {}
-      if (appStateData.temperature !== undefined) settingsToUpdate.temperature = appStateData.temperature
-      if (appStateData.max_tokens !== undefined) settingsToUpdate.max_tokens = appStateData.max_tokens
-      if (appStateData.model) settingsToUpdate.model = appStateData.model
-      if (appStateData.system_prompt) settingsToUpdate.system_prompt = appStateData.system_prompt
-      if (Object.keys(settingsToUpdate).length > 0) updateGenerationSettings(settingsToUpdate)
-      setGenerationSettingsHydrated(true)
-    } else if (!storySettings) {
-      // No story-specific data and no legacy fallback; mark hydration to enable persistence
-      setGenerationSettingsHydrated(true)
     }
+
+    const applyLegacySettings = () => {
+      if (appStateData?.context) setContext(appStateData.context)
+      const settingsToUpdate: any = {}
+      if (appStateData?.temperature !== undefined) settingsToUpdate.temperature = appStateData.temperature
+      if (appStateData?.max_tokens !== undefined) settingsToUpdate.max_tokens = appStateData.max_tokens
+      if (appStateData?.model) settingsToUpdate.model = appStateData.model
+      if (appStateData?.system_prompt) settingsToUpdate.system_prompt = appStateData.system_prompt
+      if (Object.keys(settingsToUpdate).length > 0) updateGenerationSettings(settingsToUpdate)
+    }
+
+    const storyId = currentStory || null
+
+    if (storySettings) {
+      if (!storyId || appliedStorySettingsFor.current !== storyId) {
+        applyStorySettings(storySettings)
+        if (storyId) appliedStorySettingsFor.current = storyId
+      }
+      setGenerationSettingsHydrated(true)
+      return
+    }
+
+    if (appStateData) {
+      const alreadyAppliedForStory = storyId && appliedStorySettingsFor.current === storyId
+      const alreadyAppliedLegacy = !storyId && appliedLegacyAppState.current
+      if (!alreadyAppliedForStory && !alreadyAppliedLegacy) {
+        applyLegacySettings()
+        if (storyId) appliedStorySettingsFor.current = storyId
+        else appliedLegacyAppState.current = true
+      }
+      setGenerationSettingsHydrated(true)
+      return
+    }
+
+    setGenerationSettingsHydrated(true)
   }, [
     storySettings,
     storySettingsLoading,
     appStateData,
+    currentStory,
     setContext,
     updateGenerationSettings,
     setGenerationSettingsHydrated,
