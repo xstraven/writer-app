@@ -295,6 +295,15 @@ class SnippetStore:
             return False
         if target.parent_id is None:
             raise ValueError("cannot delete the root snippet")
+        branch_rows = (
+            self._branches()
+            .select("name")
+            .eq("story", story)
+            .eq("head_id", snippet_id)
+            .execute()
+        )
+        branch_names = [row["name"] for row in branch_rows.data or [] if row.get("name")]
+        replacement_head_id: Optional[str] = None
         children = self.list_children(story, target.id)
         if children:
             active_child_id = target.child_id or children[-1].id
@@ -303,11 +312,23 @@ class SnippetStore:
             parent = self.get(target.parent_id)
             if parent and parent.child_id == target.id:
                 self._set_active_child(story, parent.id, active_child_id)
+            replacement_head_id = active_child_id
         else:
             parent = self.get(target.parent_id)
             if parent and parent.child_id == target.id:
                 self._set_active_child(story, parent.id, None)
+            replacement_head_id = parent.id if parent else None
         self._table().delete().eq("id", snippet_id).execute()
+        if branch_names:
+            if replacement_head_id:
+                for name in branch_names:
+                    self._branches().upsert(
+                        {"story": story, "name": name, "head_id": replacement_head_id},
+                        on_conflict="story,name",
+                    ).execute()
+            else:
+                for name in branch_names:
+                    self._branches().delete().eq("story", story).eq("name", name).execute()
         return True
 
     def delete_story(self, story: str) -> None:
