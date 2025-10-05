@@ -74,3 +74,38 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer base {
+  .dark .bg-white {
+    background-color: rgb(23 23 23 / 1);
+  }
+  .dark .bg-neutral-50,
+  .dark .bg-gray-100 {
+    background-color: rgb(38 38 38 / 1);
+  }
+  .dark .border-gray-200,
+  .dark .border-neutral-200 {
+    border-color: rgb(64 64 64 / 1);
+  }
+  .dark .text-gray-900,
+  .dark .text-gray-800,
+  .dark .text-neutral-900,
+  .dark .text-neutral-800 {
+    color: rgb(244 244 245 / 1);
+  }
+  .dark .text-gray-700,
+  .dark .text-neutral-700 {
+    color: rgb(212 212 216 / 1);
+  }
+  .dark .text-gray-600,
+  .dark .text-neutral-600 {
+    color: rgb(161 161 170 / 1);
+  }
+  .dark .text-gray-500,
+  .dark .text-neutral-500 {
+    color: rgb(113 113 122 / 1);
+  }
+  .dark .text-gray-400 {
+    color: rgb(82 82 91 / 1);
+  }
+}
