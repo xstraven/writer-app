@@ -9,7 +9,8 @@ import type {
   ContextState,
   BranchInfo,
   TreeRow,
-  AppState as AppStateType
+  AppState as AppStateType,
+  ExperimentalFeatures,
 } from '@/lib/types'
 import { uid } from '@/lib/utils'
 import { saveQueue } from '@/lib/saveQueue'
@@ -39,6 +40,8 @@ interface AppState extends AppStateType {
   pushHistory: (action: HistoryEntry['action'], before: Chunk[], after: Chunk[]) => void
   revertFromHistory: () => void
   clearHistory: () => void
+  setExperimental: (experimental: ExperimentalFeatures) => void
+  updateExperimental: (experimental: Partial<ExperimentalFeatures>) => void
   // Gallery
   setGallery: (urls: string[]) => void
   addGalleryImage: (url: string) => void
@@ -100,6 +103,9 @@ const initialState = {
   branches: [],
   treeRows: [],
   gallery: [],
+  experimental: {
+    internal_editor_workflow: false,
+  },
 }
 
 export const useAppStore = create<AppState>()(
@@ -120,6 +126,7 @@ export const useAppStore = create<AppState>()(
             editingText: '',
             hoveredId: null,
             generationSettingsHydrated: false,
+            experimental: { ...initialState.experimental },
           }))
         })()
       },
@@ -190,8 +197,14 @@ export const useAppStore = create<AppState>()(
         }
         return { branches: filtered }
       }),
-      
+
       setTreeRows: (treeRows) => set({ treeRows }),
+
+      setExperimental: (experimental) => set({ experimental: experimental ?? { internal_editor_workflow: false } }),
+
+      updateExperimental: (experimental) => set((state) => ({
+        experimental: { ...state.experimental, ...experimental },
+      })),
       
       // Gallery actions
       setGallery: (gallery: string[]) => set({ gallery }),

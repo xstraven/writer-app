@@ -28,6 +28,7 @@ export function useStorySync() {
     updateGenerationSettings,
     setGallery,
     setGenerationSettingsHydrated,
+    setExperimental,
   } = useAppStore()
 
   // Query to load story branch from backend
@@ -147,6 +148,7 @@ export function useStorySync() {
       if (Object.keys(settingsToUpdate).length > 0) updateGenerationSettings(settingsToUpdate)
       if (Array.isArray(s.gallery)) setGallery(s.gallery)
       if (Array.isArray((s as any).lorebook)) setLorebook((s as any).lorebook)
+      if ((s as any).experimental) setExperimental((s as any).experimental)
     }
 
     const applyLegacySettings = () => {
@@ -195,6 +197,7 @@ export function useStorySync() {
     setMemory,
     setGallery,
     setLorebook,
+    setExperimental,
   ])
 
   // Auto-sync when story changes

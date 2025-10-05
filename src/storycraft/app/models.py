@@ -120,6 +120,10 @@ class AppPersistedState(BaseModel):
     gen_index: int = -1
 
 
+class ExperimentalFeatures(BaseModel):
+    internal_editor_workflow: bool = False
+
+
 class StorySettings(BaseModel):
     story: str
     temperature: float | None = None
@@ -134,6 +138,7 @@ class StorySettings(BaseModel):
     gallery: list[str] = Field(default_factory=list)
     synopsis: str | None = None
     memory: MemoryState | None = None
+    experimental: Optional["ExperimentalFeatures"] = None
 
 
 class StorySettingsUpdate(BaseModel):
@@ -148,6 +153,7 @@ class StorySettingsUpdate(BaseModel):
     gallery: list[str] | None = None
     synopsis: str | None = None
     memory: MemoryState | None = None
+    experimental: Optional["ExperimentalFeatures"] = None
 
 
 class StorySettingsPatch(StorySettingsUpdate):
