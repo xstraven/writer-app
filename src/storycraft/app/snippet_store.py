@@ -335,6 +335,12 @@ class SnippetStore:
         self._branches().delete().eq("story", story).execute()
         self._table().delete().eq("story", story).execute()
 
+    def truncate_story(self, story: str) -> SnippetRow:
+        """Remove all snippets for the story and return a fresh empty root snippet."""
+        self._branches().delete().eq("story", story).execute()
+        self._table().delete().eq("story", story).execute()
+        return self.create_snippet(story=story, content="", kind="user", parent_id=None)
+
     def list_stories(self) -> list[str]:
         res = self._table().select("story").execute()
         stories = {row["story"] for row in res.data or [] if row.get("story")}

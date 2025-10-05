@@ -145,59 +145,63 @@ export function TopNavigation() {
     <>
       {/* Navigation Bar */}
       <div className="sticky top-0 z-40 bg-white border-b border-gray-200 px-2 py-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           {/* Left Side - Title */}
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
             <h1 className="text-xl font-bold text-gray-900">Storycraft</h1>
-            
+
             {/* Story Selector */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Story:</span>
-              <Select value={currentStory} onValueChange={setCurrentStory}>
-                <SelectTrigger className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {stories.map((story) => (
-                    <SelectItem key={story} value={story}>
-                      {story}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCreateStory}
-                className="text-purple-600 border-purple-200 hover:bg-purple-50"
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                New Story
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleOpenSeedAI}
-                className="text-purple-600 border-purple-200 hover:bg-purple-50"
-              >
-                <Sparkles className="h-4 w-4 mr-1" />
-                New Story (AI)
-              </Button>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 md:gap-4 w-full sm:w-auto">
+              <div className="flex w-full items-center gap-2 sm:w-auto">
+                <span className="text-sm text-gray-600 whitespace-nowrap">Story:</span>
+                <Select value={currentStory} onValueChange={setCurrentStory}>
+                  <SelectTrigger className="w-full min-w-0 sm:w-52 md:w-64 lg:w-72">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {stories.map((story) => (
+                      <SelectItem key={story} value={story}>
+                        {story}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCreateStory}
+                  className="w-full sm:w-auto text-purple-600 border-purple-200 hover:bg-purple-50"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  New Story
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleOpenSeedAI}
+                  className="w-full sm:w-auto text-purple-600 border-purple-200 hover:bg-purple-50"
+                >
+                  <Sparkles className="h-4 w-4 mr-1" />
+                  New Story (AI)
+                </Button>
+              </div>
               {/* Delete Story action moved to Sidebar */}
             </div>
           </div>
 
           {/* Right Side - Actions and Status */}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 md:justify-end">
 
             {/* API + LLM Status */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
               <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-                apiStatus === 'ok' 
+                apiStatus === 'ok'
                   ? 'bg-green-100 text-green-800'
                   : apiStatus === 'error'
-                  ? 'bg-red-100 text-red-800'  
+                  ? 'bg-red-100 text-red-800'
                   : 'bg-yellow-100 text-yellow-800'
               }`}>
                 {apiStatus === 'ok' ? (
@@ -228,7 +232,10 @@ export function TopNavigation() {
               </div>
 
               {(apiMessage || llmMessage) && (
-                <div className="hidden sm:block text-xs text-gray-500 max-w-xs truncate" title={`${apiMessage || ''} ${llmMessage ? ' • ' + llmMessage : ''}`}>
+                <div
+                  className="text-xs text-gray-500 max-w-full sm:max-w-xs break-words sm:truncate"
+                  title={`${apiMessage || ''} ${llmMessage ? ' • ' + llmMessage : ''}`}
+                >
                   {apiMessage || llmMessage}
                 </div>
               )}

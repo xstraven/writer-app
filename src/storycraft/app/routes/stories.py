@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..models import DuplicateStoryRequest, LoreEntryCreate
+from ..models import DuplicateStoryRequest, LoreEntryCreate, TruncateStoryResponse, Snippet
 from ..dependencies import (
     get_lorebook_store,
     get_snippet_store,
@@ -110,3 +110,20 @@ async def duplicate_story(
         pass
 
     return {"ok": True, "story": dst}
+
+
+@router.post("/api/stories/{story}/truncate", response_model=TruncateStoryResponse)
+async def truncate_story(
+    story: str,
+    snippet_store: SnippetStore = Depends(get_snippet_store),
+) -> TruncateStoryResponse:
+    story = (story or "").strip()
+    if not story:
+        raise HTTPException(status_code=400, detail="Missing story")
+
+    try:
+        root = snippet_store.truncate_story(story)
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(status_code=500, detail=f"Failed to truncate story: {exc}")
+
+    return TruncateStoryResponse(root_snippet=Snippet(**root.__dict__))
