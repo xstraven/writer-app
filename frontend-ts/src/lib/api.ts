@@ -19,9 +19,12 @@ import type {
   LoreGenerateRequest,
   LoreGenerateResponse,
   PromptPreviewRequest,
+  TruncateStoryResponse,
 } from './types';
 
 export const API_BASE = process.env.NEXT_PUBLIC_STORYCRAFT_API_BASE || 'http://localhost:8000';
+
+const GENERATION_TIMEOUT_MS = 120_000;
 
 const apiClient = axios.create({
   baseURL: API_BASE,
@@ -121,7 +124,7 @@ export const extractMemory = async (currentText: string, model?: string): Promis
 
 // Story continuation
 export const continueStory = async (request: ContinueRequest): Promise<ContinueResponse> => {
-  const response = await apiClient.post('/api/continue', request, { timeout: 60000 });
+  const response = await apiClient.post('/api/continue', request, { timeout: GENERATION_TIMEOUT_MS });
   return response.data;
 };
 
@@ -153,7 +156,7 @@ export const insertSnippetBelow = async (request: InsertBelowRequest): Promise<S
 }
 
 export const regenerateSnippet = async (request: RegenerateAIRequest): Promise<Snippet> => {
-  const response = await apiClient.post('/api/snippets/regenerate-ai', request, { timeout: 60000 });
+  const response = await apiClient.post('/api/snippets/regenerate-ai', request, { timeout: GENERATION_TIMEOUT_MS });
   return response.data;
 };
 
@@ -327,13 +330,17 @@ export const saveStorySettings = async (
 
 // AI seeding: create a new story from a prompt
 export const seedStoryAI = async (payload: SeedStoryRequest): Promise<SeedStoryResponse> => {
-  // Seeding can take longer than default; allow up to 30s.
-  const response = await apiClient.post('/api/stories/seed-ai', payload, { timeout: 30000 })
+  const response = await apiClient.post('/api/stories/seed-ai', payload, { timeout: GENERATION_TIMEOUT_MS })
   return response.data
 }
 
 // Generate lorebook entries from current story text
 export const generateLorebook = async (payload: LoreGenerateRequest): Promise<LoreGenerateResponse> => {
-  const response = await apiClient.post('/api/lorebook/generate', payload, { timeout: 30000 })
+  const response = await apiClient.post('/api/lorebook/generate', payload, { timeout: GENERATION_TIMEOUT_MS })
+  return response.data
+}
+
+export const truncateStory = async (story: string): Promise<TruncateStoryResponse> => {
+  const response = await apiClient.post(`/api/stories/${encodeURIComponent(story)}/truncate`)
   return response.data
 }

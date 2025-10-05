@@ -49,7 +49,7 @@ class OpenRouterClient:
                 "model": payload["model"],
             }
         try:
-            async with httpx.AsyncClient(timeout=60) as client:
+            async with httpx.AsyncClient(timeout=120) as client:
                 resp = await client.post(url, headers=self._headers(), json=payload)
                 resp.raise_for_status()
                 return resp.json()

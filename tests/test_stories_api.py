@@ -81,6 +81,29 @@ def test_story_crud_and_duplication_flow(client):
     assert len(duplicate_lore) == 1
     assert duplicate_lore[0]["name"] == original_lore["name"]
 
+    truncate_response = client.post(f"/api/stories/{duplicate_name}/truncate")
+    assert truncate_response.status_code == 200
+    truncated_payload = truncate_response.json()
+    assert truncated_payload["ok"] is True
+    root_snippet = truncated_payload["root_snippet"]
+    assert root_snippet["story"] == duplicate_name
+    assert root_snippet["content"] == ""
+    assert root_snippet["parent_id"] is None
+
+    truncated_path = client.get("/api/snippets/path", params={"story": duplicate_name}).json()
+    assert len(truncated_path["path"]) == 1
+    assert truncated_path["path"][0]["id"] == root_snippet["id"]
+    assert truncated_path["path"][0]["content"] == ""
+    assert truncated_path["text"] == ""
+
+    preserved_settings = client.get("/api/story-settings", params={"story": duplicate_name}).json()
+    assert preserved_settings["synopsis"] == settings_payload["synopsis"]
+    assert preserved_settings["context"]["summary"] == settings_payload["context"]["summary"]
+
+    preserved_lore = client.get("/api/lorebook", params={"story": duplicate_name}).json()
+    assert len(preserved_lore) == 1
+    assert preserved_lore[0]["name"] == original_lore["name"]
+
     delete_response = client.delete(f"/api/stories/{story}")
     assert delete_response.status_code == 200
     assert delete_response.json() == {"ok": True}

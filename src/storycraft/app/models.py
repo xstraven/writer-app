@@ -156,6 +156,11 @@ class StorySettingsPatch(StorySettingsUpdate):
     lorebook: list[dict] | None = None
 
 
+class TruncateStoryResponse(BaseModel):
+    ok: bool = True
+    root_snippet: Snippet
+
+
 # --- Snippets & Branching ---
 
 class Snippet(BaseModel):

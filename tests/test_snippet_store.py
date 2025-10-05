@@ -58,3 +58,26 @@ def test_snippet_store_branching(tmp_path):
     assert ok
     path4 = store.main_path(story)
     assert [p.content for p in path4] == ["A", "ABOVE", "BELOW"]
+
+
+def test_truncate_story_resets_to_single_empty_root(tmp_path):
+    reset_supabase_client()
+    client = get_supabase_client()
+    store = SnippetStore(client=client)
+    story = "Resettable"
+
+    root = store.create_snippet(story=story, content="Opening", kind="user", parent_id=None)
+    child = store.create_snippet(story=story, content="Follow-up", kind="ai", parent_id=root.id)
+    store.upsert_branch(story=story, name="main", head_id=child.id)
+
+    fresh_root = store.truncate_story(story)
+
+    assert fresh_root.story == story
+    assert fresh_root.parent_id is None
+    assert fresh_root.content == ""
+    assert store.list_children(story, fresh_root.id) == []
+    assert store.list_branches(story) == []
+
+    path = store.main_path(story)
+    assert len(path) == 1
+    assert path[0].id == fresh_root.id

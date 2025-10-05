@@ -194,6 +194,11 @@ export interface PromptPreviewRequest {
   context?: ContextState | null;
 }
 
+export interface TruncateStoryResponse {
+  ok: boolean;
+  root_snippet: Snippet;
+}
+
 // --- AI Seed Story ---
 export interface SeedStoryRequest {
   story: string;
