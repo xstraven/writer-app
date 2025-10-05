@@ -225,8 +225,8 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
       onMouseEnter={() => setHoveredId(chunk.id)}
       onMouseLeave={() => setHoveredId(null)}
       className={cn(
-        "relative group transition-colors px-0 py-0 hover:bg-amber-50",
-        isHovered ? "bg-amber-50" : "bg-transparent"
+        "relative group transition-colors px-0 py-0 hover:bg-amber-50 dark:hover:bg-amber-900/40",
+        isHovered ? "bg-amber-50 dark:bg-amber-900/40" : "bg-transparent"
       )}
     >
       <Textarea
