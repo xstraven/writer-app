@@ -21,6 +21,7 @@ export function Sidebar() {
   const [openCtx, setOpenCtx] = useState(true)
   const [openImgs, setOpenImgs] = useState(true)
   const [openStory, setOpenStory] = useState(true)
+  const [openExperimental, setOpenExperimental] = useState(false)
 
   // Local modals/actions
   const [showBranches, setShowBranches] = useState(false)
@@ -52,6 +53,8 @@ export function Sidebar() {
     clearHistory,
     setEditingId,
     setEditingText,
+    experimental,
+    updateExperimental,
   } = useAppStore()
 
   const queryClient = useQueryClient()
@@ -186,6 +189,47 @@ export function Sidebar() {
               >
                 {loadingPrompt ? 'Loading…' : 'Preview Prompt'}
               </Button>
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
+      {/* Experimental Features */}
+      <Card className="shadow-sm">
+        <CardHeader className="pb-2">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between"
+            onClick={() => setOpenExperimental(v => !v)}
+            aria-expanded={openExperimental}
+          >
+            <CardTitle className="text-lg">Experimental Features</CardTitle>
+            <ChevronDown className={`h-4 w-4 transition-transform ${openExperimental ? '' : '-rotate-90'}`} />
+          </button>
+        </CardHeader>
+        {openExperimental && (
+          <CardContent>
+            <div className="space-y-4">
+              <label className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">Internal editor workflow</span>
+                    <span className="text-[10px] uppercase tracking-wide text-amber-600 bg-amber-100 px-2 py-0.5 rounded">
+                      Beta
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-neutral-500 max-w-xs">
+                    Generate four continuations and let an internal LLM judge pick the version that best follows your requested actions and story beats.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4"
+                  checked={!!experimental.internal_editor_workflow}
+                  onChange={(event) => updateExperimental({ internal_editor_workflow: event.target.checked })}
+                  aria-label="Toggle internal editor workflow"
+                />
+              </label>
             </div>
           </CardContent>
         )}

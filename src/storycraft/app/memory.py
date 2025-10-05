@@ -101,6 +101,7 @@ async def continue_story(
     history_text: str = "",
     lore_items: Optional[List[LoreEntry]] = None,
     system_prompt: Optional[str] = None,
+    request_timeout: Optional[float] = None,
 ) -> Dict[str, str]:
     client = OpenRouterClient()
     sys = system_prompt.strip() if system_prompt else CONTINUE_SYSTEM
@@ -124,6 +125,7 @@ async def continue_story(
         model=model,
         max_tokens=max_tokens,
         temperature=temperature,
+        timeout=request_timeout,
     )
     content = resp.get("choices", [{}])[0].get("message", {}).get("content", "")
     used_model = resp.get("model", model or client.default_model)

@@ -5,6 +5,7 @@ import traceback
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from ..editor_workflow import run_internal_editor_workflow
 from ..memory import continue_story, extract_memory_from_text
 from ..models import (
     AppendSnippetRequest,
@@ -22,6 +23,7 @@ from ..models import (
     UpdateSnippetRequest,
     UpsertBranchRequest,
 )
+from ..services.experimental import internal_editor_enabled
 from ..services.prompt_utils import merge_instruction
 from ..dependencies import (
     get_lorebook_store,
@@ -99,7 +101,7 @@ async def regenerate_ai(
     req: RegenerateAIRequest,
     snippet_store: SnippetStore = Depends(get_snippet_store),
     lore_store: LorebookStore = Depends(get_lorebook_store),
-    story_settings: StorySettingsStore = Depends(get_story_settings_store),
+    story_settings_store: StorySettingsStore = Depends(get_story_settings_store),
 ) -> Snippet:
     target = snippet_store.get(req.target_snippet_id)
     if not target or target.story != req.story:
@@ -129,17 +131,32 @@ async def regenerate_ai(
             if entry:
                 lore_items.append(entry)
 
+    merged_instruction = merge_instruction(req.instruction, req.story, story_settings_store) or ""
+    generation_kwargs = {
+        "draft_text": base_text,
+        "instruction": merged_instruction,
+        "mem": mem,
+        "context": (req.context if req.use_context else None),
+        "model": req.model,
+        "max_tokens": req.max_tokens,
+        "temperature": req.temperature,
+        "history_text": base_text,
+        "lore_items": lore_items,
+    }
+
+    use_internal_editor = internal_editor_enabled(req.story, story_settings_store)
+
     try:
-        result = await continue_story(
-            draft_text=base_text,
-            instruction=merge_instruction(req.instruction, req.story, story_settings) or "",
-            mem=mem,
-            context=(req.context if req.use_context else None),
-            model=req.model,
-            max_tokens=req.max_tokens,
-            temperature=req.temperature,
-            lore_items=lore_items,
-        )
+        if use_internal_editor:
+            result = await run_internal_editor_workflow(
+                generation_kwargs=generation_kwargs,
+                user_instruction=req.instruction or "",
+                story_so_far=base_text,
+                draft_segment=base_text,
+                judge_model=req.model,
+            )
+        else:
+            result = await continue_story(**generation_kwargs)
     except Exception as e:
         traceback.print_exc(file=sys.stderr)
         raise HTTPException(status_code=502, detail=f"Regeneration failed: {e}")

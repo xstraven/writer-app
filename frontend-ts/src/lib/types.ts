@@ -156,6 +156,10 @@ export interface GenerationSettings {
   base_instruction?: string;
 }
 
+export interface ExperimentalFeatures {
+  internal_editor_workflow?: boolean;
+}
+
 export interface BranchInfo {
   story: string;
   name: string;
@@ -251,6 +255,7 @@ export interface AppState {
   branches: BranchInfo[];
   treeRows: TreeRow[];
   gallery: string[];
+  experimental: ExperimentalFeatures;
 }
 
 // Per-story settings payload persisted in backend
@@ -268,4 +273,5 @@ export interface StorySettingsPayload {
   synopsis?: string;
   memory?: MemoryState;
   lorebook?: LoreEntry[];
+  experimental?: ExperimentalFeatures;
 }

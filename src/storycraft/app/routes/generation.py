@@ -14,6 +14,7 @@ from ..dependencies import (
     get_snippet_store,
     get_story_settings_store,
 )
+from ..editor_workflow import run_internal_editor_workflow
 from ..lorebook_store import LorebookStore
 from ..memory import continue_story, extract_memory_from_text, suggest_context_from_text
 from ..models import (
@@ -34,6 +35,7 @@ from ..models import (
 )
 from ..openrouter import OpenRouterClient
 from ..prompt_builder import PromptBuilder
+from ..services.experimental import internal_editor_enabled
 from ..services.prompt_utils import merge_instruction, select_lore_items
 from ..snippet_store import SnippetStore
 from ..story_settings_store import StorySettingsStore
@@ -82,7 +84,7 @@ async def continue_endpoint(
     req: ContinueRequest,
     snippet_store: SnippetStore = Depends(get_snippet_store),
     lore_store: LorebookStore = Depends(get_lorebook_store),
-    story_settings: StorySettingsStore = Depends(get_story_settings_store),
+    story_settings_store: StorySettingsStore = Depends(get_story_settings_store),
 ) -> ContinueResponse:
     draft_text = req.draft_text or ""
     draft_text = _truncate_text(draft_text, getattr(req, "max_context_window", 0))
@@ -103,19 +105,32 @@ async def continue_endpoint(
     if req.use_memory and draft_text.strip():
         mem = await extract_memory_from_text(text=draft_text, model=req.model)
 
+    merged_instruction = merge_instruction(req.instruction, req.story, story_settings_store) or ""
+    generation_kwargs = {
+        "draft_text": req.draft_text,
+        "instruction": merged_instruction,
+        "mem": mem,
+        "context": (req.context if req.use_context else None),
+        "model": req.model,
+        "max_tokens": req.max_tokens,
+        "temperature": req.temperature,
+        "history_text": history_text,
+        "lore_items": lore_items,
+        "system_prompt": req.system_prompt,
+    }
+    use_internal_editor = internal_editor_enabled(req.story, story_settings_store)
+
     try:
-        result = await continue_story(
-            draft_text=req.draft_text,
-            instruction=merge_instruction(req.instruction, req.story, story_settings) or "",
-            mem=mem,
-            context=(req.context if req.use_context else None),
-            model=req.model,
-            max_tokens=req.max_tokens,
-            temperature=req.temperature,
-            history_text=history_text,
-            lore_items=lore_items,
-            system_prompt=req.system_prompt,
-        )
+        if use_internal_editor:
+            result = await run_internal_editor_workflow(
+                generation_kwargs=generation_kwargs,
+                user_instruction=req.instruction or "",
+                story_so_far=history_text,
+                draft_segment=req.draft_text or "",
+                judge_model=req.model,
+            )
+        else:
+            result = await continue_story(**generation_kwargs)
     except Exception as e:
         traceback.print_exc(file=sys.stderr)
         raise HTTPException(status_code=502, detail=f"Generation failed: {e}")

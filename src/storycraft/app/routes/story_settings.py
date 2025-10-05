@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..models import LoreEntryCreate, StorySettings, StorySettingsPatch
+from ..models import ExperimentalFeatures, LoreEntryCreate, StorySettings, StorySettingsPatch
 from ..dependencies import (
     get_story_settings_store,
     get_base_settings_store,
@@ -42,6 +44,7 @@ async def get_story_settings(
             synopsis=None,
             memory=None,
             gallery=[],
+            experimental=ExperimentalFeatures(),
         )
     return StorySettings(
         story=story,
@@ -55,7 +58,21 @@ async def get_story_settings(
         synopsis=data.get("synopsis"),
         memory=data.get("memory"),
         gallery=data.get("gallery") or [],
+        experimental=_load_experimental(data.get("experimental")),
     )
+
+
+def _load_experimental(raw: Any) -> ExperimentalFeatures | None:
+    if not raw:
+        return ExperimentalFeatures()
+    if isinstance(raw, ExperimentalFeatures):
+        return raw
+    if isinstance(raw, dict):
+        try:
+            return ExperimentalFeatures(**raw)
+        except Exception:
+            pass
+    return ExperimentalFeatures()
 
 
 async def _write_story_settings(

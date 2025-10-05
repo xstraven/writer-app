@@ -15,6 +15,7 @@ export function usePersistAppState(delayMs: number = 600) {
     synopsis,
     memory,
     generationSettingsHydrated,
+    experimental,
   } = useAppStore()
   const queryClient = useQueryClient()
   const timer = useRef<NodeJS.Timeout | null>(null)
@@ -55,6 +56,7 @@ export function usePersistAppState(delayMs: number = 600) {
         gallery,
         synopsis,
         memory,
+        experimental,
       },
     }
 
@@ -77,6 +79,7 @@ export function usePersistAppState(delayMs: number = 600) {
     gallery,
     synopsis,
     memory,
+    experimental,
     generationSettingsHydrated,
     delayMs,
   ])
