@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Wand2, Undo2, AlertCircle } from 'lucide-react'
+import { Wand2, Undo2, AlertCircle, ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { TipTapComposer } from './TipTapComposer'
@@ -64,7 +64,9 @@ export function StoryEditor() {
   const [isAddingChunk, setIsAddingChunk] = useState(false)
   const [userDraft, setUserDraft] = useState('')
   const [ideaQuestion, setIdeaQuestion] = useState('')
-  const [ideaLog, setIdeaLog] = useState<Array<{ id: string; question: string; answer: string; suggestions: string[] }>>([])
+  const [ideaLog, setIdeaLog] = useState<
+    Array<{ id: string; question: string; answer: string; suggestions: string[]; isCollapsed: boolean }>
+  >([])
   const queryClient = useQueryClient()
   
   const {
@@ -226,6 +228,7 @@ export function StoryEditor() {
             question: prompt,
             answer: cleanedAnswer,
             suggestions,
+            isCollapsed: false,
           },
         ])
       } else {
@@ -251,6 +254,29 @@ export function StoryEditor() {
       return `${trimmedEnd}${separator}${textToInsert}`
     })
     toast.success('Suggestion added to prompt')
+  }
+
+  const handleToggleSuggestionVisibility = (entryId: string) => {
+    setIdeaLog(prev =>
+      prev.map(entry =>
+        entry.id === entryId ? { ...entry, isCollapsed: !entry.isCollapsed } : entry,
+      ),
+    )
+  }
+
+  const handleDeleteSuggestion = (entryId: string, suggestionIndex: number) => {
+    setIdeaLog(prev =>
+      prev.map(entry => {
+        if (entry.id !== entryId) {
+          return entry
+        }
+        const nextSuggestions = entry.suggestions.filter((_, index) => index !== suggestionIndex)
+        return {
+          ...entry,
+          suggestions: nextSuggestions,
+        }
+      }),
+    )
   }
 
   return (
@@ -353,23 +379,61 @@ export function StoryEditor() {
           <div className="space-y-3 text-sm">
             {ideaLog.map((entry) => (
               <div key={entry.id} className="rounded-md border border-neutral-200 bg-white p-3 shadow-sm space-y-3">
-                <p className="font-medium text-neutral-800">Q: {entry.question}</p>
-                <div className="space-y-2">
-                  {entry.suggestions.map((suggestion, index) => (
-                    <div key={`${entry.id}-${index}`} className="flex flex-col gap-2 rounded border border-neutral-200 bg-neutral-50 p-2 sm:flex-row sm:items-start">
-                      <div className="flex-1 whitespace-pre-wrap text-neutral-700">{suggestion}</div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        className="self-end sm:self-auto"
-                        onClick={() => handleAddSuggestionToInstruction(suggestion)}
-                      >
-                        Add to prompt
-                      </Button>
-                    </div>
-                  ))}
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="font-medium text-neutral-800">Q: {entry.question}</p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="self-start sm:self-auto"
+                    onClick={() => handleToggleSuggestionVisibility(entry.id)}
+                  >
+                    {entry.isCollapsed ? (
+                      <>
+                        <ChevronDown className="mr-2 h-4 w-4" /> Show suggestions
+                      </>
+                    ) : (
+                      <>
+                        <ChevronUp className="mr-2 h-4 w-4" /> Hide suggestions
+                      </>
+                    )}
+                  </Button>
                 </div>
+                {!entry.isCollapsed && (
+                  <div className="space-y-2">
+                    {entry.suggestions.length > 0 ? (
+                      entry.suggestions.map((suggestion, index) => (
+                        <div
+                          key={`${entry.id}-${index}`}
+                          className="flex flex-col gap-2 rounded border border-neutral-200 bg-neutral-50 p-2 sm:flex-row sm:items-start"
+                        >
+                          <div className="flex-1 whitespace-pre-wrap text-neutral-700">{suggestion}</div>
+                          <div className="flex items-center gap-2 self-end sm:self-auto">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => handleAddSuggestionToInstruction(suggestion)}
+                            >
+                              Add to prompt
+                            </Button>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => handleDeleteSuggestion(entry.id, index)}
+                              aria-label="Delete suggestion"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs italic text-neutral-500">No suggestions remaining.</p>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
