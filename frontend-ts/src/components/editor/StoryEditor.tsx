@@ -18,11 +18,53 @@ import { uid } from '@/lib/utils'
 import type { Chunk } from '@/lib/types'
 import { Input } from '@/components/ui/input'
 
+const SUGGESTION_LINE_PATTERN = /^(?:\d+[\).]\s+|[-•–]\s+)/
+
+function extractSuggestions(answer: string): string[] {
+  const lines = answer
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+
+  if (lines.length === 0) {
+    return []
+  }
+
+  const suggestions: string[] = []
+  let current = ''
+
+  for (const line of lines) {
+    if (SUGGESTION_LINE_PATTERN.test(line)) {
+      if (current) {
+        suggestions.push(current.trim())
+      }
+      current = line.replace(SUGGESTION_LINE_PATTERN, '').trim()
+    } else if (line.match(/^(?:Suggestion|Option|Idea)\s*\d*[:.-]/i)) {
+      if (current) {
+        suggestions.push(current.trim())
+      }
+      current = line.replace(/^(?:Suggestion|Option|Idea)\s*\d*[:.-]\s*/i, '').trim()
+    } else {
+      current = current ? `${current} ${line}` : line
+    }
+  }
+
+  if (current) {
+    suggestions.push(current.trim())
+  }
+
+  if (suggestions.length === 0) {
+    return [answer.trim()]
+  }
+
+  return suggestions
+}
+
 export function StoryEditor() {
   const [isAddingChunk, setIsAddingChunk] = useState(false)
   const [userDraft, setUserDraft] = useState('')
   const [ideaQuestion, setIdeaQuestion] = useState('')
-  const [ideaLog, setIdeaLog] = useState<Array<{ id: string; question: string; answer: string }>>([])
+  const [ideaLog, setIdeaLog] = useState<Array<{ id: string; question: string; answer: string; suggestions: string[] }>>([])
   const queryClient = useQueryClient()
   
   const {
@@ -175,7 +217,17 @@ export function StoryEditor() {
     try {
       const answer = await askForIdea(prompt)
       if (answer && answer.trim()) {
-        setIdeaLog((prev) => [...prev, { id: uid(), question: prompt, answer: answer.trim() }])
+        const cleanedAnswer = answer.trim()
+        const suggestions = extractSuggestions(cleanedAnswer)
+        setIdeaLog((prev) => [
+          ...prev,
+          {
+            id: uid(),
+            question: prompt,
+            answer: cleanedAnswer,
+            suggestions,
+          },
+        ])
       } else {
         toast.error('The assistant did not return an answer')
       }
@@ -183,6 +235,22 @@ export function StoryEditor() {
     } catch (error) {
       // Error toast already handled inside hook
     }
+  }
+
+  const handleAddSuggestionToInstruction = (suggestion: string) => {
+    const textToInsert = suggestion.trim()
+    if (!textToInsert) {
+      return
+    }
+    setInstruction((prev) => {
+      if (prev.trim().length === 0) {
+        return textToInsert
+      }
+      const trimmedEnd = prev.replace(/\s+$/, '')
+      const separator = trimmedEnd.endsWith('\n') ? '' : '\n\n'
+      return `${trimmedEnd}${separator}${textToInsert}`
+    })
+    toast.success('Suggestion added to prompt')
   }
 
   return (
@@ -284,9 +352,24 @@ export function StoryEditor() {
         {ideaLog.length > 0 && (
           <div className="space-y-3 text-sm">
             {ideaLog.map((entry) => (
-              <div key={entry.id} className="rounded-md border border-neutral-200 bg-white p-3 shadow-sm">
+              <div key={entry.id} className="rounded-md border border-neutral-200 bg-white p-3 shadow-sm space-y-3">
                 <p className="font-medium text-neutral-800">Q: {entry.question}</p>
-                <p className="mt-2 whitespace-pre-wrap text-neutral-700">{entry.answer}</p>
+                <div className="space-y-2">
+                  {entry.suggestions.map((suggestion, index) => (
+                    <div key={`${entry.id}-${index}`} className="flex flex-col gap-2 rounded border border-neutral-200 bg-neutral-50 p-2 sm:flex-row sm:items-start">
+                      <div className="flex-1 whitespace-pre-wrap text-neutral-700">{suggestion}</div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        className="self-end sm:self-auto"
+                        onClick={() => handleAddSuggestionToInstruction(suggestion)}
+                      >
+                        Add to prompt
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
