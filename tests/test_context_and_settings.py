@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from storycraft.app.memory import CONTEXT_SUGGEST_SYSTEM
+
 
 def test_suggest_context_returns_structured_payload(client):
     response = client.post(
@@ -8,10 +10,11 @@ def test_suggest_context_returns_structured_payload(client):
     )
     assert response.status_code == 200
     data = response.json()
-    assert set(data.keys()) == {"summary", "npcs", "objects"}
+    assert set(data.keys()) == {"summary", "npcs", "objects", "system_prompt"}
     assert isinstance(data["summary"], str)
     assert isinstance(data["npcs"], list)
     assert isinstance(data["objects"], list)
+    assert data["system_prompt"] == CONTEXT_SUGGEST_SYSTEM
 
 
 def test_story_settings_persist_and_patch(client):

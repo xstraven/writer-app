@@ -104,6 +104,7 @@ const initialState = {
     summary: "",
     npcs: [],
     objects: [],
+    system_prompt: undefined,
   },
   branches: [],
   treeRows: [],

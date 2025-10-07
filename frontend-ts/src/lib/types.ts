@@ -56,6 +56,7 @@ export interface ContextState {
   summary: string;
   npcs: ContextItem[];
   objects: ContextItem[];
+  system_prompt?: string;
 }
 
 export interface Snippet {

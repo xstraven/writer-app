@@ -60,6 +60,14 @@ class ContextState(BaseModel):
     summary: str = ""
     npcs: List[ContextItem] = Field(default_factory=list)
     objects: List[ContextItem] = Field(default_factory=list)
+    system_prompt: Optional[str] = None
+
+
+class SuggestContextResponse(ContextState):
+    system_prompt: str = Field(
+        default="",
+        description="System prompt used when generating context suggestions.",
+    )
 
 
 class ContinueRequest(BaseModel):

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { MapPin, Users, Package, Plus, X, Sparkles, Loader2, Search } from 'lucide-react'
+import { MapPin, Users, Package, Plus, X, Sparkles, Loader2, Search, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -112,7 +112,7 @@ export function ContextPanel() {
 
   const clearContext = () => {
     if (!confirm('Clear the entire scene context? This cannot be undone.')) return
-    setContext({ summary: "", npcs: [], objects: [] })
+    setContext({ summary: "", npcs: [], objects: [], system_prompt: context.system_prompt })
     toast.success("Context cleared")
   }
 
@@ -202,6 +202,19 @@ export function ContextPanel() {
         </div>
       </CardHeader>
       <CardContent>
+        {context.system_prompt ? (
+          <div className="mb-4 rounded-md border border-dashed border-neutral-200 bg-neutral-50 p-3">
+            <div className="flex items-start gap-2 text-xs text-neutral-600">
+              <Info className="mt-0.5 h-4 w-4 text-neutral-500" />
+              <div>
+                <p className="font-medium text-neutral-700">Suggestion system prompt</p>
+                <p className="mt-1 whitespace-pre-wrap leading-relaxed text-neutral-700">
+                  {context.system_prompt}
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
         <ScrollArea className="h-[400px]">
           <div className="space-y-4">
             {/* Scene Summary */}

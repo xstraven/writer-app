@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-from .models import ContextState, LoreEntry, MemoryState
+from .models import ContextState, LoreEntry, MemoryState, SuggestContextResponse
 from .openrouter import OpenRouterClient
 from .prompt_builder import PromptBuilder
 
@@ -159,9 +159,13 @@ CONTEXT_SUGGEST_SYSTEM = (
 
 async def suggest_context_from_text(
     *, text: str, model: Optional[str] = None, max_npcs: int = 6, max_objects: int = 8
-) -> ContextState:
+) -> SuggestContextResponse:
     client = OpenRouterClient()
     schema = ContextState.model_json_schema()
+    schema.get("properties", {}).pop("system_prompt", None)
+    required = schema.get("required")
+    if isinstance(required, list) and "system_prompt" in required:
+        schema["required"] = [field for field in required if field != "system_prompt"]
     messages = [
         {"role": "system", "content": CONTEXT_SUGGEST_SYSTEM},
         {
@@ -193,6 +197,10 @@ async def suggest_context_from_text(
             import json as _json
 
             data = _json.loads(content)
-        return ContextState(**data)
+        ctx = ContextState(**data)
+        return SuggestContextResponse(
+            **ctx.model_dump(),
+            system_prompt=CONTEXT_SUGGEST_SYSTEM,
+        )
     except Exception:
-        return ContextState()
+        return SuggestContextResponse(system_prompt=CONTEXT_SUGGEST_SYSTEM)
