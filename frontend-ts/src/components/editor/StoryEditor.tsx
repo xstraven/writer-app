@@ -245,14 +245,14 @@ export function StoryEditor() {
     if (!textToInsert) {
       return
     }
-    setInstruction((prev) => {
-      if (prev.trim().length === 0) {
-        return textToInsert
-      }
-      const trimmedEnd = prev.replace(/\s+$/, '')
+    const currentInstruction = instruction
+    if (currentInstruction.trim().length === 0) {
+      setInstruction(textToInsert)
+    } else {
+      const trimmedEnd = currentInstruction.replace(/\s+$/, '')
       const separator = trimmedEnd.endsWith('\n') ? '' : '\n\n'
-      return `${trimmedEnd}${separator}${textToInsert}`
-    })
+      setInstruction(`${trimmedEnd}${separator}${textToInsert}`)
+    }
     toast.success('Suggestion added to prompt')
   }
 
