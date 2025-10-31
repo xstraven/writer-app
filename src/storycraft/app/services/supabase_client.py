@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import os
 from collections import defaultdict
 from copy import deepcopy
 from dataclasses import dataclass
@@ -173,6 +174,9 @@ def get_supabase_client(url: Optional[str] = None, key: Optional[str] = None) ->
     with _client_lock:
         if _client is not None:
             return _client
+        if os.getenv("PYTEST_CURRENT_TEST"):
+            _client = InMemorySupabaseClient()  # type: ignore[assignment]
+            return _client  # type: ignore[return-value]
         settings = get_settings()
         supabase_url = url or settings.supabase_url
         supabase_key = key or settings.supabase_service_key

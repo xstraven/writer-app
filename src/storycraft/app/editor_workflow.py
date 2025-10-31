@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Any, Dict, List, Optional
 
+from .instructor_client import get_structured_llm_client
 from .memory import continue_story
-from .openrouter import OpenRouterClient
+from .models import InternalEditorSelection
 
 JUDGE_SYSTEM_PROMPT = (
     "You are an impartial senior fiction editor. Review multiple candidate continuations for a "
@@ -54,8 +54,7 @@ async def run_internal_editor_workflow(
         system_prompt=generation_kwargs.get("system_prompt"),
     )
 
-    winner = selection.get("winner")
-    winner_index = _coerce_index(winner, len(candidates))
+    winner_index = _coerce_index(selection.winner, len(candidates))
     return candidates[winner_index]
 
 
@@ -68,8 +67,7 @@ async def _select_best_candidate(
     draft_segment: str,
     model: Optional[str],
     system_prompt: Optional[str],
-) -> Dict[str, Any]:
-    client = OpenRouterClient()
+) -> InternalEditorSelection:
     messages = [
         {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
         {
@@ -84,53 +82,27 @@ async def _select_best_candidate(
             ),
         },
     ]
-    schema = {
-        "name": "internal_editor_selection",
-        "schema": {
-            "type": "object",
-            "properties": {
-                "winner": {
-                    "type": "integer",
-                    "description": "Index (0-based) for the best candidate continuation.",
-                },
-                "reason": {
-                    "type": "string",
-                    "description": "Short explanation mentioning requested actions or story points.",
-                },
-                "scores": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "candidate": {"type": "integer"},
-                            "instruction_coverage": {"type": "number"},
-                            "continuity": {"type": "number"},
-                            "quality": {"type": "number"},
-                            "notes": {"type": "string"},
-                        },
-                        "required": [
-                            "candidate",
-                            "instruction_coverage",
-                            "continuity",
-                            "quality",
-                        ],
-                    },
-                },
-            },
-            "required": ["winner"],
-        },
-        "strict": False,
-    }
-
-    response = await client.chat(
-        messages=messages,
-        model=model,
-        temperature=0.0,
-        max_tokens=512,
-        response_format={"type": "json_schema", "json_schema": schema},
-        timeout=180,
-    )
-    return _parse_selection(response)
+    client = get_structured_llm_client()
+    try:
+        return await client.create(
+            response_model=InternalEditorSelection,
+            messages=messages,
+            model=model,
+            temperature=0.0,
+            max_tokens=512,
+            validation_context={"num_candidates": len(completions)},
+            fallback=lambda: InternalEditorSelection(
+                winner=0,
+                reason="Structured judge unavailable",
+                scores=[],
+            ),
+        )
+    except Exception:
+        return InternalEditorSelection(
+            winner=0,
+            reason="Failed to obtain structured judge response",
+            scores=[],
+        )
 
 
 def _build_judge_prompt(
@@ -182,16 +154,6 @@ def _build_judge_prompt(
         "optional scores per candidate (instruction_coverage, continuity, quality, notes)."
     )
     return "\n".join(lines)
-
-
-def _parse_selection(response: Dict[str, Any]) -> Dict[str, Any]:
-    try:
-        content = response.get("choices", [{}])[0].get("message", {}).get("content", {})
-        if isinstance(content, dict):
-            return content
-        return json.loads(content)
-    except Exception:
-        return {"winner": 0, "reason": "Judge response unparsable"}
 
 
 def _coerce_index(value: Any, length: int) -> int:

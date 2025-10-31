@@ -15,6 +15,7 @@ from ..dependencies import (
     get_story_settings_store,
 )
 from ..editor_workflow import run_internal_editor_workflow
+from ..instructor_client import get_structured_llm_client
 from ..lorebook_store import LorebookStore
 from ..memory import continue_story, extract_memory_from_text, suggest_context_from_text
 from ..models import (
@@ -24,6 +25,7 @@ from ..models import (
     DevSeedResponse,
     ExtractMemoryRequest,
     LoreEntryCreate,
+    LoreEntryDraft,
     LoreGenerateRequest,
     LoreGenerateResponse,
     MemoryState,
@@ -306,24 +308,22 @@ async def generate_lorebook(
     if not story_text.strip():
         story_text = ""
 
-    schema = {
-        "type": "array",
-        "items": {
-            "type": "object",
-            "properties": {
-                "name": {"type": "string"},
-                "kind": {"type": "string", "description": "character | location | item | faction | concept | note"},
-                "summary": {"type": "string"},
-                "tags": {"type": "array", "items": {"type": "string"}},
-                "keys": {"type": "array", "items": {"type": "string"}},
-                "always_on": {"type": "boolean"},
-            },
-            "required": ["name", "summary"],
-            "additionalProperties": False,
-        },
-    }
+    structured = get_structured_llm_client()
 
-    client = OpenRouterClient()
+    def default_lore_entries() -> list[LoreEntryDraft]:
+        excerpt = story_text[:200]
+        if len(story_text) > 200:
+            excerpt += "…"
+        return [
+            LoreEntryDraft(
+                name="Synopsis",
+                kind="note",
+                summary=excerpt or "Story synopsis placeholder.",
+                tags=["auto"],
+                keys=[],
+                always_on=True,
+            )
+        ]
     names = [n.strip() for n in (req.names or []) if n and n.strip()]
     if names:
         names_block = "\n".join(f"- {n}" for n in names)
@@ -361,31 +361,22 @@ async def generate_lorebook(
             },
         ]
 
-    result = await client.chat(
-        messages=messages,
-        model=req.model,
-        temperature=0.2,
-        response_format={
-            "type": "json_schema",
-            "json_schema": {"name": "lore_entries", "schema": schema, "strict": False},
-        },
-    )
+    try:
+        drafts = await structured.create(
+            response_model=list[LoreEntryDraft],
+            messages=messages,
+            model=req.model,
+            temperature=0.2,
+            max_retries=2,
+            fallback=default_lore_entries,
+        )
+    except Exception:
+        drafts = default_lore_entries()
+
+    if not isinstance(drafts, list):
+        drafts = default_lore_entries()
 
     created = 0
-    try:
-        content = result.get("choices", [{}])[0].get("message", {}).get("content")
-        data = content if isinstance(content, list) else json.loads(content or "[]")
-    except Exception:
-        data = [
-            {
-                "name": "Synopsis",
-                "kind": "note",
-                "summary": (story_text[:200] + ("…" if len(story_text) > 200 else "")) or "Story synopsis placeholder.",
-                "tags": ["auto"],
-                "keys": [],
-                "always_on": True,
-            }
-        ]
 
     if req.strategy == "replace":
         try:
@@ -394,31 +385,31 @@ async def generate_lorebook(
             pass
 
     existing = {(e.name.strip().lower(), (e.kind or "").strip().lower()) for e in lore_store.list(story)}
-    for it in data or []:
+    for draft in drafts or []:
         try:
-            name = (it.get("name", "") or "").strip()
-            summary = (it.get("summary", "") or "").strip()
+            draft_obj = draft if isinstance(draft, LoreEntryDraft) else LoreEntryDraft.model_validate(draft)
+        except Exception:
+            continue
+        try:
+            name = (draft_obj.name or "").strip()
+            summary = (draft_obj.summary or "").strip()
             if not name or not summary:
                 continue
-            kind = (it.get("kind", "note") or "note").strip() or "note"
+            kind = (draft_obj.kind or "note").strip() or "note"
             key = (name.lower(), kind.lower())
             if key in existing and req.strategy != "replace":
                 continue
-            tags = it.get("tags") or []
-            if not isinstance(tags, list):
-                tags = []
-            keys = it.get("keys") or []
-            if not isinstance(keys, list):
-                keys = []
-            always_on = bool(it.get("always_on", False))
+            tags = [str(t).strip() for t in (draft_obj.tags or []) if str(t).strip()]
+            keys = [str(k).strip() for k in (draft_obj.keys or []) if str(k).strip()]
+            always_on = bool(draft_obj.always_on)
             created_entry = lore_store.create(
                 LoreEntryCreate(
                     story=story,
                     name=name,
                     kind=kind,
                     summary=summary,
-                    tags=[str(t) for t in tags if str(t).strip()],
-                    keys=[str(k) for k in keys if str(k).strip()],
+                    tags=tags,
+                    keys=keys,
                     always_on=always_on,
                 )
             )

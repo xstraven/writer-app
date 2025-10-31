@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 from typing import Literal
 
 
@@ -61,6 +61,46 @@ class ContextState(BaseModel):
     npcs: List[ContextItem] = Field(default_factory=list)
     objects: List[ContextItem] = Field(default_factory=list)
     system_prompt: Optional[str] = None
+
+
+class EditorCandidateScore(BaseModel):
+    candidate: int
+    instruction_coverage: Optional[float] = None
+    continuity: Optional[float] = None
+    quality: Optional[float] = None
+    notes: Optional[str] = None
+
+    @field_validator("candidate")
+    @classmethod
+    def candidate_non_negative(cls, value: int) -> int:
+        return max(0, value)
+
+
+class InternalEditorSelection(BaseModel):
+    winner: int
+    reason: Optional[str] = None
+    scores: List[EditorCandidateScore] = Field(default_factory=list)
+
+    @field_validator("winner")
+    @classmethod
+    def winner_non_negative(cls, value: int) -> int:
+        return max(0, value)
+
+    @model_validator(mode="after")
+    def clamp_winner(self, info: ValidationInfo) -> "InternalEditorSelection":
+        limit = info.context.get("num_candidates")
+        if isinstance(limit, int) and limit > 0 and self.winner >= limit:
+            self.winner = max(0, limit - 1)
+        return self
+
+
+class LoreEntryDraft(BaseModel):
+    name: str
+    kind: str = "note"
+    summary: str
+    tags: List[str] = Field(default_factory=list)
+    keys: List[str] = Field(default_factory=list)
+    always_on: bool = False
 
 
 class SuggestContextResponse(ContextState):

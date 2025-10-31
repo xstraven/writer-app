@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
+from .instructor_client import get_structured_llm_client
 from .models import ContextState, LoreEntry, MemoryState, SuggestContextResponse
 from .openrouter import OpenRouterClient
 from .prompt_builder import PromptBuilder
@@ -20,9 +21,7 @@ async def extract_memory_from_text(
     model: Optional[str] = None,
     max_items: int = 10,
 ) -> MemoryState:
-    client = OpenRouterClient()
-
-    schema = MemoryState.model_json_schema()
+    structured = get_structured_llm_client()
 
     messages = [
         {"role": "system", "content": MEMORY_EXTRACTION_SYSTEM},
@@ -35,29 +34,15 @@ async def extract_memory_from_text(
         },
     ]
 
-    response = await client.chat(
-        messages=messages,
-        model=model,
-        temperature=0.2,
-        response_format={
-            "type": "json_schema",
-            "json_schema": {
-                "name": "memory_state",
-                "schema": schema,
-                "strict": False,
-            },
-        },
-    )
-
-    # Attempt to parse assistant message content as JSON; fall back to empty state on failure.
     try:
-        content = response["choices"][0]["message"]["content"]
-        data = content if isinstance(content, dict) else None
-        if data is None:
-            import json as _json
-
-            data = _json.loads(content)
-        return MemoryState(**data)
+        state = await structured.create(
+            response_model=MemoryState,
+            messages=messages,
+            model=model,
+            temperature=0.2,
+            fallback=lambda: MemoryState(),
+        )
+        return state
     except Exception:
         return MemoryState()
 
@@ -160,12 +145,7 @@ CONTEXT_SUGGEST_SYSTEM = (
 async def suggest_context_from_text(
     *, text: str, model: Optional[str] = None, max_npcs: int = 6, max_objects: int = 8
 ) -> SuggestContextResponse:
-    client = OpenRouterClient()
-    schema = ContextState.model_json_schema()
-    schema.get("properties", {}).pop("system_prompt", None)
-    required = schema.get("required")
-    if isinstance(required, list) and "system_prompt" in required:
-        schema["required"] = [field for field in required if field != "system_prompt"]
+    structured = get_structured_llm_client()
     messages = [
         {"role": "system", "content": CONTEXT_SUGGEST_SYSTEM},
         {
@@ -177,30 +157,14 @@ async def suggest_context_from_text(
             ),
         },
     ]
-    response = await client.chat(
-        messages=messages,
-        model=model,
-        temperature=0.2,
-        response_format={
-            "type": "json_schema",
-            "json_schema": {
-                "name": "context_state",
-                "schema": schema,
-                "strict": False,
-            },
-        },
-    )
     try:
-        content = response["choices"][0]["message"]["content"]
-        data = content if isinstance(content, dict) else None
-        if data is None:
-            import json as _json
-
-            data = _json.loads(content)
-        ctx = ContextState(**data)
-        return SuggestContextResponse(
-            **ctx.model_dump(),
-            system_prompt=CONTEXT_SUGGEST_SYSTEM,
+        ctx = await structured.create(
+            response_model=ContextState,
+            messages=messages,
+            model=model,
+            temperature=0.2,
+            fallback=lambda: ContextState(),
         )
+        return SuggestContextResponse(**ctx.model_dump(), system_prompt=CONTEXT_SUGGEST_SYSTEM)
     except Exception:
         return SuggestContextResponse(system_prompt=CONTEXT_SUGGEST_SYSTEM)
