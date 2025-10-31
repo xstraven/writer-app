@@ -11,18 +11,11 @@ ENV_SECRET_NAME = "storycraft-backend-env"
 repo_root = Path(__file__).parent
 
 image = (
-    modal.Image.debian_slim(python_version="3.12")
-    .pip_install(
-        "fastapi>=0.111",
-        "uvicorn>=0.30",
-        "pydantic>=2.8",
-        "pydantic-settings>=2.4",
-        "httpx>=0.27",
-        "python-multipart>=0.0.9",
-        "supabase>=2.21.1",
-        "psycopg[binary]>=3.2",
+    modal.Image.debian_slim(python_version="3.13")
+    .uv_sync()
+    .add_local_dir(
+        local_path=str(repo_root / "src"), remote_path="/root/app/src"
     )
-    .add_local_dir(local_path=str(repo_root / "src"), remote_path="/root/app/src")
 )
 
 app = modal.App(APP_NAME)
