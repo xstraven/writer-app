@@ -43,29 +43,14 @@ Quick Start
    ```
    The app is available at `http://localhost:3000` (expects the API on port 8000).
 
-Modal Deployment
-----------------
+Deployment
+----------
 
-1. Create a Modal secret containing the required backend env vars (Supabase URL, service key, optional OpenRouter key):
-   ```bash
-   modal secret create storycraft-backend-env \
-     STORYCRAFT_SUPABASE_URL="https://...supabase.co" \
-     STORYCRAFT_SUPABASE_SERVICE_KEY="..." \
-     STORYCRAFT_OPENROUTER_API_KEY="sk-..."   # optional
-   ```
-2. Deploy the FastAPI app to Modal (uses `modal_app.py`). Modal rebuilds the image automatically when local sources change; you can add a `--tag $(git rev-parse --short HEAD)` if you want to version deployments explicitly:
-   ```bash
-   modal deploy modal_app.py
-   ```
-3. Keep an interactive dev server running with hot reloads when needed:
-   ```bash
-   modal serve modal_app.py
-   ```
-4. Inspect runtime logs in another terminal:
-   ```bash
-   modal app logs storycraft-backend
-   ```
-5. CI/CD: GitHub Actions deploys on pushes to `main` via `.github/workflows/deploy-modal.yml`. Provide `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` as repository secrets (`Settings → Secrets and variables → Actions`).
+This project is designed for local development. To deploy:
+
+- **Backend**: The FastAPI app in `src/storycraft/app/` can be deployed to any server that runs Python (e.g., Heroku, Railway, Modal, Render).
+- **Frontend**: The Next.js frontend in `frontend-ts/` can be deployed to Vercel, Netlify, or any static hosting service.
+- **Database**: Supabase can be replaced with any PostgreSQL-compatible database.
 
 Environment Variables
 ---------------------
@@ -105,8 +90,3 @@ Project Layout
 - `tests/` — Pytest coverage for health, generation, snippets, and settings APIs
 - `data/` — Sample lore and local JSON defaults (base settings, etc.)
 - `scripts/` — Utility scripts such as `setup_supabase.py`
-
-Contributing
-------------
-
-Review `AGENTS.md` for conventions, commit message style (Conventional Commits), and PR expectations. Always run the pytest and ruff commands listed above before submitting changes.
