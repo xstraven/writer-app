@@ -3,6 +3,8 @@ Storycraft — AI-Assisted Novel Writing
 
 Storycraft is a full-stack starter writer kit for collaborative fiction writing with LLM assist.
 
+![alt text](<Screenshot 2025-11-03 at 22.06.30.png>)
+
 - **Backend**: FastAPI + Supabase-backed persistence, modular routers under `src/storycraft/app/routes/`
 - **Frontend**: Next.js + React + Tailwind located in `frontend-ts/`
 - **LLM**: OpenRouter chat completions (stubs enabled when no API key is present)
