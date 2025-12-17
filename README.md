@@ -5,7 +5,7 @@ Storycraft is a full-stack starter writer kit for collaborative fiction writing 
 
 ![alt text](<Screenshot 2025-11-03 at 22.06.30.png>)
 
-- **Backend**: FastAPI + Supabase-backed persistence, modular routers under `src/storycraft/app/routes/`
+- **Backend**: FastAPI with auto-switching persistence (local DuckDB or cloud Supabase), modular routers under `src/storycraft/app/routes/`
 - **Frontend**: Next.js + React + Tailwind located in `frontend-ts/`
 - **LLM**: OpenRouter chat completions (stubs enabled when no API key is present)
 - **Package managers**: `uv` for Python, `npm` for the frontend
@@ -14,6 +14,29 @@ Quick Start
 -----------
 
 ### Backend
+
+Storycraft supports two database modes:
+- **Local Mode (DuckDB)**: Perfect for local development and testing - no setup required!
+- **Cloud Mode (Supabase)**: Use for production or when you want cloud-hosted storage
+
+#### Option 1: Local Mode (Recommended for getting started)
+
+1. Install uv (see https://docs.astral.sh/uv/) and sync dependencies:
+   ```bash
+   uv sync
+   ```
+2. Run the API:
+   ```bash
+   uv run uvicorn storycraft.app.main:app --reload --port 8000
+   ```
+   Visit `http://127.0.0.1:8000/health` to confirm.
+
+That's it! The app will automatically create a local DuckDB database at `./data/storycraft.duckdb`.
+
+**Optional**: Set `STORYCRAFT_OPENROUTER_API_KEY` in `.env` for real LLM responses (omit for stubbed responses during development).
+
+#### Option 2: Cloud Mode with Supabase
+
 1. Install uv (see https://docs.astral.sh/uv/) and sync dependencies:
    ```bash
    uv sync
@@ -26,7 +49,7 @@ Quick Start
    ```bash
    STORYCRAFT_SUPABASE_DB_URL="postgresql://…" uv run python scripts/setup_supabase.py
    ```
-   Use the project’s Postgres connection string from the Supabase dashboard.
+   Use the project's Postgres connection string from the Supabase dashboard.
 4. Run the API:
    ```bash
    uv run uvicorn storycraft.app.main:app --reload --port 8000
@@ -34,6 +57,9 @@ Quick Start
    Visit `http://127.0.0.1:8000/health` to confirm.
 
 ### Frontend
+
+The frontend works out of the box with zero configuration!
+
 1. Install Node dependencies:
    ```bash
    cd frontend-ts
@@ -43,7 +69,12 @@ Quick Start
    ```bash
    npm run dev
    ```
-   The app is available at `http://localhost:3000` (expects the API on port 8000).
+   The app is available at `http://localhost:3000` (automatically connects to backend on `http://localhost:8000`).
+
+**Optional**: To point to a different backend URL, create `frontend-ts/.env.local`:
+```bash
+NEXT_PUBLIC_STORYCRAFT_API_BASE=https://your-backend-url.com
+```
 
 Deployment
 ----------
@@ -59,13 +90,25 @@ Environment Variables
 
 All variables use the `STORYCRAFT_` prefix.
 
-- `STORYCRAFT_SUPABASE_URL` — Supabase project URL.
-- `STORYCRAFT_SUPABASE_SERVICE_KEY` — Supabase service role key used by the backend.
-- `STORYCRAFT_SUPABASE_DB_URL` — Postgres connection string (only required when running the setup script).
-- `STORYCRAFT_OPENROUTER_API_KEY` — OpenRouter key; omit to use stubbed responses.
-- `STORYCRAFT_OPENROUTER_BASE_URL` — override base URL (default `https://openrouter.ai/api/v1`).
-- `STORYCRAFT_OPENROUTER_DEFAULT_MODEL` — default chat model (default `deepseek/deepseek-chat-v3-0324`).
-- Frontend envs go in `frontend-ts/.env.local` (e.g., `NEXT_PUBLIC_STORYCRAFT_API_BASE`).
+### Database Configuration
+The app automatically selects the database backend:
+- **Local Mode**: Used when Supabase credentials are not configured
+- **Cloud Mode**: Used when Supabase credentials are provided
+
+- `STORYCRAFT_DUCKDB_PATH` — Path to local DuckDB file (default: `./data/storycraft.duckdb`)
+- `STORYCRAFT_SUPABASE_URL` — Supabase project URL
+- `STORYCRAFT_SUPABASE_SERVICE_KEY` — Supabase service role key used by the backend
+- `STORYCRAFT_SUPABASE_DB_URL` — Postgres connection string (only required when running the setup script)
+
+### Other Configuration
+- `STORYCRAFT_OPENROUTER_API_KEY` — OpenRouter key; omit to use stubbed responses
+- `STORYCRAFT_OPENROUTER_BASE_URL` — override base URL (default `https://openrouter.ai/api/v1`)
+- `STORYCRAFT_OPENROUTER_DEFAULT_MODEL` — default chat model (default `deepseek/deepseek-chat-v3-0324`)
+
+### Frontend Configuration (Optional)
+- `NEXT_PUBLIC_STORYCRAFT_API_BASE` — Backend API URL (default: `http://localhost:8000`)
+  - Only needed if deploying or using a non-standard backend URL
+  - Set in `frontend-ts/.env.local` if needed
 
 Key Endpoints
 -------------
@@ -80,7 +123,8 @@ Key Endpoints
 Testing & Tooling
 -----------------
 
-- Run backend tests: `UV_CACHE_DIR=.uv-cache uv run pytest -q`
+- Run backend tests: `uv run pytest -q`
+  - Tests automatically use in-memory storage (no database setup required)
 - Lint / format Python: `uv run ruff check .` and `uv run ruff format .`
 - Frontend lint: `cd frontend-ts && npm run lint`
 

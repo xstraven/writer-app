@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     supabase_url: Optional[str] = None
     supabase_service_key: Optional[str] = None
 
+    # Local DuckDB database path (used when Supabase credentials not configured)
+    duckdb_path: str = "./data/storycraft.duckdb"
+
 
 @lru_cache
 def get_settings() -> Settings:

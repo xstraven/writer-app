@@ -174,17 +174,26 @@ def get_supabase_client(url: Optional[str] = None, key: Optional[str] = None) ->
     with _client_lock:
         if _client is not None:
             return _client
+
+        # Priority 1: Tests use in-memory
         if os.getenv("PYTEST_CURRENT_TEST"):
             _client = InMemorySupabaseClient()  # type: ignore[assignment]
             return _client  # type: ignore[return-value]
+
         settings = get_settings()
         supabase_url = url or settings.supabase_url
         supabase_key = key or settings.supabase_service_key
-        if not supabase_url or not supabase_key:
-            _client = InMemorySupabaseClient()  # type: ignore[assignment]
-            return _client  # type: ignore[return-value]
-        _client = create_client(supabase_url, supabase_key)
-        return _client
+
+        # Priority 2: Supabase credentials provided
+        if supabase_url and supabase_key:
+            _client = create_client(supabase_url, supabase_key)
+            return _client
+
+        # Priority 3: No credentials → use DuckDB local mode
+        from .duckdb_client import DuckDBSupabaseClient
+
+        _client = DuckDBSupabaseClient(db_path=settings.duckdb_path)  # type: ignore[assignment]
+        return _client  # type: ignore[return-value]
 
 
 def reset_supabase_client() -> None:

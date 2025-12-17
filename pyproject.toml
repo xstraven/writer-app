@@ -17,6 +17,7 @@ dependencies = [
   "modal>=1.2.1",
   "openai>=1.35.0",
   "instructor>=1.4.0",
+  "duckdb>=1.0.0",
 ]
 
 
