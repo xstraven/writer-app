@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -8,6 +9,8 @@ from typing import Iterable, List, Optional
 from supabase import Client
 
 from .services.supabase_client import get_supabase_client
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -351,10 +354,12 @@ class SnippetStore:
         self._table().delete().execute()
 
     def upsert_branch(self, *, story: str, name: str, head_id: str) -> None:
+        logger.info(f"Updating branch '{name}' for story '{story}' to head {head_id[:8]}...")
         self._branches().upsert(
             {"story": story, "name": name, "head_id": head_id},
             on_conflict="story,name",
         ).execute()
+        logger.info(f"Successfully updated branch '{name}' for story '{story}'")
 
     def list_branches(self, story: str) -> List[tuple]:
         res = (
@@ -377,6 +382,61 @@ class SnippetStore:
 
     def delete_branch(self, *, story: str, name: str) -> None:
         self._branches().delete().eq("story", story).eq("name", name).execute()
+
+    def validate_branch_head(self, story: str, head_id: str) -> dict:
+        """
+        Validate that head_id points to a valid path from root.
+        Returns dict with: { valid: bool, reason: str, path_length: int }
+        """
+        # Check if head exists
+        head = self.get(head_id)
+        if not head or head.story != story:
+            return {"valid": False, "reason": "head_not_found", "path_length": 0}
+
+        # Traverse to root
+        path = self.path_from_head(story, head_id)
+        if not path:
+            return {"valid": False, "reason": "empty_path", "path_length": 0}
+
+        # Check if root has no parent
+        root = path[0]
+        if root.parent_id is not None:
+            return {"valid": False, "reason": "root_has_parent", "path_length": len(path)}
+
+        # Compare with main_path to detect disconnection
+        main = self.main_path(story)
+        if not main:
+            return {"valid": True, "reason": "ok_empty_story", "path_length": len(path)}
+
+        # If head_path is shorter than main_path and doesn't share prefix, it's disconnected
+        main_ids = set(s.id for s in main)
+        path_ids = set(s.id for s in path)
+
+        # Check if head_path is a subset of main_path
+        if not path_ids.issubset(main_ids) and len(path) < len(main):
+            return {
+                "valid": False,
+                "reason": "disconnected_from_main",
+                "path_length": len(path),
+                "main_length": len(main)
+            }
+
+        return {"valid": True, "reason": "ok", "path_length": len(path)}
+
+    def repair_branch_head(self, story: str, name: str) -> Optional[str]:
+        """
+        Attempt to repair a corrupted branch head by finding the correct head.
+        Returns the new head_id or None if repair not possible.
+        """
+        # For 'main', use the last snippet in main_path
+        if name == "main":
+            main = self.main_path(story)
+            if main:
+                new_head_id = main[-1].id
+                self.upsert_branch(story=story, name=name, head_id=new_head_id)
+                return new_head_id
+
+        return None
 
     def _list_all_snippets(self, story: str) -> List[SnippetRow]:
         res = (

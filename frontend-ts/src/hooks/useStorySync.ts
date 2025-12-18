@@ -95,6 +95,18 @@ export function useStorySync() {
       return
     }
 
+    // CORRUPTION DETECTION: Check if backend path looks suspiciously short
+    if (chunks.length > 5 && backendChunks.length === 1) {
+      console.error(
+        `[useStorySync] Potential corruption: Local has ${chunks.length} chunks ` +
+        `but backend returned ${backendChunks.length}`
+      )
+      toast.error(
+        'Story sync issue detected. Refreshing may help. Check branch view if chunks are missing.',
+        { duration: 10000 }
+      )
+    }
+
     // If frontend has no chunks, adopt backend entirely
     if (chunks.length === 0 && backendChunks.length > 0) {
       setChunks(backendChunks)

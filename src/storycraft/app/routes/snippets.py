@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 import sys
 import traceback
 
 from fastapi import APIRouter, Depends, HTTPException
+
+logger = logging.getLogger(__name__)
 
 from ..editor_workflow import run_internal_editor_workflow
 from ..memory import continue_story, extract_memory_from_text
@@ -54,8 +57,11 @@ async def append_snippet(
         if req.set_active is not False:
             branch_name = (req.branch or "main").strip() or "main"
             snippet_store.upsert_branch(story=req.story, name=branch_name, head_id=row.id)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(
+            f"Failed to update branch for story '{req.story}': {e}",
+            exc_info=True
+        )
     return Snippet(**row.__dict__)
 
 
@@ -75,8 +81,11 @@ async def regenerate_snippet(
         if req.set_active:
             branch_name = (req.branch or "main").strip() or "main"
             snippet_store.upsert_branch(story=req.story, name=branch_name, head_id=row.id)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(
+            f"Failed to update branch for story '{req.story}': {e}",
+            exc_info=True
+        )
     return Snippet(**row.__dict__)
 
 
@@ -91,8 +100,11 @@ async def choose_active_child(
     try:
         branch_name = (req.branch or "main").strip() or "main"
         snippet_store.upsert_branch(story=req.story, name=branch_name, head_id=req.child_id)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(
+            f"Failed to update branch for story '{req.story}': {e}",
+            exc_info=True
+        )
     return {"ok": True}
 
 
@@ -172,8 +184,11 @@ async def regenerate_ai(
         if req.set_active:
             branch_name = (req.branch or "main").strip() or "main"
             snippet_store.upsert_branch(story=req.story, name=branch_name, head_id=row.id)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(
+            f"Failed to update branch for story '{req.story}': {e}",
+            exc_info=True
+        )
     return Snippet(**row.__dict__)
 
 
@@ -225,8 +240,11 @@ async def insert_below(
                 name=branch_name,
                 head_id=row.id,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(
+                f"Failed to update branch for story '{req.story}': {e}",
+                exc_info=True
+            )
     return Snippet(**row.__dict__)
 
 
@@ -297,7 +315,27 @@ async def get_branch_path(
         except Exception:
             main_branch = None
         if main_branch:
-            path = snippet_store.path_from_head(story, main_branch[2])
+            # Validate branch head integrity
+            validation = snippet_store.validate_branch_head(story, main_branch[2])
+
+            if not validation["valid"]:
+                logger.warning(
+                    f"Corrupted main branch detected for story '{story}': "
+                    f"{validation['reason']}. Attempting repair..."
+                )
+
+                # Attempt auto-repair
+                repaired_head = snippet_store.repair_branch_head(story, "main")
+
+                if repaired_head:
+                    logger.info(f"Successfully repaired main branch for story '{story}'")
+                    path = snippet_store.path_from_head(story, repaired_head)
+                else:
+                    # Fallback to main_path if repair fails
+                    logger.warning(f"Repair failed, using main_path fallback for story '{story}'")
+                    path = snippet_store.main_path(story)
+            else:
+                path = snippet_store.path_from_head(story, main_branch[2])
         else:
             path = snippet_store.main_path(story)
 
@@ -358,6 +396,33 @@ async def delete_branch(
 ) -> dict:
     snippet_store.delete_branch(story=story, name=name)
     return {"ok": True}
+
+
+@router.get("/api/branches/health", response_model=dict)
+async def check_branch_health(
+    story: str,
+    snippet_store: SnippetStore = Depends(get_snippet_store),
+) -> dict:
+    """
+    Check integrity of all branches for a story.
+    Returns health status and any issues found.
+    """
+    branches = snippet_store.list_branches(story)
+    results = {}
+
+    for branch_row in branches:
+        name = branch_row[1]
+        head_id = branch_row[2]
+        validation = snippet_store.validate_branch_head(story, head_id)
+        results[name] = validation
+
+    all_valid = all(r["valid"] for r in results.values())
+
+    return {
+        "story": story,
+        "healthy": all_valid,
+        "branches": results,
+    }
 
 
 @router.get("/api/snippets/{snippet_id}", response_model=Snippet)
