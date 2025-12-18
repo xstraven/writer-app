@@ -116,7 +116,8 @@ export function StoryEditor() {
       return
     }
 
-    setInstruction('')
+    // Keep instruction persistent between generations
+    // Removed: setInstruction('')
 
     const { chunks: currentChunks } = useAppStore.getState()
     const parentId = currentChunks.length > 0 ? currentChunks[currentChunks.length - 1].id : null
@@ -301,9 +302,19 @@ export function StoryEditor() {
 
       {/* Instruction Box with TipTap */}
       <div>
-        <label htmlFor="instruction" className="block mb-2 text-sm text-neutral-600">
-          Instruction to model (Press Cmd/Ctrl+Enter to generate)
-        </label>
+        <div className="flex items-center justify-between mb-2">
+          <label htmlFor="instruction" className="text-sm text-neutral-600">
+            Instruction to model (Press Cmd/Ctrl+Enter to generate)
+          </label>
+          <button
+            type="button"
+            onClick={() => setInstruction('')}
+            disabled={isGenerating || !instruction.trim()}
+            className="text-xs text-neutral-500 hover:text-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Clear
+          </button>
+        </div>
         <div className="relative" aria-busy={isGenerating}>
           {isGenerating && (
             <div className="absolute inset-0 rounded-md bg-white/60 dark:bg-neutral-900/70 backdrop-blur-[1px] z-10 flex items-center justify-center" aria-hidden="true">

@@ -113,10 +113,10 @@ class SuggestContextResponse(ContextState):
 class ContinueRequest(BaseModel):
     draft_text: str
     instruction: str = ""
-    max_tokens: int = 512
+    max_tokens: int = 1024
     model: Optional[str] = None
     use_memory: bool = True
-    temperature: float = 0.7
+    temperature: float = 1.0
     # Optional override of the system prompt used for generation.
     system_prompt: Optional[str] = None
     # Optional user/LLM-provided context to enrich the prompt.
@@ -158,8 +158,8 @@ class AppPersistedState(BaseModel):
     draft_text: str = ""
     instruction: str = ""
     model: Optional[str] = None
-    temperature: float = 0.7
-    max_tokens: int = 512
+    temperature: float = 1.0
+    max_tokens: int = 1024
     system_prompt: Optional[str] = None
     include_memory: bool = True
     include_context: bool = True
@@ -265,10 +265,10 @@ class RegenerateAIRequest(BaseModel):
     story: str
     target_snippet_id: str
     instruction: str = ""
-    max_tokens: int = 512
+    max_tokens: int = 1024
     model: Optional[str] = None
     use_memory: bool = True
-    temperature: float = 0.7
+    temperature: float = 1.0
     max_context_window: Optional[int] = None
     context: Optional[ContextState] = None
     use_context: bool = True
@@ -381,8 +381,8 @@ class SeedStoryRequest(BaseModel):
     story: str
     prompt: str
     model: Optional[str] = None
-    temperature: float = 0.7
-    max_tokens_first_chunk: int = 200
+    temperature: float = 1.0
+    max_tokens_first_chunk: int = 2048
     # When true, attempt to pick relevant lore entries by keyword match.
     use_lore: bool = True
 
@@ -393,6 +393,8 @@ class SeedStoryResponse(BaseModel):
     content: str
     synopsis: str = ""
     relevant_lore_ids: list[str] = Field(default_factory=list)
+    generated_lore_ids: list[str] = Field(default_factory=list)
+    generated_lore_count: int = 0
 
 
 # --- Lorebook Generation ---

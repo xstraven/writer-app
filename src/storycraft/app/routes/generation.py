@@ -270,6 +270,26 @@ async def seed_story_from_prompt(
     except Exception:
         synopsis = ""
 
+    # Auto-generate lorebook entries from the generated content
+    generated_lore_count = 0
+    generated_lore_ids: list[str] = []
+    try:
+        # Combine prompt and generated content for better entity extraction
+        lore_text = (prompt + "\n\n" + content)
+        generated_lore_count, generated_lore_ids = await generate_lorebook_from_text(
+            story=story,
+            story_text=lore_text,
+            lore_store=lore_store,
+            model=req.model,
+            max_items=10,  # Reasonable default for initial seeding
+            target_names=None,  # Auto-extract entities
+            strategy="append",
+        )
+    except Exception as e:
+        # Don't fail story creation if lorebook generation fails
+        import logging
+        logging.warning(f"Failed to auto-generate lorebook for story '{story}': {e}")
+
     relevant_ids: list[str] = []
     if req.use_lore:
         try:
@@ -290,23 +310,37 @@ async def seed_story_from_prompt(
         content=content,
         synopsis=synopsis,
         relevant_lore_ids=relevant_ids,
+        generated_lore_ids=generated_lore_ids,
+        generated_lore_count=generated_lore_count,
     )
 
 
-@router.post("/api/lorebook/generate", response_model=LoreGenerateResponse)
-async def generate_lorebook(
-    req: LoreGenerateRequest,
-    snippet_store: SnippetStore = Depends(get_snippet_store),
-    lore_store: LorebookStore = Depends(get_lorebook_store),
-) -> LoreGenerateResponse:
-    story = (req.story or "").strip()
-    if not story:
-        raise HTTPException(status_code=400, detail="Missing story")
+async def generate_lorebook_from_text(
+    story: str,
+    story_text: str,
+    lore_store: LorebookStore,
+    model: Optional[str] = None,
+    max_items: int = 10,
+    target_names: Optional[list[str]] = None,
+    strategy: str = "append",
+) -> tuple[int, list[str]]:
+    """
+    Generate lorebook entries from story text using LLM.
 
-    path = snippet_store.main_path(story)
-    story_text = snippet_store.build_text(path)
+    Args:
+        story: Name of the story
+        story_text: Text to extract entities from
+        lore_store: Store instance for saving entries
+        model: LLM model to use (optional)
+        max_items: Maximum number of entries to generate
+        target_names: Optional specific names to generate for
+        strategy: "append" (add to existing) or "replace" (clear first)
+
+    Returns:
+        Tuple of (created_count, list_of_created_ids)
+    """
     if not story_text.strip():
-        story_text = ""
+        return (0, [])
 
     structured = get_structured_llm_client()
 
@@ -324,7 +358,8 @@ async def generate_lorebook(
                 always_on=True,
             )
         ]
-    names = [n.strip() for n in (req.names or []) if n and n.strip()]
+
+    names = [n.strip() for n in (target_names or []) if n and n.strip()]
     if names:
         names_block = "\n".join(f"- {n}" for n in names)
         messages = [
@@ -356,7 +391,7 @@ async def generate_lorebook(
             {
                 "role": "user",
                 "content": (
-                    f"Produce up to {max(1, int(req.max_items))} entries from this story text.\n\n" + story_text
+                    f"Produce up to {max(1, int(max_items))} entries from this story text.\n\n" + story_text
                 ),
             },
         ]
@@ -365,7 +400,7 @@ async def generate_lorebook(
         drafts = await structured.create(
             response_model=list[LoreEntryDraft],
             messages=messages,
-            model=req.model,
+            model=model,
             temperature=0.2,
             max_retries=2,
             fallback=default_lore_entries,
@@ -377,8 +412,9 @@ async def generate_lorebook(
         drafts = default_lore_entries()
 
     created = 0
+    created_ids: list[str] = []
 
-    if req.strategy == "replace":
+    if strategy == "replace":
         try:
             lore_store.delete_all(story)
         except Exception:
@@ -397,7 +433,7 @@ async def generate_lorebook(
                 continue
             kind = (draft_obj.kind or "note").strip() or "note"
             key = (name.lower(), kind.lower())
-            if key in existing and req.strategy != "replace":
+            if key in existing and strategy != "replace":
                 continue
             tags = [str(t).strip() for t in (draft_obj.tags or []) if str(t).strip()]
             keys = [str(k).strip() for k in (draft_obj.keys or []) if str(k).strip()]
@@ -416,8 +452,36 @@ async def generate_lorebook(
             existing.add(key)
             if created_entry:
                 created += 1
+                created_ids.append(created_entry.id)
         except Exception:
             continue
+
+    return (created, created_ids)
+
+
+@router.post("/api/lorebook/generate", response_model=LoreGenerateResponse)
+async def generate_lorebook(
+    req: LoreGenerateRequest,
+    snippet_store: SnippetStore = Depends(get_snippet_store),
+    lore_store: LorebookStore = Depends(get_lorebook_store),
+) -> LoreGenerateResponse:
+    story = (req.story or "").strip()
+    if not story:
+        raise HTTPException(status_code=400, detail="Missing story")
+
+    path = snippet_store.main_path(story)
+    story_text = snippet_store.build_text(path)
+
+    # Call helper function
+    created, _ = await generate_lorebook_from_text(
+        story=story,
+        story_text=story_text,
+        lore_store=lore_store,
+        model=req.model,
+        max_items=req.max_items,
+        target_names=req.names,
+        strategy=req.strategy,
+    )
 
     total = len(lore_store.list(story))
     return LoreGenerateResponse(story=story, created=created, total=total)

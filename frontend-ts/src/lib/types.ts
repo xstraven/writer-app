@@ -221,6 +221,8 @@ export interface SeedStoryResponse {
   content: string;
   synopsis: string;
   relevant_lore_ids: string[];
+  generated_lore_ids: string[];
+  generated_lore_count: number;
 }
 
 export interface LoreGenerateRequest {

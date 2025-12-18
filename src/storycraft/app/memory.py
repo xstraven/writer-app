@@ -80,8 +80,8 @@ async def continue_story(
     mem: Optional[MemoryState] = None,
     context: Optional[ContextState] = None,
     model: Optional[str] = None,
-    max_tokens: int = 512,
-    temperature: float = 0.7,
+    max_tokens: int = 1024,
+    temperature: float = 1.0,
     # New optional fields for future enrichment
     history_text: str = "",
     lore_items: Optional[List[LoreEntry]] = None,

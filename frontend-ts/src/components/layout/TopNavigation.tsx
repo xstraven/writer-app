@@ -126,18 +126,21 @@ export function TopNavigation() {
     const storyName = base || `Untitled ${stories.length + 1}`
     setSeeding(true)
     try {
-      await seedStoryAI({
+      const result = await seedStoryAI({
         story: storyName,
         prompt,
-        // Keep the first chunk small to avoid timeouts
-        max_tokens_first_chunk: 200,
+        max_tokens_first_chunk: 2048,
         // Model/params can be wired from settings later if needed
       })
       // Add to list and switch
       setStories([...stories, storyName])
       setCurrentStory(storyName)
       setShowSeedAI(false)
-      toast.success('Starter generated')
+      toast.success(
+        result.generated_lore_count > 0
+          ? `Starter generated! Created ${result.generated_lore_count} lorebook ${result.generated_lore_count === 1 ? 'entry' : 'entries'}.`
+          : 'Starter generated'
+      )
     } catch (error) {
       console.error('Failed to seed story:', error)
       toast.error(`Failed to seed story: ${error instanceof Error ? error.message : 'Unknown error'}`)
