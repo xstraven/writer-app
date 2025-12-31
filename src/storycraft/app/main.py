@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 
 from .config import get_settings
 from .runtime import (
@@ -34,6 +36,11 @@ if settings.cors_origin_regex:
     cors_config["allow_origin_regex"] = settings.cors_origin_regex
 
 app.add_middleware(CORSMiddleware, **cors_config)
+
+# Create images directory and mount for serving
+IMAGES_DIR = Path("./data/images")
+IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/api/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
 
 app.include_router(health_router)
 app.include_router(state_router)

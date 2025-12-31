@@ -5,6 +5,13 @@ export interface Chunk {
   timestamp: number;
 }
 
+export interface GalleryItem {
+  type: "url" | "upload";
+  value: string;
+  display_name?: string;
+  uploaded_at?: string;
+}
+
 export interface LoreEntry {
   id: string;
   story: string;
@@ -258,7 +265,7 @@ export interface AppState {
   context: ContextState;
   branches: BranchInfo[];
   treeRows: TreeRow[];
-  gallery: string[];
+  gallery: GalleryItem[];
   experimental: ExperimentalFeatures;
 }
 
@@ -272,7 +279,7 @@ export interface StorySettingsPayload {
   base_instruction?: string | null;
   max_context_window?: number;
   context?: ContextState;
-  gallery?: string[];
+  gallery?: GalleryItem[];
   // Optional future fields: synopsis, memory
   synopsis?: string;
   memory?: MemoryState;

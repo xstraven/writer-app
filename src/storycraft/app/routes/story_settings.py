@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form
+import os
+import uuid
+from pathlib import Path
 
 from ..models import ExperimentalFeatures, LoreEntryCreate, StorySettings, StorySettingsPatch
 from ..dependencies import (
@@ -16,6 +19,7 @@ from ..lorebook_store import LorebookStore
 
 
 router = APIRouter()
+IMAGES_DIR = Path("./data/images")
 
 
 @router.get("/api/story-settings", response_model=StorySettings)
@@ -129,3 +133,67 @@ async def post_story_settings(
     lorebook_store: LorebookStore = Depends(get_lorebook_store),
 ) -> dict:
     return await _write_story_settings(payload, story_settings_store, lorebook_store)
+
+
+@router.post("/api/story-settings/upload-image")
+async def upload_gallery_image(
+    story: str = Form(...),
+    file: UploadFile = File(...)
+) -> dict:
+    """Upload an image file for a story's gallery"""
+    story = (story or "").strip()
+    if not story:
+        raise HTTPException(status_code=400, detail="Missing story name")
+
+    # Validate file type
+    allowed_types = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail=f"Invalid file type")
+
+    # Validate file size (10MB max)
+    file.file.seek(0, 2)
+    size = file.file.tell()
+    file.file.seek(0)
+    if size > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large (max 10MB)")
+
+    # Create story directory
+    story_dir = IMAGES_DIR / story
+    story_dir.mkdir(parents=True, exist_ok=True)
+
+    # Generate unique filename
+    ext = Path(file.filename).suffix or ".jpg"
+    unique_filename = f"{uuid.uuid4().hex}{ext}"
+    file_path = story_dir / unique_filename
+
+    # Save file
+    with open(file_path, "wb") as f:
+        content = await file.read()
+        f.write(content)
+
+    return {
+        "ok": True,
+        "filename": unique_filename,
+        "original_filename": file.filename,
+        "story": story,
+        "url": f"/api/images/{story}/{unique_filename}"
+    }
+
+
+@router.delete("/api/story-settings/delete-image")
+async def delete_gallery_image(story: str, filename: str) -> dict:
+    """Delete an uploaded image file"""
+    story = (story or "").strip()
+    if not story or not filename:
+        raise HTTPException(status_code=400, detail="Missing story or filename")
+
+    # Prevent directory traversal
+    if ".." in filename or "/" in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    file_path = IMAGES_DIR / story / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    file_path.unlink()
+    return {"ok": True, "deleted": filename}

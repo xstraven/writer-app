@@ -1,16 +1,17 @@
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
-import type { 
-  Chunk, 
-  HistoryEntry, 
-  GenerationSettings, 
-  LoreEntry, 
+import type {
+  Chunk,
+  HistoryEntry,
+  GenerationSettings,
+  LoreEntry,
   MemoryState,
   ContextState,
   BranchInfo,
   TreeRow,
   AppState as AppStateType,
   ExperimentalFeatures,
+  GalleryItem,
 } from '@/lib/types'
 import { uid } from '@/lib/utils'
 import { saveQueue } from '@/lib/saveQueue'
@@ -43,9 +44,9 @@ interface AppState extends AppStateType {
   setExperimental: (experimental: ExperimentalFeatures) => void
   updateExperimental: (experimental: Partial<ExperimentalFeatures>) => void
   // Gallery
-  setGallery: (urls: string[]) => void
-  addGalleryImage: (url: string) => void
-  removeGalleryImage: (url: string) => void
+  setGallery: (items: GalleryItem[]) => void
+  addGalleryImage: (item: GalleryItem) => void
+  removeGalleryImage: (item: GalleryItem) => void
 }
 
 const defaultExperimental: ExperimentalFeatures = {
@@ -212,9 +213,11 @@ export const useAppStore = create<AppState>()(
       })),
       
       // Gallery actions
-      setGallery: (gallery: string[]) => set({ gallery }),
-      addGalleryImage: (url: string) => set((state) => ({ gallery: [url, ...state.gallery] })),
-      removeGalleryImage: (url: string) => set((state) => ({ gallery: state.gallery.filter(u => u !== url) })),
+      setGallery: (gallery: GalleryItem[]) => set({ gallery }),
+      addGalleryImage: (item: GalleryItem) => set((state) => ({ gallery: [item, ...state.gallery] })),
+      removeGalleryImage: (item: GalleryItem) => set((state) => ({
+        gallery: state.gallery.filter(i => !(i.type === item.type && i.value === item.value))
+      })),
       
       pushHistory: (action, before, after) => set((state) => ({
         history: [{

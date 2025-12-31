@@ -6,6 +6,14 @@ from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_va
 from typing import Literal
 
 
+class GalleryItem(BaseModel):
+    """Gallery image - either URL or uploaded file"""
+    type: Literal["url", "upload"] = "url"
+    value: str  # URL or filename
+    display_name: str | None = None
+    uploaded_at: datetime | None = None
+
+
 class LoreEntry(BaseModel):
     id: str
     story: str
@@ -183,10 +191,26 @@ class StorySettings(BaseModel):
     # Maximum context window (characters ÷ 3 heuristic used elsewhere)
     max_context_window: int | None = None
     context: ContextState | None = None
-    gallery: list[str] = Field(default_factory=list)
+    gallery: list[GalleryItem] = Field(default_factory=list)
     synopsis: str | None = None
     memory: MemoryState | None = None
     experimental: Optional["ExperimentalFeatures"] = None
+
+    @field_validator("gallery", mode="before")
+    @classmethod
+    def migrate_legacy_gallery(cls, value):
+        """Convert legacy URL strings to GalleryItem objects"""
+        if not value:
+            return []
+        result = []
+        for item in value:
+            if isinstance(item, str):
+                result.append(GalleryItem(type="url", value=item))
+            elif isinstance(item, dict):
+                result.append(GalleryItem(**item))
+            elif isinstance(item, GalleryItem):
+                result.append(item)
+        return result
 
 
 class StorySettingsUpdate(BaseModel):
@@ -198,7 +222,7 @@ class StorySettingsUpdate(BaseModel):
     base_instruction: str | None = None
     max_context_window: int | None = None
     context: ContextState | None = None
-    gallery: list[str] | None = None
+    gallery: list[GalleryItem] | None = None
     synopsis: str | None = None
     memory: MemoryState | None = None
     experimental: Optional["ExperimentalFeatures"] = None

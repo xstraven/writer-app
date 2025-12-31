@@ -344,3 +344,34 @@ export const truncateStory = async (story: string): Promise<TruncateStoryRespons
   const response = await apiClient.post(`/api/stories/${encodeURIComponent(story)}/truncate`)
   return response.data
 }
+
+// Gallery image upload/delete
+export const uploadGalleryImage = async (
+  story: string,
+  file: File
+): Promise<{ filename: string; url: string; original_filename: string }> => {
+  const formData = new FormData();
+  formData.append('story', story);
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE}/api/story-settings/upload-image`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
+    throw new Error(error.detail || 'Upload failed');
+  }
+
+  return response.json();
+};
+
+export const deleteGalleryImage = async (
+  story: string,
+  filename: string
+): Promise<void> => {
+  await apiClient.delete('/api/story-settings/delete-image', {
+    params: { story, filename }
+  });
+};
