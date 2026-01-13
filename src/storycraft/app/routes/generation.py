@@ -266,29 +266,24 @@ async def seed_story_from_prompt(
     try:
         ctx = await suggest_context_from_text(text=content, model=req.model, max_npcs=4, max_objects=4)
         synopsis = (ctx.summary or "").strip()
-        story_settings.update(story, {"synopsis": synopsis, "context": ctx.model_dump()})
+        story_settings.update(story, {"synopsis": synopsis, "context": ctx.model_dump(), "initial_prompt": prompt})
     except Exception:
         synopsis = ""
 
-    # Auto-generate lorebook entries from the generated content
-    generated_lore_count = 0
-    generated_lore_ids: list[str] = []
+    # Propose lorebook entities for user confirmation
+    proposed_entities: list = []
     try:
         # Combine prompt and generated content for better entity extraction
         lore_text = (prompt + "\n\n" + content)
-        generated_lore_count, generated_lore_ids = await generate_lorebook_from_text(
-            story=story,
+        proposed_entities = await propose_lorebook_entities(
             story_text=lore_text,
-            lore_store=lore_store,
             model=req.model,
-            max_items=10,  # Reasonable default for initial seeding
-            target_names=None,  # Auto-extract entities
-            strategy="append",
+            max_proposals=8,
         )
     except Exception as e:
-        # Don't fail story creation if lorebook generation fails
+        # Don't fail story creation if proposal fails
         import logging
-        logging.warning(f"Failed to auto-generate lorebook for story '{story}': {e}")
+        logging.warning(f"Failed to propose lorebook for story '{story}': {e}")
 
     relevant_ids: list[str] = []
     if req.use_lore:
@@ -310,9 +305,57 @@ async def seed_story_from_prompt(
         content=content,
         synopsis=synopsis,
         relevant_lore_ids=relevant_ids,
-        generated_lore_ids=generated_lore_ids,
-        generated_lore_count=generated_lore_count,
+        proposed_entities=proposed_entities,
     )
+
+
+async def propose_lorebook_entities(
+    story_text: str,
+    model: Optional[str] = None,
+    max_proposals: int = 8,
+) -> list:
+    """
+    Propose major entities without generating full entries.
+    Returns lightweight proposals with name, kind, and reason.
+    """
+    from ..models import ProposedLoreEntry
+
+    structured = get_structured_llm_client()
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a story bible curator. Identify MAJOR entities that deserve lorebook entries.\n\n"
+                "INCLUDE:\n"
+                "- Main characters (named, plot-significant)\n"
+                "- Key locations (where scenes occur)\n"
+                "- Important factions/organizations (if story-central)\n"
+                "- Significant items/concepts (if critical to plot)\n\n"
+                "EXCLUDE:\n"
+                "- Minor/unnamed NPCs, generic objects, passing mentions\n"
+                "- Details that should be part of larger entries\n\n"
+                "Return: name, kind, reason (1 sentence why it deserves an entry)"
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"Propose up to {max_proposals} major entities:\n\n{story_text}",
+        },
+    ]
+
+    try:
+        result = await structured.create(
+            response_model=list[ProposedLoreEntry],
+            messages=messages,
+            model=model,
+            temperature=0.2,
+            max_retries=2,
+            fallback=lambda: [],
+        )
+        return result or []
+    except Exception:
+        return []
 
 
 async def generate_lorebook_from_text(
@@ -382,16 +425,36 @@ async def generate_lorebook_from_text(
             {
                 "role": "system",
                 "content": (
-                    "You are a story bible generator. From the provided story text, extract a concise lorebook. "
-                    "Return a JSON array where each item has: name, kind, summary, tags, keys, always_on. "
-                    "- name: short unique label.\n- kind: character | location | item | faction | concept.\n"
-                    "- summary: 1-3 sentences, factual.\n- tags: short labels.\n- keys: trigger words to auto-include.\n- always_on: true for core canon only."
+                    "You are a story bible generator creating a focused lorebook. "
+                    "Extract ONLY the most important entities.\n\n"
+
+                    "INCLUDE entries for:\n"
+                    "- Main characters (named, with speaking roles or plot significance)\n"
+                    "- Key locations (where scenes take place)\n"
+                    "- Important factions/organizations (if they drive the story)\n"
+                    "- Critical items/artifacts (if story-central)\n"
+                    "- Core concepts (unique world rules, magic systems)\n\n"
+
+                    "EXCLUDE entries for:\n"
+                    "- Minor/unnamed characters (guards, crowds)\n"
+                    "- Generic objects (furniture, common items, weather)\n"
+                    "- Passing mentions (things mentioned once)\n"
+                    "- Sub-details that belong in larger entries\n"
+                    "- Atmosphere/mood descriptions\n\n"
+
+                    "Consolidate related information into comprehensive entries.\n\n"
+
+                    "Return JSON array with: name, kind (character|location|faction|item|concept), "
+                    "summary (1-3 factual sentences), tags (1-3 labels), keys (2-4 trigger words), "
+                    "always_on (true ONLY if needed in every prompt)."
                 ),
             },
             {
                 "role": "user",
                 "content": (
-                    f"Produce up to {max(1, int(max_items))} entries from this story text.\n\n" + story_text
+                    f"Extract up to {max(1, int(max_items))} MAJOR entities. "
+                    "Prioritize quality over quantity - fewer comprehensive entries are better than many small ones.\n\n"
+                    + story_text
                 ),
             },
         ]
@@ -481,6 +544,69 @@ async def generate_lorebook(
         max_items=req.max_items,
         target_names=req.names,
         strategy=req.strategy,
+    )
+
+    total = len(lore_store.list(story))
+    return LoreGenerateResponse(story=story, created=created, total=total)
+
+
+@router.post("/api/lorebook/propose")
+async def propose_lorebook_entries_endpoint(
+    req: "ProposeLoreEntriesRequest",
+    snippet_store: SnippetStore = Depends(get_snippet_store),
+):
+    """Propose entities for lorebook entries without generating full details."""
+    from ..models import ProposeLoreEntriesRequest, ProposeLoreEntriesResponse
+
+    story = (req.story or "").strip()
+    if not story:
+        raise HTTPException(status_code=400, detail="Missing story")
+
+    story_text = req.story_text or ""
+    if not story_text:
+        # Fallback: use current story text
+        path = snippet_store.main_path(story)
+        story_text = snippet_store.build_text(path)
+
+    proposals = await propose_lorebook_entities(
+        story_text=story_text,
+        model=req.model,
+        max_proposals=req.max_proposals,
+    )
+
+    return ProposeLoreEntriesResponse(story=story, proposals=proposals)
+
+
+@router.post("/api/lorebook/generate-from-proposals", response_model=LoreGenerateResponse)
+async def generate_from_proposals(
+    req: "GenerateFromProposalsRequest",
+    snippet_store: SnippetStore = Depends(get_snippet_store),
+    lore_store: LorebookStore = Depends(get_lorebook_store),
+) -> LoreGenerateResponse:
+    """Generate lorebook entries for user-confirmed entities."""
+    from ..models import GenerateFromProposalsRequest
+
+    story = (req.story or "").strip()
+    if not story:
+        raise HTTPException(status_code=400, detail="Missing story")
+
+    if not req.selected_names:
+        return LoreGenerateResponse(story=story, created=0, total=len(lore_store.list(story)))
+
+    story_text = req.story_text or ""
+    if not story_text:
+        path = snippet_store.main_path(story)
+        story_text = snippet_store.build_text(path)
+
+    # Use existing helper with target_names
+    created, _ = await generate_lorebook_from_text(
+        story=story,
+        story_text=story_text,
+        lore_store=lore_store,
+        model=req.model,
+        max_items=len(req.selected_names),
+        target_names=req.selected_names,  # Only generate selected
+        strategy="append",
     )
 
     total = len(lore_store.list(story))

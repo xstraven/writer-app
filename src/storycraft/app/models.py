@@ -195,6 +195,7 @@ class StorySettings(BaseModel):
     synopsis: str | None = None
     memory: MemoryState | None = None
     experimental: Optional["ExperimentalFeatures"] = None
+    initial_prompt: str | None = None  # Original story seed prompt
 
     @field_validator("gallery", mode="before")
     @classmethod
@@ -226,6 +227,7 @@ class StorySettingsUpdate(BaseModel):
     synopsis: str | None = None
     memory: MemoryState | None = None
     experimental: Optional["ExperimentalFeatures"] = None
+    initial_prompt: str | None = None
 
 
 class StorySettingsPatch(StorySettingsUpdate):
@@ -411,14 +413,19 @@ class SeedStoryRequest(BaseModel):
     use_lore: bool = True
 
 
+class ProposedLoreEntry(BaseModel):
+    name: str
+    kind: str  # character, location, faction, item, concept
+    reason: str  # 1-sentence explanation of importance
+
+
 class SeedStoryResponse(BaseModel):
     story: str
     root_snippet_id: str
     content: str
     synopsis: str = ""
     relevant_lore_ids: list[str] = Field(default_factory=list)
-    generated_lore_ids: list[str] = Field(default_factory=list)
-    generated_lore_count: int = 0
+    proposed_entities: list["ProposedLoreEntry"] = Field(default_factory=list)
 
 
 # --- Lorebook Generation ---
@@ -435,3 +442,22 @@ class LoreGenerateResponse(BaseModel):
     story: str
     created: int = 0
     total: int = 0
+
+
+class ProposeLoreEntriesRequest(BaseModel):
+    story: str
+    story_text: str
+    model: Optional[str] = None
+    max_proposals: int = 8  # Fewer than current 10
+
+
+class ProposeLoreEntriesResponse(BaseModel):
+    story: str
+    proposals: list[ProposedLoreEntry] = Field(default_factory=list)
+
+
+class GenerateFromProposalsRequest(BaseModel):
+    story: str
+    story_text: str
+    selected_names: list[str]  # User-confirmed names
+    model: Optional[str] = None

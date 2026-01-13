@@ -213,6 +213,12 @@ export interface TruncateStoryResponse {
 }
 
 // --- AI Seed Story ---
+export interface ProposedLoreEntry {
+  name: string;
+  kind: string;
+  reason: string;
+}
+
 export interface SeedStoryRequest {
   story: string;
   prompt: string;
@@ -228,8 +234,7 @@ export interface SeedStoryResponse {
   content: string;
   synopsis: string;
   relevant_lore_ids: string[];
-  generated_lore_ids: string[];
-  generated_lore_count: number;
+  proposed_entities: ProposedLoreEntry[];
 }
 
 export interface LoreGenerateRequest {
@@ -244,6 +249,25 @@ export interface LoreGenerateResponse {
   story: string;
   created: number;
   total: number;
+}
+
+export interface ProposeLoreEntriesRequest {
+  story: string;
+  story_text: string;
+  model?: string | null;
+  max_proposals?: number;
+}
+
+export interface ProposeLoreEntriesResponse {
+  story: string;
+  proposals: ProposedLoreEntry[];
+}
+
+export interface GenerateFromProposalsRequest {
+  story: string;
+  story_text: string;
+  selected_names: string[];
+  model?: string | null;
 }
 
 export interface AppState {
@@ -285,4 +309,5 @@ export interface StorySettingsPayload {
   memory?: MemoryState;
   lorebook?: LoreEntry[];
   experimental?: ExperimentalFeatures;
+  initial_prompt?: string;
 }

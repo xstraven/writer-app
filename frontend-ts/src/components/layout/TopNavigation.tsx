@@ -20,8 +20,9 @@ import {
 import { Modal } from '@/components/ui/modal'
 // import { GenerationSettings } from '@/components/sidebar/GenerationSettings'
 import { useAppStore } from '@/stores/appStore'
-import { getStories, healthCheck, llmHealthCheck, seedStoryAI, appendSnippet } from '@/lib/api'
+import { getStories, healthCheck, llmHealthCheck, seedStoryAI, appendSnippet, generateFromProposals } from '@/lib/api'
 import { toast } from 'sonner'
+import type { ProposedLoreEntry } from '@/lib/types'
 
 export function TopNavigation() {
   const { currentStory, setCurrentStory } = useAppStore()
@@ -42,6 +43,12 @@ export function TopNavigation() {
   const [seedName, setSeedName] = useState('')
   const [seedPrompt, setSeedPrompt] = useState('')
   const [seeding, setSeeding] = useState(false)
+
+  // Entity confirmation for lorebook
+  const [proposedEntities, setProposedEntities] = useState<ProposedLoreEntry[]>([])
+  const [selectedEntityNames, setSelectedEntityNames] = useState<Set<string>>(new Set())
+  const [showEntityConfirmation, setShowEntityConfirmation] = useState(false)
+  const [currentStoryContext, setCurrentStoryContext] = useState<{story: string, text: string} | null>(null)
 
   useEffect(() => {
     loadStories()
@@ -126,27 +133,78 @@ export function TopNavigation() {
     const storyName = base || `Untitled ${stories.length + 1}`
     setSeeding(true)
     try {
+      // Step 1: Generate opening scene + get entity proposals
       const result = await seedStoryAI({
         story: storyName,
         prompt,
         max_tokens_first_chunk: 2048,
-        // Model/params can be wired from settings later if needed
       })
+
       // Add to list and switch
       setStories([...stories, storyName])
       setCurrentStory(storyName)
       setShowSeedAI(false)
-      toast.success(
-        result.generated_lore_count > 0
-          ? `Starter generated! Created ${result.generated_lore_count} lorebook ${result.generated_lore_count === 1 ? 'entry' : 'entries'}.`
-          : 'Starter generated'
-      )
+
+      // Step 2: Show entity confirmation if proposals exist
+      if (result.proposed_entities && result.proposed_entities.length > 0) {
+        setProposedEntities(result.proposed_entities)
+        setSelectedEntityNames(new Set(result.proposed_entities.map(e => e.name)))  // Pre-select all
+        setCurrentStoryContext({
+          story: storyName,
+          text: prompt + "\n\n" + result.content
+        })
+        setShowEntityConfirmation(true)
+      } else {
+        toast.success('Story starter generated!')
+      }
     } catch (error) {
       console.error('Failed to seed story:', error)
       toast.error(`Failed to seed story: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setSeeding(false)
     }
+  }
+
+  const handleConfirmEntities = async () => {
+    if (!currentStoryContext) return
+
+    const selectedNames = Array.from(selectedEntityNames)
+    if (selectedNames.length === 0) {
+      setShowEntityConfirmation(false)
+      setCurrentStoryContext(null)
+      toast.info('Story created without lorebook entries')
+      return
+    }
+
+    setSeeding(true)
+    try {
+      const result = await generateFromProposals({
+        story: currentStoryContext.story,
+        story_text: currentStoryContext.text,
+        selected_names: selectedNames,
+      })
+
+      toast.success(`Created ${result.created} lorebook ${result.created === 1 ? 'entry' : 'entries'}`)
+      setShowEntityConfirmation(false)
+      setProposedEntities([])
+      setSelectedEntityNames(new Set())
+      setCurrentStoryContext(null)
+    } catch (error) {
+      console.error('Failed to generate lorebook:', error)
+      toast.error(`Failed to generate lorebook: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setSeeding(false)
+    }
+  }
+
+  const toggleEntitySelection = (name: string) => {
+    const newSet = new Set(selectedEntityNames)
+    if (newSet.has(name)) {
+      newSet.delete(name)
+    } else {
+      newSet.add(name)
+    }
+    setSelectedEntityNames(newSet)
   }
 
   // Prompt preview moved to right sidebar Generation card
@@ -303,6 +361,76 @@ export function TopNavigation() {
             </Button>
             <Button variant="ghost" onClick={() => setShowSeedAI(false)} disabled={seeding}>
               Cancel
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Entity Confirmation Modal */}
+      <Modal
+        isOpen={showEntityConfirmation}
+        onClose={() => {
+          if (!seeding) {
+            setShowEntityConfirmation(false)
+            setProposedEntities([])
+            setSelectedEntityNames(new Set())
+            setCurrentStoryContext(null)
+          }
+        }}
+        title="Confirm Lorebook Entries"
+        size="lg"
+      >
+        <div className="p-4 space-y-3">
+          <p className="text-sm text-gray-600">
+            Select which entities should get lorebook entries:
+          </p>
+          <div className="space-y-2 max-h-[400px] overflow-y-auto">
+            {proposedEntities.map((entity) => (
+              <div
+                key={entity.name}
+                className="flex items-start gap-3 p-3 border rounded hover:bg-gray-50 cursor-pointer"
+                onClick={() => toggleEntitySelection(entity.name)}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedEntityNames.has(entity.name)}
+                  onChange={() => toggleEntitySelection(entity.name)}
+                  className="mt-1"
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <div className="flex-1">
+                  <div className="font-medium">
+                    {entity.name}
+                    <span className="ml-2 text-xs text-gray-500 font-normal">
+                      ({entity.kind})
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-600 mt-1">
+                    {entity.reason}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="text-xs text-gray-500">
+            {selectedEntityNames.size} of {proposedEntities.length} selected
+          </div>
+          <div className="flex items-center gap-2 pt-2 border-t">
+            <Button onClick={handleConfirmEntities} disabled={seeding}>
+              {seeding ? 'Generating…' : `Generate ${selectedEntityNames.size} ${selectedEntityNames.size === 1 ? 'Entry' : 'Entries'}`}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowEntityConfirmation(false)
+                setProposedEntities([])
+                setSelectedEntityNames(new Set())
+                setCurrentStoryContext(null)
+                toast.info('Story created without lorebook entries')
+              }}
+              disabled={seeding}
+            >
+              Skip Lorebook
             </Button>
           </div>
         </div>

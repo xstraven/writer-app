@@ -18,6 +18,18 @@ export function GenerationSettings() {
 
   return (
     <div className="space-y-4">
+      {/* Show initial prompt if available */}
+      {generationSettings.initial_prompt && (
+        <div className="mb-4 p-3 bg-gray-50 rounded border">
+          <label className="text-xs font-medium text-gray-600 mb-1 block">
+            Original Story Prompt
+          </label>
+          <div className="text-sm text-gray-800 whitespace-pre-wrap">
+            {generationSettings.initial_prompt}
+          </div>
+        </div>
+      )}
+
       <div>
         <div className="flex items-center justify-between">
           <label htmlFor="temp" className="text-sm font-medium">Temperature</label>

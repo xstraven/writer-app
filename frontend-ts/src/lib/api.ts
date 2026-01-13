@@ -18,6 +18,9 @@ import type {
   SeedStoryResponse,
   LoreGenerateRequest,
   LoreGenerateResponse,
+  ProposeLoreEntriesRequest,
+  ProposeLoreEntriesResponse,
+  GenerateFromProposalsRequest,
   PromptPreviewRequest,
   TruncateStoryResponse,
 } from './types';
@@ -337,6 +340,18 @@ export const seedStoryAI = async (payload: SeedStoryRequest): Promise<SeedStoryR
 // Generate lorebook entries from current story text
 export const generateLorebook = async (payload: LoreGenerateRequest): Promise<LoreGenerateResponse> => {
   const response = await apiClient.post('/api/lorebook/generate', payload, { timeout: GENERATION_TIMEOUT_MS })
+  return response.data
+}
+
+// Propose lorebook entities without generating full entries
+export const proposeLoreEntries = async (payload: ProposeLoreEntriesRequest): Promise<ProposeLoreEntriesResponse> => {
+  const response = await apiClient.post('/api/lorebook/propose', payload, { timeout: GENERATION_TIMEOUT_MS })
+  return response.data
+}
+
+// Generate lorebook entries from user-confirmed proposals
+export const generateFromProposals = async (payload: GenerateFromProposalsRequest): Promise<LoreGenerateResponse> => {
+  const response = await apiClient.post('/api/lorebook/generate-from-proposals', payload, { timeout: GENERATION_TIMEOUT_MS })
   return response.data
 }
 
