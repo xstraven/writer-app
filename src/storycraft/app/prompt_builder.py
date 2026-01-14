@@ -89,7 +89,7 @@ class PromptBuilder:
                 "Continue the story, matching established voice, tone, and point of view. "
                 "Maintain continuity with prior events and details."
             )
-        meta_parts.append("[Prompt]\n" + prompt_text)
+        meta_parts.append("[Task]\n" + prompt_text)
 
         meta_msg = "\n\n".join(meta_parts).strip()
 

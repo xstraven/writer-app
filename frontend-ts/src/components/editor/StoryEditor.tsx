@@ -81,6 +81,7 @@ export function StoryEditor() {
     pushHistory,
     currentStory,
     currentBranch,
+    generationSettings,
   } = useAppStore()
 
   const { 
@@ -96,12 +97,12 @@ export function StoryEditor() {
 
   const draftText = useMemo(() => chunks.map(c => c.text).join(' '), [chunks])
 
-  const DEFAULT_INSTRUCTION = "Continue the story, matching established voice, tone, and point of view. Maintain continuity with prior events and details."
+  const DEFAULT_INSTRUCTION = generationSettings.base_instruction || 'Continue the story, matching established voice, tone, and point of view. Maintain continuity with prior events and details.'
+
   const handleGenerate = async (maybeText?: string) => {
-    const raw = (maybeText ?? instruction)
-    const text = raw.trim() || DEFAULT_INSTRUCTION
-    // If user didn't provide custom instruction, pass empty so backend applies base instruction
-    const payloadInstr = (text === DEFAULT_INSTRUCTION) ? '' : text
+    const userInstr = (maybeText ?? instruction).trim()
+    // Merge base instruction with user instruction if provided
+    const payloadInstr = userInstr ? `${DEFAULT_INSTRUCTION}\n\n${userInstr}` : DEFAULT_INSTRUCTION
 
     let continuation: string
     try {

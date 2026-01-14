@@ -55,6 +55,7 @@ export function Sidebar() {
     setEditingText,
     experimental,
     updateExperimental,
+    instruction,
   } = useAppStore()
 
   const queryClient = useQueryClient()
@@ -169,9 +170,14 @@ export function Sidebar() {
                           objects: [],
                         }
 
+                    // Merge base instruction with user instruction (same logic as StoryEditor)
+                    const baseInstruction = generationSettings.base_instruction || 'Continue the story, matching established voice, tone, and point of view. Maintain continuity with prior events and details.'
+                    const userInstr = (instruction || '').trim()
+                    const mergedInstruction = userInstr ? `${baseInstruction}\n\n${userInstr}` : baseInstruction
+
                     const res = await getPromptPreview({
                       story: currentStory,
-                      instruction: '',
+                      instruction: mergedInstruction,
                       model: generationSettings.model,
                       system_prompt: generationSettings.system_prompt,
                       draft_text: draftText,

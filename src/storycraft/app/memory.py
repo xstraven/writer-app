@@ -90,10 +90,7 @@ async def continue_story(
 ) -> Dict[str, str]:
     client = OpenRouterClient()
     sys = system_prompt.strip() if system_prompt else CONTINUE_SYSTEM
-    if mem:
-        sys += "\nUse the provided Memory to maintain continuity."
-    if context:
-        sys += "\nIncorporate the Context details when plausible."
+    # Note: Memory and context instructions removed - user has full control via system_prompt
     messages = (
         PromptBuilder()
         .with_system(sys)

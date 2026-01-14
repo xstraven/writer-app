@@ -106,9 +106,9 @@ async def continue_endpoint(
         selection_text=selection_text,
     )
 
+    # Memory auto-extraction disabled - LLM-generated memory removed from generation process
+    # API endpoint /api/extract-memory still available for manual extraction if needed
     mem: MemoryState | None = None
-    if req.use_memory and draft_text.strip():
-        mem = await extract_memory_from_text(text=draft_text, model=req.model)
 
     merged_instruction = merge_instruction(req.instruction, req.story, story_settings_store) or ""
     generation_kwargs = {
@@ -192,18 +192,16 @@ async def prompt_preview(
     )
 
     mem: MemoryState | None = None
-    if req.use_memory and (req.draft_text or "").strip():
-        mem = await extract_memory_from_text(text=req.draft_text, model=req.model)
+    # Memory auto-extraction disabled - LLM-generated memory removed from prompt preview
+    # API endpoint /api/extract-memory still available for manual extraction if needed
+    # mem: MemoryState | None = None  (already initialized above)
 
     sys_prompt = (req.system_prompt or "").strip() or (
         "You are an expert creative writing assistant. Continue the user's story in the same voice,"
         " tone, and perspective. Always preserve established canon, character continuity, and"
         " world-building details. If given instructions, apply them elegantly."
     )
-    if req.use_memory:
-        sys_prompt += "\nUse the provided Memory to maintain continuity."
-    if req.use_context:
-        sys_prompt += "\nIncorporate the Context details when plausible."
+    # Note: Memory and context instructions removed - user has full control via system_prompt
 
     merged_instr = merge_instruction(req.instruction, req.story, story_settings)
     messages = (

@@ -1,13 +1,14 @@
 'use client'
 
-import { Settings, Trash2, GitBranch, ArrowUpToLine, ArrowDownToLine } from 'lucide-react'
+import { Settings, Trash2, GitBranch, ArrowUpToLine, ArrowDownToLine, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Modal } from '@/components/ui/modal'
 import { useAppStore } from '@/stores/appStore'
 import { toast } from 'sonner'
 import type { Chunk } from '@/lib/types'
-import { deleteSnippet as apiDeleteSnippet, createBranch, getBranches, insertSnippetAbove, insertSnippetBelow, getBranchPath } from '@/lib/api'
+import { deleteSnippet as apiDeleteSnippet, createBranch, getBranches, insertSnippetAbove, insertSnippetBelow, getBranchPath, continueStory } from '@/lib/api'
 import { saveQueue } from '@/lib/saveQueue'
 import { useQueryClient } from '@tanstack/react-query'
 import { cn, uid } from '@/lib/utils'
@@ -37,6 +38,12 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
   const isHovered = hoveredId === chunk.id
   const [localText, setLocalText] = useState<string>(chunk.text)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+
+  // Rewrite feature state
+  const [showRewriteModal, setShowRewriteModal] = useState(false)
+  const [rewriteInstruction, setRewriteInstruction] = useState('')
+  const [rewrittenText, setRewrittenText] = useState<string | null>(null)
+  const [isRewriting, setIsRewriting] = useState(false)
 
   useEffect(() => {
     setLocalText(chunk.text)
@@ -70,7 +77,7 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
       const next = document.querySelector(`textarea[data-chunk="${id}"]`) as HTMLTextAreaElement | null
       if (next) {
         e.preventDefault()
-        next.focus()
+        next.focus({ preventScroll: true })
         const p = toEnd ? next.value.length : 0
         next.setSelectionRange(p, p)
       }
@@ -88,7 +95,7 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
     requestAnimationFrame(() => {
       const el = document.querySelector(`textarea[data-chunk="${id}"]`) as HTMLTextAreaElement | null
       if (el) {
-        el.focus()
+        el.focus({ preventScroll: true })
         el.setSelectionRange(0, 0)
       }
     })
@@ -220,6 +227,66 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
     }
   }
 
+  const handleRewrite = () => {
+    setShowRewriteModal(true)
+    setRewriteInstruction('')
+    setRewrittenText(null)
+  }
+
+  const handleGenerateRewrite = async () => {
+    if (!rewriteInstruction.trim()) {
+      toast.error('Please enter rewrite instructions')
+      return
+    }
+
+    setIsRewriting(true)
+    try {
+      const { generationSettings } = useAppStore.getState()
+      const response = await continueStory({
+        draft_text: chunk.text,
+        instruction: rewriteInstruction,
+        story: currentStory,
+        max_tokens: generationSettings.max_tokens || 512,
+        temperature: generationSettings.temperature || 0.8,
+        model: generationSettings.model,
+        system_prompt: 'You are an expert editor. Rewrite the provided text according to the user\'s instructions. Return ONLY the rewritten text, nothing else.',
+        use_memory: false,
+        use_context: false,
+        preview_only: true,
+        context: { summary: '', npcs: [], objects: [] },
+        lore_ids: [],
+      })
+      setRewrittenText(response.continuation)
+    } catch (error) {
+      console.error('Failed to rewrite:', error)
+      toast.error(`Rewrite failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setIsRewriting(false)
+    }
+  }
+
+  const handleAcceptRewrite = () => {
+    if (rewrittenText) {
+      const before = [...chunks]
+      setLocalText(rewrittenText)
+      updateChunk(chunk.id, { text: rewrittenText, timestamp: Date.now() })
+      const kind = chunk.author === 'user' ? 'user' : 'ai'
+      saveQueue.queue(chunk.id, rewrittenText, kind)
+      const after = chunks.map(c => c.id === chunk.id ? { ...c, text: rewrittenText } : c)
+      pushHistory('edit', before, after)
+      toast.success('Rewrite accepted')
+    }
+    setShowRewriteModal(false)
+    setRewrittenText(null)
+    setRewriteInstruction('')
+  }
+
+  const handleDiscardRewrite = () => {
+    setShowRewriteModal(false)
+    setRewrittenText(null)
+    setRewriteInstruction('')
+  }
+
   return (
     <div
       onMouseEnter={() => setHoveredId(chunk.id)}
@@ -257,30 +324,37 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
             </PopoverTrigger>
             <PopoverContent align="end" className="w-56 p-1">
               <div className="space-y-1">
-                <Button 
-                  variant="ghost" 
-                  className="w-full justify-start text-sm" 
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-sm"
+                  onClick={handleRewrite}
+                >
+                  <Sparkles className="h-4 w-4 mr-2" /> Rewrite
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-sm"
                   onClick={handleInsertAbove}
                 >
                   <ArrowUpToLine className="h-4 w-4 mr-2" /> Insert above
                 </Button>
-                <Button 
-                  variant="ghost" 
-                  className="w-full justify-start text-sm" 
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-sm"
                   onClick={handleInsertBelow}
                 >
                   <ArrowDownToLine className="h-4 w-4 mr-2" /> Insert below
                 </Button>
-                <Button 
-                  variant="ghost" 
-                  className="w-full justify-start text-sm" 
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-sm"
                   onClick={handleBranchFrom}
                 >
                   <GitBranch className="h-4 w-4 mr-2" /> Branch from here
                 </Button>
-                <Button 
-                  variant="ghost" 
-                  className="w-full justify-start text-sm text-red-600 hover:text-red-700 hover:bg-red-50" 
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-sm text-red-600 hover:text-red-700 hover:bg-red-50"
                   onClick={handleDelete}
                 >
                   <Trash2 className="h-4 w-4 mr-2" /> Delete chunk
@@ -290,6 +364,80 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
           </Popover>
         </div>
       </div>
+
+      {/* Rewrite Modal */}
+      <Modal
+        isOpen={showRewriteModal}
+        onClose={handleDiscardRewrite}
+        title="Rewrite Chunk"
+        size="lg"
+      >
+        <div className="p-4 space-y-4">
+          <div>
+            <label className="text-sm font-medium mb-2 block">Original Text</label>
+            <div className="p-3 bg-gray-50 rounded border text-sm max-h-40 overflow-y-auto">
+              {chunk.text}
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="rewrite-instruction" className="text-sm font-medium mb-2 block">
+              Rewrite Instructions
+            </label>
+            <Textarea
+              id="rewrite-instruction"
+              value={rewriteInstruction}
+              onChange={(e) => setRewriteInstruction(e.target.value)}
+              placeholder="E.g., Make it more dramatic, Change the tone to humorous, Simplify the language..."
+              className="min-h-[80px]"
+              disabled={isRewriting}
+            />
+          </div>
+
+          {rewrittenText && (
+            <div>
+              <label className="text-sm font-medium mb-2 block">Rewritten Text</label>
+              <div className="p-3 bg-blue-50 rounded border text-sm max-h-60 overflow-y-auto whitespace-pre-wrap">
+                {rewrittenText}
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 justify-end">
+            {!rewrittenText ? (
+              <>
+                <Button
+                  variant="ghost"
+                  onClick={handleDiscardRewrite}
+                  disabled={isRewriting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleGenerateRewrite}
+                  disabled={isRewriting || !rewriteInstruction.trim()}
+                >
+                  {isRewriting ? 'Rewriting...' : 'Generate Rewrite'}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  onClick={handleDiscardRewrite}
+                >
+                  Discard
+                </Button>
+                <Button
+                  onClick={handleAcceptRewrite}
+                >
+                  Accept Rewrite
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
