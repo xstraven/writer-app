@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getBranchPath, getLorebook, loadAppState, getStorySettings } from '@/lib/api'
+import { loadGalleryFromLocalStorage } from './usePersistAppState'
 import { useAppStore } from '@/stores/appStore'
 import { toast } from 'sonner'
 import type { Chunk, Snippet } from '@/lib/types'
@@ -75,6 +76,14 @@ export function useStorySync() {
 
   const appliedStorySettingsFor = useRef<string | null>(null)
   const appliedLegacyAppState = useRef<boolean>(false)
+
+  // Load gallery from localStorage when story changes
+  useEffect(() => {
+    if (currentStory) {
+      const savedGallery = loadGalleryFromLocalStorage(currentStory)
+      setGallery(savedGallery)
+    }
+  }, [currentStory, setGallery])
 
   // Sync backend chunks when branch data changes
   const lastBranchRef = useRef<string | null>(null)
@@ -158,7 +167,8 @@ export function useStorySync() {
       if ((s as any).base_instruction !== undefined && (s as any).base_instruction !== null) settingsToUpdate.base_instruction = (s as any).base_instruction || undefined
       if (s.max_context_window !== undefined && s.max_context_window !== null) settingsToUpdate.max_context_window = s.max_context_window
       if (Object.keys(settingsToUpdate).length > 0) updateGenerationSettings(settingsToUpdate)
-      if (Array.isArray(s.gallery)) setGallery(s.gallery)
+      // Gallery is now loaded from localStorage, not from backend
+      // if (Array.isArray(s.gallery)) setGallery(s.gallery)
       if (Array.isArray((s as any).lorebook)) setLorebook((s as any).lorebook)
       if ((s as any).experimental) setExperimental((s as any).experimental)
     }
