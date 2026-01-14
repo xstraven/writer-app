@@ -24,6 +24,7 @@ from ..models import (
     DevSeedRequest,
     DevSeedResponse,
     ExtractMemoryRequest,
+    GenerateFromProposalsRequest,
     LoreEntryCreate,
     LoreEntryDraft,
     LoreGenerateRequest,
@@ -31,6 +32,8 @@ from ..models import (
     MemoryState,
     PromptPreviewRequest,
     PromptPreviewResponse,
+    ProposeLoreEntriesRequest,
+    ProposeLoreEntriesResponse,
     SeedStoryRequest,
     SeedStoryResponse,
     SuggestContextRequest,
@@ -552,12 +555,10 @@ async def generate_lorebook(
 
 @router.post("/api/lorebook/propose")
 async def propose_lorebook_entries_endpoint(
-    req: "ProposeLoreEntriesRequest",
+    req: ProposeLoreEntriesRequest,
     snippet_store: SnippetStore = Depends(get_snippet_store),
 ):
     """Propose entities for lorebook entries without generating full details."""
-    from ..models import ProposeLoreEntriesRequest, ProposeLoreEntriesResponse
-
     story = (req.story or "").strip()
     if not story:
         raise HTTPException(status_code=400, detail="Missing story")
@@ -579,13 +580,11 @@ async def propose_lorebook_entries_endpoint(
 
 @router.post("/api/lorebook/generate-from-proposals", response_model=LoreGenerateResponse)
 async def generate_from_proposals(
-    req: "GenerateFromProposalsRequest",
+    req: GenerateFromProposalsRequest,
     snippet_store: SnippetStore = Depends(get_snippet_store),
     lore_store: LorebookStore = Depends(get_lorebook_store),
 ) -> LoreGenerateResponse:
     """Generate lorebook entries for user-confirmed entities."""
-    from ..models import GenerateFromProposalsRequest
-
     story = (req.story or "").strip()
     if not story:
         raise HTTPException(status_code=400, detail="Missing story")
