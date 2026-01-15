@@ -461,3 +461,19 @@ class GenerateFromProposalsRequest(BaseModel):
     story_text: str
     selected_names: list[str]  # User-confirmed names
     model: Optional[str] = None
+
+
+# --- Story Import ---
+class ImportStoryRequest(BaseModel):
+    story: str
+    text: str
+    model: Optional[str] = None  # For lorebook proposal
+    target_chunk_tokens: int = 768  # Target tokens per chunk (512-1024 range)
+    generate_lore_proposals: bool = True
+
+
+class ImportStoryResponse(BaseModel):
+    story: str
+    chunks_created: int = 0
+    total_characters: int = 0
+    proposed_entities: list["ProposedLoreEntry"] = Field(default_factory=list)

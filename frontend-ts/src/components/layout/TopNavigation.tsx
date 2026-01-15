@@ -7,7 +7,8 @@ import {
   CheckCircle,
   Sparkles,
   Menu,
-  X
+  X,
+  Upload
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { 
@@ -20,7 +21,7 @@ import {
 import { Modal } from '@/components/ui/modal'
 // import { GenerationSettings } from '@/components/sidebar/GenerationSettings'
 import { useAppStore } from '@/stores/appStore'
-import { getStories, healthCheck, llmHealthCheck, seedStoryAI, appendSnippet, generateFromProposals } from '@/lib/api'
+import { getStories, healthCheck, llmHealthCheck, seedStoryAI, appendSnippet, generateFromProposals, importStory } from '@/lib/api'
 import { toast } from 'sonner'
 import type { ProposedLoreEntry } from '@/lib/types'
 
@@ -43,6 +44,12 @@ export function TopNavigation() {
   const [seedName, setSeedName] = useState('')
   const [seedPrompt, setSeedPrompt] = useState('')
   const [seeding, setSeeding] = useState(false)
+
+  // Modal: Import story
+  const [showImport, setShowImport] = useState(false)
+  const [importName, setImportName] = useState('')
+  const [importText, setImportText] = useState('')
+  const [importing, setImporting] = useState(false)
 
   // Entity confirmation for lorebook
   const [proposedEntities, setProposedEntities] = useState<ProposedLoreEntry[]>([])
@@ -207,6 +214,61 @@ export function TopNavigation() {
     setSelectedEntityNames(newSet)
   }
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const text = event.target?.result as string
+      setImportText(text || '')
+    }
+    reader.readAsText(file)
+  }
+
+  const handleImportStory = async () => {
+    const text = importText.trim()
+    if (!text) {
+      toast.error('Please enter or upload text to import')
+      return
+    }
+
+    const base = importName.trim()
+    const storyName = base || `Imported ${stories.length + 1}`
+
+    setImporting(true)
+    try {
+      const result = await importStory({
+        story: storyName,
+        text,
+        generate_lore_proposals: true,
+      })
+
+      // Add to list and switch
+      setStories([...stories, storyName])
+      setCurrentStory(storyName)
+      setShowImport(false)
+
+      toast.success(`Imported ${result.chunks_created} chunks (${result.total_characters.toLocaleString()} characters)`)
+
+      // Show entity confirmation if proposals exist
+      if (result.proposed_entities && result.proposed_entities.length > 0) {
+        setProposedEntities(result.proposed_entities)
+        setSelectedEntityNames(new Set(result.proposed_entities.map(e => e.name)))
+        setCurrentStoryContext({
+          story: storyName,
+          text: text,
+        })
+        setShowEntityConfirmation(true)
+      }
+    } catch (error) {
+      console.error('Failed to import story:', error)
+      toast.error(`Failed to import story: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setImporting(false)
+    }
+  }
+
   // Prompt preview moved to right sidebar Generation card
 
   return (
@@ -269,6 +331,19 @@ export function TopNavigation() {
                   >
                     <Sparkles className="h-4 w-4 mr-1" />
                     New Story (AI)
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setImportName('')
+                      setImportText('')
+                      setShowImport(true)
+                    }}
+                    className="w-full sm:w-auto text-purple-600 border-purple-200 hover:bg-purple-50"
+                  >
+                    <Upload className="h-4 w-4 mr-1" />
+                    Import Story
                   </Button>
                 </div>
                 {/* Delete Story action moved to Sidebar */}
@@ -360,6 +435,58 @@ export function TopNavigation() {
               {seeding ? 'Generating…' : 'Generate Starter'}
             </Button>
             <Button variant="ghost" onClick={() => setShowSeedAI(false)} disabled={seeding}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Import Story Modal */}
+      <Modal
+        isOpen={showImport}
+        onClose={() => setShowImport(false)}
+        title="Import Story from Text"
+        size="lg"
+      >
+        <div className="p-4 space-y-3">
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">Story Name (optional)</label>
+            <input
+              className="w-full border rounded px-2 py-2"
+              value={importName}
+              onChange={(e) => setImportName(e.target.value)}
+              placeholder="e.g., My Imported Story"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">
+              Story Text (paste or upload .txt file)
+            </label>
+            <textarea
+              className="w-full border rounded px-2 py-2 min-h-[200px] font-mono text-sm"
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              placeholder="Paste your story text here..."
+            />
+            <div className="mt-2 flex items-center gap-3">
+              <input
+                type="file"
+                accept=".txt"
+                onChange={handleFileUpload}
+                className="text-sm"
+              />
+              {importText && (
+                <span className="text-xs text-gray-500">
+                  {importText.length.toLocaleString()} characters (~{Math.round(importText.length / 4).toLocaleString()} tokens)
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button onClick={handleImportStory} disabled={importing || !importText.trim()}>
+              {importing ? 'Importing...' : 'Import Story'}
+            </Button>
+            <Button variant="ghost" onClick={() => setShowImport(false)} disabled={importing}>
               Cancel
             </Button>
           </div>

@@ -270,6 +270,22 @@ export interface GenerateFromProposalsRequest {
   model?: string | null;
 }
 
+// --- Story Import ---
+export interface ImportStoryRequest {
+  story: string;
+  text: string;
+  model?: string | null;
+  target_chunk_tokens?: number;
+  generate_lore_proposals?: boolean;
+}
+
+export interface ImportStoryResponse {
+  story: string;
+  chunks_created: number;
+  total_characters: number;
+  proposed_entities: ProposedLoreEntry[];
+}
+
 export interface AppState {
   currentStory: string;
   currentBranch: string;

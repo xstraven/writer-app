@@ -25,6 +25,8 @@ from ..models import (
     DevSeedResponse,
     ExtractMemoryRequest,
     GenerateFromProposalsRequest,
+    ImportStoryRequest,
+    ImportStoryResponse,
     LoreEntryCreate,
     LoreEntryDraft,
     LoreGenerateRequest,
@@ -608,6 +610,126 @@ async def generate_from_proposals(
 
     total = len(lore_store.list(story))
     return LoreGenerateResponse(story=story, created=created, total=total)
+
+
+def chunk_text_by_paragraphs(
+    text: str,
+    target_tokens: int = 768,
+    chars_per_token: int = 4,
+) -> list[str]:
+    """
+    Split text into chunks targeting a specific token count.
+
+    Strategy:
+    1. Split on double newlines (paragraphs)
+    2. Merge small consecutive paragraphs until target is reached
+    3. Never exceed 2x target (hard split if single paragraph too large)
+    """
+    target_chars = target_tokens * chars_per_token
+    max_chars = target_chars * 2
+
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    if not paragraphs:
+        return []
+
+    chunks: list[str] = []
+    current_chunk: list[str] = []
+    current_length = 0
+
+    for para in paragraphs:
+        para_len = len(para)
+
+        # Handle oversized paragraphs
+        if para_len > max_chars:
+            # Flush current chunk
+            if current_chunk:
+                chunks.append("\n\n".join(current_chunk))
+                current_chunk = []
+                current_length = 0
+            # Hard split oversized paragraph at sentence boundaries or max_chars
+            remaining = para
+            while len(remaining) > max_chars:
+                # Try to split at sentence boundary
+                split_point = max_chars
+                for sep in [". ", "! ", "? ", "\n"]:
+                    last_sep = remaining[:max_chars].rfind(sep)
+                    if last_sep > max_chars // 2:
+                        split_point = last_sep + len(sep)
+                        break
+                chunks.append(remaining[:split_point].strip())
+                remaining = remaining[split_point:].strip()
+            if remaining:
+                current_chunk = [remaining]
+                current_length = len(remaining)
+            continue
+
+        # Would adding this paragraph exceed target?
+        if current_length + para_len + 2 > target_chars and current_chunk:
+            chunks.append("\n\n".join(current_chunk))
+            current_chunk = []
+            current_length = 0
+
+        current_chunk.append(para)
+        current_length += para_len + 2  # +2 for \n\n separator
+
+    # Flush remaining
+    if current_chunk:
+        chunks.append("\n\n".join(current_chunk))
+
+    return chunks
+
+
+@router.post("/api/stories/import", response_model=ImportStoryResponse)
+async def import_story(
+    req: ImportStoryRequest,
+    snippet_store: SnippetStore = Depends(get_snippet_store),
+    lore_store: LorebookStore = Depends(get_lorebook_store),
+    story_settings: StorySettingsStore = Depends(get_story_settings_store),
+) -> ImportStoryResponse:
+    """Import an existing story from raw text, chunking it into snippets."""
+    story = (req.story or "").strip()
+    text = (req.text or "").strip()
+
+    if not story:
+        raise HTTPException(status_code=400, detail="Missing story name")
+    if not text:
+        raise HTTPException(status_code=400, detail="Missing text content")
+
+    # Chunk the text
+    chunks = chunk_text_by_paragraphs(text, target_tokens=req.target_chunk_tokens)
+    if not chunks:
+        raise HTTPException(status_code=400, detail="No content to import")
+
+    # Create snippets in linked-list fashion (like dev_seed)
+    parent_id = None
+    for chunk in chunks:
+        row = snippet_store.create_snippet(
+            story=story,
+            content=chunk,
+            kind="user",  # Imported text is user content
+            parent_id=parent_id,
+            set_active=parent_id is not None,
+        )
+        parent_id = row.id
+
+    # Propose lorebook entities if requested
+    proposed_entities: list = []
+    if req.generate_lore_proposals:
+        try:
+            proposed_entities = await propose_lorebook_entities(
+                story_text=text,
+                model=req.model,
+                max_proposals=10,
+            )
+        except Exception:
+            pass  # Don't fail import if proposal fails
+
+    return ImportStoryResponse(
+        story=story,
+        chunks_created=len(chunks),
+        total_characters=len(text),
+        proposed_entities=proposed_entities,
+    )
 
 
 @router.post("/api/dev/seed", response_model=DevSeedResponse)

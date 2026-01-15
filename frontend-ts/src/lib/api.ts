@@ -23,6 +23,8 @@ import type {
   GenerateFromProposalsRequest,
   PromptPreviewRequest,
   TruncateStoryResponse,
+  ImportStoryRequest,
+  ImportStoryResponse,
 } from './types';
 
 export const API_BASE = process.env.NEXT_PUBLIC_STORYCRAFT_API_BASE || 'http://localhost:8000';
@@ -334,6 +336,12 @@ export const saveStorySettings = async (
 // AI seeding: create a new story from a prompt
 export const seedStoryAI = async (payload: SeedStoryRequest): Promise<SeedStoryResponse> => {
   const response = await apiClient.post('/api/stories/seed-ai', payload, { timeout: GENERATION_TIMEOUT_MS })
+  return response.data
+}
+
+// Import story from raw text
+export const importStory = async (payload: ImportStoryRequest): Promise<ImportStoryResponse> => {
+  const response = await apiClient.post('/api/stories/import', payload, { timeout: GENERATION_TIMEOUT_MS })
   return response.data
 }
 
