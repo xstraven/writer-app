@@ -246,6 +246,7 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
         draft_text: chunk.text,
         instruction: rewriteInstruction,
         story: currentStory,
+        branch: currentBranch,
         max_tokens: generationSettings.max_tokens || 512,
         temperature: generationSettings.temperature || 0.8,
         model: generationSettings.model,

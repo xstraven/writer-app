@@ -132,6 +132,8 @@ class ContinueRequest(BaseModel):
     use_context: bool = True
     # Optional story id for persistence/branching.
     story: Optional[str] = None
+    # Optional branch name for context and persistence (defaults to "main").
+    branch: Optional[str] = None
     # Optional lorebook items to include (IDs from lorebook)
     lore_ids: Optional[List[str]] = None
     # When true, do not persist generated continuation even if story is provided.

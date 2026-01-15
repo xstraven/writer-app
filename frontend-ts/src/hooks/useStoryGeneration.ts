@@ -56,6 +56,7 @@ export function useStoryGeneration() {
         // If empty, backend applies base instruction; if provided, backend merges base+user
         instruction,
         story: currentStory,
+        branch: currentBranch,
         max_tokens: generationSettings.max_tokens,
         temperature: generationSettings.temperature,
         model: generationSettings.model,
@@ -157,6 +158,7 @@ export function useStoryGeneration() {
         draft_text: draftText,
         instruction: `Answer the user's question about the story. Respond with helpful ideas, not narrative. Question: ${prompt}`,
         story: currentStory,
+        branch: currentBranch,
         max_tokens: Math.max(128, generationSettings.max_tokens),
         temperature: generationSettings.temperature,
         model: generationSettings.model,

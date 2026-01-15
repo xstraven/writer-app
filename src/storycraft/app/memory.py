@@ -87,6 +87,9 @@ async def continue_story(
     lore_items: Optional[List[LoreEntry]] = None,
     system_prompt: Optional[str] = None,
     request_timeout: Optional[float] = None,
+    # Adjacent context for rewriting (helps LLM stitch text smoothly)
+    preceding_text: str = "",
+    following_text: str = "",
 ) -> Dict[str, str]:
     client = OpenRouterClient()
     sys = system_prompt.strip() if system_prompt else CONTINUE_SYSTEM
@@ -100,6 +103,8 @@ async def continue_story(
         .with_context(context)
         .with_history_text(history_text)
         .with_draft_text(draft_text)
+        .with_preceding_text(preceding_text)
+        .with_following_text(following_text)
         .build_messages()
     )
     resp = await client.chat(

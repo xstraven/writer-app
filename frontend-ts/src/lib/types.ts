@@ -137,6 +137,7 @@ export interface ContinueRequest {
   context?: ContextState | null;
   use_context?: boolean;
   story?: string | null;
+  branch?: string | null;
   lore_ids?: string[] | null;
   preview_only?: boolean;
 }

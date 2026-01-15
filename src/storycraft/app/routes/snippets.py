@@ -131,6 +131,20 @@ async def regenerate_ai(
     except Exception:
         pass
 
+    # Get adjacent chunks for context (helps LLM stitch text smoothly)
+    preceding_text = ""
+    following_text = ""
+    # Chunk above: the immediate parent's content
+    if parent_id:
+        parent_snippet = snippet_store.get(parent_id)
+        if parent_snippet:
+            preceding_text = parent_snippet.content or ""
+    # Chunk below: the active child's content (if exists)
+    if target.child_id:
+        child_snippet = snippet_store.get(target.child_id)
+        if child_snippet:
+            following_text = child_snippet.content or ""
+
     mem = None
     if req.use_memory and base_text.strip():
         mem = await extract_memory_from_text(text=base_text, model=req.model)
@@ -154,6 +168,8 @@ async def regenerate_ai(
         "temperature": req.temperature,
         "history_text": base_text,
         "lore_items": lore_items,
+        "preceding_text": preceding_text,
+        "following_text": following_text,
     }
 
     use_internal_editor = internal_editor_enabled(req.story, story_settings_store)

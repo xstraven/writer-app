@@ -69,14 +69,52 @@ def _truncate_text(draft_text: str, window_chars: Optional[int]) -> str:
     return draft_text
 
 
-def _gather_history_text(story: Optional[str], snippet_store: SnippetStore) -> str:
-    if not story:
-        return ""
+def _get_branch_head_id(story: str, branch: Optional[str], snippet_store: SnippetStore) -> Optional[str]:
+    """Get the head_id for a branch, or None to use main_path."""
+    if not branch or branch.strip().lower() == "main":
+        # For main branch, try to get the branch record first
+        try:
+            branches = snippet_store.list_branches(story)
+            main_branch = next((b for b in branches if b[1] == "main"), None)
+            if main_branch:
+                return main_branch[2]  # head_id
+        except Exception:
+            pass
+        return None  # Will fall back to main_path
+
+    # For non-main branches, look up the branch head
     try:
-        path = snippet_store.main_path(story)
-        return snippet_store.build_text(path)
+        branches = snippet_store.list_branches(story)
+        found = next((b for b in branches if b[1] == branch), None)
+        if found:
+            return found[2]  # head_id
     except Exception:
-        return ""
+        pass
+    return None
+
+
+def _gather_history_text(
+    story: Optional[str],
+    snippet_store: SnippetStore,
+    branch: Optional[str] = None,
+) -> tuple[str, Optional[str]]:
+    """
+    Gather history text for a story, optionally from a specific branch.
+    Returns (history_text, head_id) where head_id is the last snippet in the path.
+    """
+    if not story:
+        return "", None
+    try:
+        head_id = _get_branch_head_id(story, branch, snippet_store)
+        if head_id:
+            path = snippet_store.path_from_head(story, head_id)
+        else:
+            path = snippet_store.main_path(story)
+        text = snippet_store.build_text(path)
+        last_id = path[-1].id if path else None
+        return text, last_id
+    except Exception:
+        return "", None
 
 
 def _effective_lore_selection_text(draft_text: str, history_text: str) -> str:
@@ -96,9 +134,11 @@ async def continue_endpoint(
     draft_text = req.draft_text or ""
     draft_text = _truncate_text(draft_text, getattr(req, "max_context_window", 0))
 
+    # Get history from the correct branch (not always main)
     history_text = ""
+    branch_head_id: Optional[str] = None
     if req.story:
-        history_text = _gather_history_text(req.story, snippet_store)
+        history_text, branch_head_id = _gather_history_text(req.story, snippet_store, req.branch)
 
     selection_text = _effective_lore_selection_text(draft_text, history_text)
     lore_items = select_lore_items(
@@ -145,19 +185,32 @@ async def continue_endpoint(
     try:
         if req.story and not req.preview_only:
             story = req.story
-            if not snippet_store.main_path(story) and req.draft_text.strip():
-                snippet_store.create_snippet(
+            branch_name = (req.branch or "main").strip() or "main"
+
+            # Use the branch head as parent, not main_path
+            parent_id = branch_head_id
+
+            # If no existing path and we have draft text, create root snippet first
+            if not parent_id and req.draft_text.strip():
+                root = snippet_store.create_snippet(
                     story=story, content=req.draft_text, kind="user", parent_id=None
                 )
-            main_path = snippet_store.main_path(story)
-            parent_id = main_path[-1].id if main_path else None
-            snippet_store.create_snippet(
+                parent_id = root.id
+
+            # Create the AI continuation snippet
+            new_snippet = snippet_store.create_snippet(
                 story=story,
                 content=result.get("continuation", ""),
                 kind="ai",
                 parent_id=parent_id,
                 set_active=True,
             )
+
+            # Update the branch head to point to the new snippet
+            try:
+                snippet_store.upsert_branch(story=story, name=branch_name, head_id=new_snippet.id)
+            except Exception:
+                pass
     except Exception:
         pass
     return ContinueResponse(**result)
