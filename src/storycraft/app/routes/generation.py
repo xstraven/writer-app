@@ -236,7 +236,7 @@ async def prompt_preview(
 ) -> PromptPreviewResponse:
     history_text = ""
     if req.story:
-        history_text = _gather_history_text(req.story, snippet_store)
+        history_text, _ = _gather_history_text(req.story, snippet_store)
 
     selection_text = _effective_lore_selection_text(req.draft_text or "", history_text)
     lore_items = select_lore_items(

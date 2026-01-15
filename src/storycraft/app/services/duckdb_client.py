@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+import threading
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -134,165 +135,164 @@ class _DuckDBQuery:
             row["created_at"] = datetime.now(tz=timezone.utc).isoformat()
 
     def execute(self) -> _DuckDBResult:
+        # Connection is reused across queries (thread-local persistent connection)
         conn = self._client._get_connection()
-        try:
-            if self._action == "select":
-                # Build SELECT query
-                query = f"SELECT {self._select_columns} FROM {self._table}"
-                params = []
 
-                if self._filters:
-                    where_clauses = [f"{col} = ?" for col, _ in self._filters]
-                    query += " WHERE " + " AND ".join(where_clauses)
-                    params.extend([val for _, val in self._filters])
+        if self._action == "select":
+            # Build SELECT query
+            query = f"SELECT {self._select_columns} FROM {self._table}"
+            params = []
 
-                if self._order:
-                    col, desc = self._order
-                    query += f" ORDER BY {col} {'DESC' if desc else 'ASC'}"
+            if self._filters:
+                where_clauses = [f"{col} = ?" for col, _ in self._filters]
+                query += " WHERE " + " AND ".join(where_clauses)
+                params.extend([val for _, val in self._filters])
 
-                if self._limit is not None:
-                    query += f" LIMIT {self._limit}"
+            if self._order:
+                col, desc = self._order
+                query += f" ORDER BY {col} {'DESC' if desc else 'ASC'}"
 
-                cursor = conn.execute(query, params)
-                rows = cursor.fetchall()
-                columns = [desc[0] for desc in cursor.description]
-                data = [dict(zip(columns, row)) for row in rows]
-                return _DuckDBResult(data)
+            if self._limit is not None:
+                query += f" LIMIT {self._limit}"
 
-            elif self._action == "insert":
-                # Handle both single dict and list of dicts
-                rows = self._payload if isinstance(self._payload, list) else [self._payload]
-                out = []
+            cursor = conn.execute(query, params)
+            rows = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+            data = [dict(zip(columns, row)) for row in rows]
+            return _DuckDBResult(data)
 
-                for row in rows:
-                    record = deepcopy(row)
-                    self._ensure_created_at(record)
+        elif self._action == "insert":
+            # Handle both single dict and list of dicts
+            rows = self._payload if isinstance(self._payload, list) else [self._payload]
+            out = []
 
-                    columns = list(record.keys())
-                    placeholders = ", ".join(["?" for _ in columns])
-                    query = f"INSERT INTO {self._table} ({', '.join(columns)}) VALUES ({placeholders})"
-                    values = [record[col] for col in columns]
+            for row in rows:
+                record = deepcopy(row)
+                self._ensure_created_at(record)
 
-                    conn.execute(query, values)
-                    out.append(deepcopy(record))
+                columns = list(record.keys())
+                placeholders = ", ".join(["?" for _ in columns])
+                query = f"INSERT INTO {self._table} ({', '.join(columns)}) VALUES ({placeholders})"
+                values = [record[col] for col in columns]
 
-                return _DuckDBResult(out)
+                conn.execute(query, values)
+                out.append(deepcopy(record))
 
-            elif self._action == "update":
-                # Build UPDATE query
-                if not self._payload:
-                    return _DuckDBResult([])
+            return _DuckDBResult(out)
 
-                set_clause = ", ".join([f"{col} = ?" for col in self._payload.keys()])
-                query = f"UPDATE {self._table} SET {set_clause}"
-                params = list(self._payload.values())
+        elif self._action == "update":
+            # Build UPDATE query
+            if not self._payload:
+                return _DuckDBResult([])
 
-                if self._filters:
-                    where_clauses = [f"{col} = ?" for col, _ in self._filters]
-                    query += " WHERE " + " AND ".join(where_clauses)
-                    params.extend([val for _, val in self._filters])
+            set_clause = ", ".join([f"{col} = ?" for col in self._payload.keys()])
+            query = f"UPDATE {self._table} SET {set_clause}"
+            params = list(self._payload.values())
 
-                conn.execute(query, params)
+            if self._filters:
+                where_clauses = [f"{col} = ?" for col, _ in self._filters]
+                query += " WHERE " + " AND ".join(where_clauses)
+                params.extend([val for _, val in self._filters])
 
-                # Fetch updated rows to return
-                select_query = f"SELECT * FROM {self._table}"
-                if self._filters:
-                    where_clauses = [f"{col} = ?" for col, _ in self._filters]
-                    select_query += " WHERE " + " AND ".join(where_clauses)
-                    select_params = [val for _, val in self._filters]
-                    cursor = conn.execute(select_query, select_params)
-                else:
-                    cursor = conn.execute(select_query)
+            conn.execute(query, params)
 
-                rows = cursor.fetchall()
-                columns = [desc[0] for desc in cursor.description]
-                data = [dict(zip(columns, row)) for row in rows]
-                return _DuckDBResult(data)
+            # Fetch updated rows to return
+            select_query = f"SELECT * FROM {self._table}"
+            if self._filters:
+                where_clauses = [f"{col} = ?" for col, _ in self._filters]
+                select_query += " WHERE " + " AND ".join(where_clauses)
+                select_params = [val for _, val in self._filters]
+                cursor = conn.execute(select_query, select_params)
+            else:
+                cursor = conn.execute(select_query)
 
-            elif self._action == "delete":
-                # First fetch rows to return
-                select_query = f"SELECT * FROM {self._table}"
-                params = []
+            rows = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+            data = [dict(zip(columns, row)) for row in rows]
+            return _DuckDBResult(data)
 
-                if self._filters:
-                    where_clauses = [f"{col} = ?" for col, _ in self._filters]
-                    select_query += " WHERE " + " AND ".join(where_clauses)
-                    params = [val for _, val in self._filters]
+        elif self._action == "delete":
+            # First fetch rows to return
+            select_query = f"SELECT * FROM {self._table}"
+            params = []
 
-                cursor = conn.execute(select_query, params)
-                rows = cursor.fetchall()
-                columns = [desc[0] for desc in cursor.description]
-                data = [dict(zip(columns, row)) for row in rows]
+            if self._filters:
+                where_clauses = [f"{col} = ?" for col, _ in self._filters]
+                select_query += " WHERE " + " AND ".join(where_clauses)
+                params = [val for _, val in self._filters]
 
-                # Now delete
-                delete_query = f"DELETE FROM {self._table}"
-                if self._filters:
-                    where_clauses = [f"{col} = ?" for col, _ in self._filters]
-                    delete_query += " WHERE " + " AND ".join(where_clauses)
+            cursor = conn.execute(select_query, params)
+            rows = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+            data = [dict(zip(columns, row)) for row in rows]
 
-                conn.execute(delete_query, params)
-                return _DuckDBResult(data)
+            # Now delete
+            delete_query = f"DELETE FROM {self._table}"
+            if self._filters:
+                where_clauses = [f"{col} = ?" for col, _ in self._filters]
+                delete_query += " WHERE " + " AND ".join(where_clauses)
 
-            elif self._action == "upsert":
-                # Handle both single dict and list of dicts
-                rows = self._payload if isinstance(self._payload, list) else [self._payload]
-                out: List[Dict[str, Any]] = []
-                keys = []
+            conn.execute(delete_query, params)
+            return _DuckDBResult(data)
 
-                if self._on_conflict:
-                    keys = [key.strip() for key in self._on_conflict.split(",") if key.strip()]
+        elif self._action == "upsert":
+            # Handle both single dict and list of dicts
+            rows = self._payload if isinstance(self._payload, list) else [self._payload]
+            out: List[Dict[str, Any]] = []
+            keys = []
 
-                for row in rows:
-                    record = deepcopy(row)
-                    self._ensure_created_at(record)
+            if self._on_conflict:
+                keys = [key.strip() for key in self._on_conflict.split(",") if key.strip()]
 
-                    # Check if row exists
-                    if keys:
-                        where_clauses = [f"{k} = ?" for k in keys]
-                        check_query = f"SELECT * FROM {self._table} WHERE {' AND '.join(where_clauses)}"
-                        check_params = [record.get(k) for k in keys]
+            for row in rows:
+                record = deepcopy(row)
+                self._ensure_created_at(record)
 
+                # Check if row exists
+                if keys:
+                    where_clauses = [f"{k} = ?" for k in keys]
+                    check_query = f"SELECT * FROM {self._table} WHERE {' AND '.join(where_clauses)}"
+                    check_params = [record.get(k) for k in keys]
+
+                    cursor = conn.execute(check_query, check_params)
+                    existing = cursor.fetchone()
+
+                    if existing:
+                        # UPDATE existing row
+                        update_cols = [col for col in record.keys() if col not in keys]
+                        if update_cols:
+                            set_clause = ", ".join([f"{col} = ?" for col in update_cols])
+                            update_query = f"UPDATE {self._table} SET {set_clause} WHERE {' AND '.join(where_clauses)}"
+                            update_params = [record[col] for col in update_cols]
+                            update_params.extend(check_params)
+                            conn.execute(update_query, update_params)
+
+                        # Fetch updated row
                         cursor = conn.execute(check_query, check_params)
-                        existing = cursor.fetchone()
-
-                        if existing:
-                            # UPDATE existing row
-                            update_cols = [col for col in record.keys() if col not in keys]
-                            if update_cols:
-                                set_clause = ", ".join([f"{col} = ?" for col in update_cols])
-                                update_query = f"UPDATE {self._table} SET {set_clause} WHERE {' AND '.join(where_clauses)}"
-                                update_params = [record[col] for col in update_cols]
-                                update_params.extend(check_params)
-                                conn.execute(update_query, update_params)
-
-                            # Fetch updated row
-                            cursor = conn.execute(check_query, check_params)
-                            updated = cursor.fetchone()
-                            columns = [desc[0] for desc in cursor.description]
-                            out.append(dict(zip(columns, updated)))
-                        else:
-                            # INSERT new row
-                            columns = list(record.keys())
-                            placeholders = ", ".join(["?" for _ in columns])
-                            insert_query = f"INSERT INTO {self._table} ({', '.join(columns)}) VALUES ({placeholders})"
-                            values = [record[col] for col in columns]
-                            conn.execute(insert_query, values)
-                            out.append(deepcopy(record))
+                        updated = cursor.fetchone()
+                        columns = [desc[0] for desc in cursor.description]
+                        out.append(dict(zip(columns, updated)))
                     else:
-                        # No conflict keys, just insert
+                        # INSERT new row
                         columns = list(record.keys())
                         placeholders = ", ".join(["?" for _ in columns])
                         insert_query = f"INSERT INTO {self._table} ({', '.join(columns)}) VALUES ({placeholders})"
                         values = [record[col] for col in columns]
                         conn.execute(insert_query, values)
                         out.append(deepcopy(record))
+                else:
+                    # No conflict keys, just insert
+                    columns = list(record.keys())
+                    placeholders = ", ".join(["?" for _ in columns])
+                    insert_query = f"INSERT INTO {self._table} ({', '.join(columns)}) VALUES ({placeholders})"
+                    values = [record[col] for col in columns]
+                    conn.execute(insert_query, values)
+                    out.append(deepcopy(record))
 
-                return _DuckDBResult(out)
+            return _DuckDBResult(out)
 
-            else:
-                raise RuntimeError(f"Unsupported DuckDB action: {self._action}")
-        finally:
-            conn.close()
+        else:
+            raise RuntimeError(f"Unsupported DuckDB action: {self._action}")
 
 
 class _DuckDBTable:
@@ -323,6 +323,9 @@ class _DuckDBTable:
 class DuckDBSupabaseClient:
     def __init__(self, db_path: str = "./data/storycraft.duckdb") -> None:
         self.db_path = Path(db_path)
+        # Thread-local storage for connections (one persistent connection per thread)
+        self._local = threading.local()
+        self._lock = threading.Lock()
 
         # Create data directory if it doesn't exist
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -357,8 +360,22 @@ class DuckDBSupabaseClient:
                 raise
 
     def _get_connection(self) -> duckdb.DuckDBPyConnection:
-        """Get a connection to the database."""
-        return duckdb.connect(str(self.db_path))
+        """Get a persistent connection for the current thread (reused across queries)."""
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            conn = duckdb.connect(str(self.db_path))
+            self._local.conn = conn
+        return conn
+
+    def close(self) -> None:
+        """Close the connection for the current thread."""
+        conn = getattr(self._local, "conn", None)
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+            self._local.conn = None
 
     def table(self, name: str) -> _DuckDBTable:
         return _DuckDBTable(self, name)

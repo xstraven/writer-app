@@ -77,6 +77,11 @@ class SnippetStore:
         res = self._table().select("*").eq("story", story).execute()
         return res.data or []
 
+    def _build_snippet_index(self, story: str) -> dict[str, SnippetRow]:
+        """Load all snippets for a story in one query and return a dict keyed by id."""
+        rows = self._fetch_story_snippets(story)
+        return {r["id"]: self._row_to_obj(r) for r in rows}
+
     def get(self, snippet_id: str) -> Optional[SnippetRow]:
         row = self._fetch_snippet(snippet_id)
         return self._row_to_obj(row) if row else None
@@ -170,15 +175,22 @@ class SnippetStore:
             raise ValueError("child is not a descendant of parent in this story")
         self._set_active_child(story, parent_id, child_id)
 
-    def main_path(self, story: str) -> List[SnippetRow]:
-        root = self._get_root(story)
-        if not root:
+    def _main_path_from_index(self, story: str, index: dict[str, SnippetRow]) -> List[SnippetRow]:
+        """Traverse main path using pre-built index (no additional queries)."""
+        if not index:
             return []
+        # Find root (snippet with no parent_id)
+        roots = [s for s in index.values() if s.parent_id is None]
+        if not roots:
+            return []
+        roots.sort(key=lambda s: s.created_at, reverse=True)
+        root = roots[0]
+        # Traverse in memory following child_id links
         path: List[SnippetRow] = [root]
         cursor = root
         visited = {root.id}
         while cursor.child_id:
-            child = self.get(cursor.child_id)
+            child = index.get(cursor.child_id)
             if not child or child.story != story or child.id in visited:
                 break
             path.append(child)
@@ -186,10 +198,17 @@ class SnippetStore:
             cursor = child
         return path
 
-    def path_from_head(self, story: str, head_id: str) -> List[SnippetRow]:
-        head = self.get(head_id)
+    def main_path(self, story: str) -> List[SnippetRow]:
+        # Load all snippets in one query for in-memory traversal
+        index = self._build_snippet_index(story)
+        return self._main_path_from_index(story, index)
+
+    def _path_from_head_with_index(self, story: str, head_id: str, index: dict[str, SnippetRow]) -> List[SnippetRow]:
+        """Traverse path from head to root using pre-built index (no additional queries)."""
+        head = index.get(head_id)
         if not head or head.story != story:
             return []
+        # Traverse backwards to root in memory following parent_id links
         chain: List[SnippetRow] = []
         cursor = head
         visited = set()
@@ -199,7 +218,7 @@ class SnippetStore:
             chain.append(cursor)
             visited.add(cursor.id)
             if cursor.parent_id:
-                parent = self.get(cursor.parent_id)
+                parent = index.get(cursor.parent_id)
                 if not parent or parent.story != story:
                     break
                 cursor = parent
@@ -207,6 +226,11 @@ class SnippetStore:
                 break
         chain.reverse()
         return chain
+
+    def path_from_head(self, story: str, head_id: str) -> List[SnippetRow]:
+        # Load all snippets in one query for in-memory traversal
+        index = self._build_snippet_index(story)
+        return self._path_from_head_with_index(story, head_id, index)
 
     @staticmethod
     def build_text(path: Iterable[SnippetRow]) -> str:
@@ -388,13 +412,16 @@ class SnippetStore:
         Validate that head_id points to a valid path from root.
         Returns dict with: { valid: bool, reason: str, path_length: int }
         """
+        # Load all snippets once for all operations (1 query instead of 3+)
+        index = self._build_snippet_index(story)
+
         # Check if head exists
-        head = self.get(head_id)
+        head = index.get(head_id)
         if not head or head.story != story:
             return {"valid": False, "reason": "head_not_found", "path_length": 0}
 
-        # Traverse to root
-        path = self.path_from_head(story, head_id)
+        # Traverse to root using shared index
+        path = self._path_from_head_with_index(story, head_id, index)
         if not path:
             return {"valid": False, "reason": "empty_path", "path_length": 0}
 
@@ -403,8 +430,8 @@ class SnippetStore:
         if root.parent_id is not None:
             return {"valid": False, "reason": "root_has_parent", "path_length": len(path)}
 
-        # Compare with main_path to detect disconnection
-        main = self.main_path(story)
+        # Compare with main_path using shared index
+        main = self._main_path_from_index(story, index)
         if not main:
             return {"valid": True, "reason": "ok_empty_story", "path_length": len(path)}
 

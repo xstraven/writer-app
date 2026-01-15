@@ -8,7 +8,8 @@ import {
   Sparkles,
   Menu,
   X,
-  Upload
+  Upload,
+  RefreshCw
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { 
@@ -30,7 +31,7 @@ export function TopNavigation() {
   const [stories, setStories] = useState<string[]>([])
   const [apiStatus, setApiStatus] = useState<'checking' | 'ok' | 'error'>('checking')
   const [apiMessage, setApiMessage] = useState('')
-  const [llmStatus, setLlmStatus] = useState<'checking' | 'ok' | 'error'>('checking')
+  const [llmStatus, setLlmStatus] = useState<'checking' | 'ok' | 'error' | 'unknown'>('unknown')
   const [llmMessage, setLlmMessage] = useState('')
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -60,12 +61,11 @@ export function TopNavigation() {
   useEffect(() => {
     loadStories()
     checkApiStatus()
-    checkLlmStatus()
-    
+    // LLM status check is now manual (click the badge) to reduce log noise
+
     // Check API status every 30 seconds
     const interval = setInterval(() => {
       checkApiStatus()
-      checkLlmStatus()
     }, 30000)
     return () => clearInterval(interval)
   }, [])
@@ -372,22 +372,31 @@ export function TopNavigation() {
                 API {apiStatus === 'checking' ? 'Checking' : apiStatus.toUpperCase()}
               </div>
               
-              <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-                llmStatus === 'ok' 
-                  ? 'bg-green-100 text-green-800'
-                  : llmStatus === 'error'
-                  ? 'bg-red-100 text-red-800'  
-                  : 'bg-yellow-100 text-yellow-800'
-              }`}>
+              <button
+                onClick={checkLlmStatus}
+                disabled={llmStatus === 'checking'}
+                className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity ${
+                  llmStatus === 'ok'
+                    ? 'bg-green-100 text-green-800'
+                    : llmStatus === 'error'
+                    ? 'bg-red-100 text-red-800'
+                    : llmStatus === 'unknown'
+                    ? 'bg-gray-100 text-gray-600'
+                    : 'bg-yellow-100 text-yellow-800'
+                }`}
+                title="Click to check LLM status"
+              >
                 {llmStatus === 'ok' ? (
                   <CheckCircle className="h-3 w-3" />
                 ) : llmStatus === 'error' ? (
                   <AlertCircle className="h-3 w-3" />
-                ) : (
+                ) : llmStatus === 'checking' ? (
                   <div className="h-3 w-3 rounded-full bg-current animate-pulse" />
+                ) : (
+                  <RefreshCw className="h-3 w-3" />
                 )}
-                LLM {llmStatus === 'checking' ? 'Checking' : llmStatus.toUpperCase()}
-              </div>
+                LLM {llmStatus === 'checking' ? 'Checking' : llmStatus === 'unknown' ? 'Check' : llmStatus.toUpperCase()}
+              </button>
 
               {(apiMessage || llmMessage) && (
                 <div
