@@ -249,6 +249,10 @@ class SnippetStore:
         self._table().update(updates).eq("id", snippet_id).execute()
         return self.get(snippet_id)
 
+    def _supports_transactions(self) -> bool:
+        """Check if the client supports transactions."""
+        return hasattr(self._client, "transaction")
+
     def insert_above(
         self,
         *,
@@ -261,27 +265,35 @@ class SnippetStore:
         target = self.get(target_snippet_id)
         if not target or target.story != story:
             raise ValueError("target snippet not found")
-        old_parent_id = target.parent_id
-        new_id = uuid.uuid4().hex
-        self._table().insert(
-            {
-                "id": new_id,
-                "story": story,
-                "parent_id": old_parent_id,
-                "child_id": target.id,
-                "kind": kind,
-                "content": content,
-            }
-        ).execute()
-        self._table().update({"parent_id": new_id}).eq("id", target.id).execute()
-        if old_parent_id and set_active:
-            parent = self.get(old_parent_id)
-            if parent and parent.child_id == target.id:
-                self._set_active_child(story, old_parent_id, new_id)
-        new_row = self._fetch_snippet(new_id)
-        if not new_row:
-            raise RuntimeError("Failed to fetch inserted snippet")
-        return self._row_to_obj(new_row)
+
+        def do_insert() -> SnippetRow:
+            old_parent_id = target.parent_id
+            new_id = uuid.uuid4().hex
+            self._table().insert(
+                {
+                    "id": new_id,
+                    "story": story,
+                    "parent_id": old_parent_id,
+                    "child_id": target.id,
+                    "kind": kind,
+                    "content": content,
+                }
+            ).execute()
+            self._table().update({"parent_id": new_id}).eq("id", target.id).execute()
+            if old_parent_id and set_active:
+                parent = self.get(old_parent_id)
+                if parent and parent.child_id == target.id:
+                    self._set_active_child(story, old_parent_id, new_id)
+            new_row = self._fetch_snippet(new_id)
+            if not new_row:
+                raise RuntimeError("Failed to fetch inserted snippet")
+            return self._row_to_obj(new_row)
+
+        if self._supports_transactions():
+            with self._client.transaction():
+                return do_insert()
+        else:
+            return do_insert()
 
     def insert_below(
         self,
@@ -295,26 +307,34 @@ class SnippetStore:
         parent = self.get(parent_snippet_id)
         if not parent or parent.story != story:
             raise ValueError("parent snippet not found")
-        new_id = uuid.uuid4().hex
-        self._table().insert(
-            {
-                "id": new_id,
-                "story": story,
-                "parent_id": parent.id,
-                "child_id": None,
-                "kind": kind,
-                "content": content,
-            }
-        ).execute()
-        if parent.child_id:
-            self._table().update({"parent_id": new_id}).eq("id", parent.child_id).execute()
-            self._table().update({"child_id": parent.child_id}).eq("id", new_id).execute()
-        if set_active:
-            self._set_active_child(story, parent.id, new_id)
-        new_row = self._fetch_snippet(new_id)
-        if not new_row:
-            raise RuntimeError("Failed to fetch inserted snippet")
-        return self._row_to_obj(new_row)
+
+        def do_insert() -> SnippetRow:
+            new_id = uuid.uuid4().hex
+            self._table().insert(
+                {
+                    "id": new_id,
+                    "story": story,
+                    "parent_id": parent.id,
+                    "child_id": None,
+                    "kind": kind,
+                    "content": content,
+                }
+            ).execute()
+            if parent.child_id:
+                self._table().update({"parent_id": new_id}).eq("id", parent.child_id).execute()
+                self._table().update({"child_id": parent.child_id}).eq("id", new_id).execute()
+            if set_active:
+                self._set_active_child(story, parent.id, new_id)
+            new_row = self._fetch_snippet(new_id)
+            if not new_row:
+                raise RuntimeError("Failed to fetch inserted snippet")
+            return self._row_to_obj(new_row)
+
+        if self._supports_transactions():
+            with self._client.transaction():
+                return do_insert()
+        else:
+            return do_insert()
 
     def delete_snippet(self, *, story: str, snippet_id: str) -> bool:
         target = self.get(snippet_id)
@@ -322,41 +342,49 @@ class SnippetStore:
             return False
         if target.parent_id is None:
             raise ValueError("cannot delete the root snippet")
-        branch_rows = (
-            self._branches()
-            .select("name")
-            .eq("story", story)
-            .eq("head_id", snippet_id)
-            .execute()
-        )
-        branch_names = [row["name"] for row in branch_rows.data or [] if row.get("name")]
-        replacement_head_id: Optional[str] = None
-        children = self.list_children(story, target.id)
-        if children:
-            active_child_id = target.child_id or children[-1].id
-            for child in children:
-                self._table().update({"parent_id": target.parent_id}).eq("id", child.id).execute()
-            parent = self.get(target.parent_id)
-            if parent and parent.child_id == target.id:
-                self._set_active_child(story, parent.id, active_child_id)
-            replacement_head_id = active_child_id
-        else:
-            parent = self.get(target.parent_id)
-            if parent and parent.child_id == target.id:
-                self._set_active_child(story, parent.id, None)
-            replacement_head_id = parent.id if parent else None
-        self._table().delete().eq("id", snippet_id).execute()
-        if branch_names:
-            if replacement_head_id:
-                for name in branch_names:
-                    self._branches().upsert(
-                        {"story": story, "name": name, "head_id": replacement_head_id},
-                        on_conflict="story,name",
-                    ).execute()
+
+        def do_delete() -> bool:
+            branch_rows = (
+                self._branches()
+                .select("name")
+                .eq("story", story)
+                .eq("head_id", snippet_id)
+                .execute()
+            )
+            branch_names = [row["name"] for row in branch_rows.data or [] if row.get("name")]
+            replacement_head_id: Optional[str] = None
+            children = self.list_children(story, target.id)
+            if children:
+                active_child_id = target.child_id or children[-1].id
+                for child in children:
+                    self._table().update({"parent_id": target.parent_id}).eq("id", child.id).execute()
+                parent = self.get(target.parent_id)
+                if parent and parent.child_id == target.id:
+                    self._set_active_child(story, parent.id, active_child_id)
+                replacement_head_id = active_child_id
             else:
-                for name in branch_names:
-                    self._branches().delete().eq("story", story).eq("name", name).execute()
-        return True
+                parent = self.get(target.parent_id)
+                if parent and parent.child_id == target.id:
+                    self._set_active_child(story, parent.id, None)
+                replacement_head_id = parent.id if parent else None
+            self._table().delete().eq("id", snippet_id).execute()
+            if branch_names:
+                if replacement_head_id:
+                    for name in branch_names:
+                        self._branches().upsert(
+                            {"story": story, "name": name, "head_id": replacement_head_id},
+                            on_conflict="story,name",
+                        ).execute()
+                else:
+                    for name in branch_names:
+                        self._branches().delete().eq("story", story).eq("name", name).execute()
+            return True
+
+        if self._supports_transactions():
+            with self._client.transaction():
+                return do_delete()
+        else:
+            return do_delete()
 
     def delete_story(self, story: str) -> None:
         self._branches().delete().eq("story", story).execute()

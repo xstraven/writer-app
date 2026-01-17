@@ -157,12 +157,57 @@ class _InMemoryTable:
         return _InMemoryQuery(self._store, action="upsert", payload=payload, on_conflict=on_conflict)
 
 
+class _InMemoryTransactionContext:
+    """No-op transaction context for in-memory client."""
+
+    def __init__(self, client: "InMemorySupabaseClient") -> None:
+        self._client = client
+
+    def __enter__(self) -> "_InMemoryTransactionContext":
+        self._client.begin_transaction()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        if exc_type is not None:
+            self._client.rollback()
+            return False
+        self._client.commit()
+        return False
+
+
 class InMemorySupabaseClient:
     def __init__(self) -> None:
         self._tables: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        self._in_transaction = False
+        self._snapshot: Optional[Dict[str, List[Dict[str, Any]]]] = None
 
     def table(self, name: str) -> _InMemoryTable:
         return _InMemoryTable(self._tables[name])
+
+    def begin_transaction(self) -> None:
+        """Begin a transaction by snapshotting current state."""
+        if self._in_transaction:
+            return  # Already in transaction
+        self._in_transaction = True
+        self._snapshot = {k: [deepcopy(v) for v in lst] for k, lst in self._tables.items()}
+
+    def commit(self) -> None:
+        """Commit the transaction (discard snapshot)."""
+        self._in_transaction = False
+        self._snapshot = None
+
+    def rollback(self) -> None:
+        """Rollback to the snapshot state."""
+        if self._snapshot is not None:
+            self._tables.clear()
+            for k, v in self._snapshot.items():
+                self._tables[k] = v
+        self._in_transaction = False
+        self._snapshot = None
+
+    def transaction(self) -> _InMemoryTransactionContext:
+        """Context manager for transactions."""
+        return _InMemoryTransactionContext(self)
 
 
 _client_lock = threading.Lock()

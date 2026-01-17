@@ -53,15 +53,19 @@ async def append_snippet(
         parent_id=req.parent_id,
         set_active=req.set_active,
     )
-    try:
-        if req.set_active is not False:
-            branch_name = (req.branch or "main").strip() or "main"
+    if req.set_active is not False:
+        branch_name = (req.branch or "main").strip() or "main"
+        try:
             snippet_store.upsert_branch(story=req.story, name=branch_name, head_id=row.id)
-    except Exception as e:
-        logger.error(
-            f"Failed to update branch for story '{req.story}': {e}",
-            exc_info=True
-        )
+        except Exception as e:
+            logger.error(
+                f"Failed to update branch for story '{req.story}': {e}",
+                exc_info=True
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=f"Snippet created but failed to update branch head: {e}"
+            )
     return Snippet(**row.__dict__)
 
 
@@ -77,15 +81,19 @@ async def regenerate_snippet(
         kind=req.kind,
         set_active=req.set_active,
     )
-    try:
-        if req.set_active:
-            branch_name = (req.branch or "main").strip() or "main"
+    if req.set_active:
+        branch_name = (req.branch or "main").strip() or "main"
+        try:
             snippet_store.upsert_branch(story=req.story, name=branch_name, head_id=row.id)
-    except Exception as e:
-        logger.error(
-            f"Failed to update branch for story '{req.story}': {e}",
-            exc_info=True
-        )
+        except Exception as e:
+            logger.error(
+                f"Failed to update branch for story '{req.story}': {e}",
+                exc_info=True
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=f"Snippet regenerated but failed to update branch head: {e}"
+            )
     return Snippet(**row.__dict__)
 
 
@@ -97,13 +105,17 @@ async def choose_active_child(
     snippet_store.choose_active_child(
         story=req.story, parent_id=req.parent_id, child_id=req.child_id
     )
+    branch_name = (req.branch or "main").strip() or "main"
     try:
-        branch_name = (req.branch or "main").strip() or "main"
         snippet_store.upsert_branch(story=req.story, name=branch_name, head_id=req.child_id)
     except Exception as e:
         logger.error(
             f"Failed to update branch for story '{req.story}': {e}",
             exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Active child set but failed to update branch head: {e}"
         )
     return {"ok": True}
 
@@ -196,15 +208,19 @@ async def regenerate_ai(
         kind="ai",
         set_active=req.set_active,
     )
-    try:
-        if req.set_active:
-            branch_name = (req.branch or "main").strip() or "main"
+    if req.set_active:
+        branch_name = (req.branch or "main").strip() or "main"
+        try:
             snippet_store.upsert_branch(story=req.story, name=branch_name, head_id=row.id)
-    except Exception as e:
-        logger.error(
-            f"Failed to update branch for story '{req.story}': {e}",
-            exc_info=True
-        )
+        except Exception as e:
+            logger.error(
+                f"Failed to update branch for story '{req.story}': {e}",
+                exc_info=True
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=f"AI regeneration succeeded but failed to update branch head: {e}"
+            )
     return Snippet(**row.__dict__)
 
 
@@ -261,11 +277,30 @@ async def insert_below(
                 f"Failed to update branch for story '{req.story}': {e}",
                 exc_info=True
             )
+            raise HTTPException(
+                status_code=500,
+                detail=f"Snippet inserted but failed to update branch head: {e}"
+            )
     return Snippet(**row.__dict__)
 
 
 @router.put("/api/snippets/{snippet_id}", response_model=Snippet)
 async def update_snippet(
+    snippet_id: str,
+    patch: UpdateSnippetRequest,
+    snippet_store: SnippetStore = Depends(get_snippet_store),
+) -> Snippet:
+    row = snippet_store.update_snippet(
+        snippet_id=snippet_id, content=patch.content, kind=patch.kind
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Snippet not found")
+    return Snippet(**row.__dict__)
+
+
+# POST endpoint mirrors PUT for sendBeacon compatibility (sendBeacon can only POST)
+@router.post("/api/snippets/{snippet_id}/update", response_model=Snippet)
+async def update_snippet_post(
     snippet_id: str,
     patch: UpdateSnippetRequest,
     snippet_store: SnippetStore = Depends(get_snippet_store),

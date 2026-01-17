@@ -333,6 +333,25 @@ class DuckDBSupabaseClient:
         # Initialize database schema
         self._initialize_db()
 
+    def begin_transaction(self) -> None:
+        """Begin an explicit transaction."""
+        conn = self._get_connection()
+        conn.execute("BEGIN TRANSACTION")
+
+    def commit(self) -> None:
+        """Commit the current transaction."""
+        conn = self._get_connection()
+        conn.execute("COMMIT")
+
+    def rollback(self) -> None:
+        """Rollback the current transaction."""
+        conn = self._get_connection()
+        conn.execute("ROLLBACK")
+
+    def transaction(self) -> "TransactionContext":
+        """Context manager for transactions. Usage: with client.transaction(): ..."""
+        return TransactionContext(self)
+
     def _initialize_db(self) -> None:
         """Create tables if they don't exist."""
         try:
@@ -381,4 +400,22 @@ class DuckDBSupabaseClient:
         return _DuckDBTable(self, name)
 
 
-__all__ = ["DuckDBSupabaseClient"]
+class TransactionContext:
+    """Context manager for database transactions."""
+
+    def __init__(self, client: DuckDBSupabaseClient) -> None:
+        self._client = client
+
+    def __enter__(self) -> "TransactionContext":
+        self._client.begin_transaction()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        if exc_type is not None:
+            self._client.rollback()
+            return False  # Re-raise the exception
+        self._client.commit()
+        return False
+
+
+__all__ = ["DuckDBSupabaseClient", "TransactionContext"]

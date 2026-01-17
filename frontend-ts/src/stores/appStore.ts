@@ -119,31 +119,39 @@ export const useAppStore = create<AppState>()(
       ...initialState,
 
       setCurrentStory: (story) => {
-        // Ensure pending edits are persisted before switching stories
-        (async () => {
-          try { await saveQueue.flush() } catch {}
-          set((state) => ({
-            currentStory: story,
-            // Reset per-story draft data so sync adopts backend for the selected story
-            chunks: [],
-            history: [],
-            editingId: null,
-            editingText: '',
-            hoveredId: null,
-            generationSettingsHydrated: false,
-            experimental: { ...defaultExperimental },
-          }))
-        })()
+        const currentStoryBefore = get().currentStory
+        if (currentStoryBefore === story) return // No-op if same story
+
+        // Flush previous story's pending edits with keepalive for reliability
+        // This is fire-and-forget but uses keepalive to survive if user navigates away
+        saveQueue.flush({ keepalive: true }).catch(() => {})
+
+        // Set new story state synchronously (saveQueue operates on snippet IDs,
+        // so clearing chunks doesn't lose queued data)
+        set({
+          currentStory: story,
+          // Reset per-story draft data so sync adopts backend for the selected story
+          chunks: [],
+          history: [],
+          editingId: null,
+          editingText: '',
+          hoveredId: null,
+          generationSettingsHydrated: false,
+          experimental: { ...defaultExperimental },
+        })
       },
-      
+
       setInstruction: (instruction) => set({ instruction }),
 
       setCurrentBranch: (name: string) => {
-        // Persist edits before switching active branch
-        (async () => {
-          try { await saveQueue.flush() } catch {}
-          set({ currentBranch: name })
-        })()
+        const currentBranchBefore = get().currentBranch
+        if (currentBranchBefore === name) return // No-op if same branch
+
+        // Flush pending edits with keepalive for reliability
+        saveQueue.flush({ keepalive: true }).catch(() => {})
+
+        // Update branch synchronously
+        set({ currentBranch: name })
       },
       
       setChunks: (chunks) => set({ chunks }),

@@ -25,10 +25,11 @@ class SaveQueue {
       const entries = Array.from(this.pending.entries())
       this.pending.clear()
       for (const [id, { content, kind }] of entries) {
-        // Attempt keepalive fetch first for unload-safe delivery
+        // Attempt sendBeacon first for unload-safe delivery (uses POST endpoint)
         if (opts?.keepalive && typeof navigator !== 'undefined' && 'sendBeacon' in navigator) {
           try {
-            const url = `${API_BASE}/api/snippets/${encodeURIComponent(id)}`
+            // Use /update POST endpoint since sendBeacon can only send POST requests
+            const url = `${API_BASE}/api/snippets/${encodeURIComponent(id)}/update`
             const blob = new Blob([JSON.stringify({ content, kind })], { type: 'application/json' })
             const ok = (navigator as any).sendBeacon(url, blob)
             if (ok) continue
