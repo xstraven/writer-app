@@ -376,7 +376,7 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
         <div className="p-4 space-y-4">
           <div>
             <label className="text-sm font-medium mb-2 block">Original Text</label>
-            <div className="p-3 bg-gray-50 rounded border text-sm max-h-40 overflow-y-auto">
+            <div className="p-3 bg-gray-50 dark:bg-neutral-900/70 dark:border-neutral-700 dark:text-neutral-100 rounded border text-sm max-h-40 overflow-y-auto">
               {chunk.text}
             </div>
           </div>
@@ -398,7 +398,7 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
           {rewrittenText && (
             <div>
               <label className="text-sm font-medium mb-2 block">Rewritten Text</label>
-              <div className="p-3 bg-blue-50 rounded border text-sm max-h-60 overflow-y-auto whitespace-pre-wrap">
+              <div className="p-3 bg-blue-50 dark:bg-blue-950/40 dark:border-blue-900/60 dark:text-blue-50 rounded border text-sm max-h-60 overflow-y-auto whitespace-pre-wrap">
                 {rewrittenText}
               </div>
             </div>
@@ -423,6 +423,13 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
               </>
             ) : (
               <>
+                <Button
+                  variant="ghost"
+                  onClick={handleGenerateRewrite}
+                  disabled={isRewriting}
+                >
+                  {isRewriting ? 'Regenerating...' : 'Regenerate'}
+                </Button>
                 <Button
                   variant="ghost"
                   onClick={handleDiscardRewrite}
