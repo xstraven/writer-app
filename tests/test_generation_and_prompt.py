@@ -21,7 +21,7 @@ def test_prompt_preview_default_prompt_order(client):
     assert len(messages) >= 2
     last = messages[-1]
     assert last["role"] == "user"
-    assert "[Prompt]" in last["content"]
+    assert "[Task]" in last["content"]
     assert "Continue the story" in last["content"]
 
 

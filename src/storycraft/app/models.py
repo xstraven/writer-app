@@ -231,6 +231,23 @@ class StorySettingsUpdate(BaseModel):
     experimental: Optional["ExperimentalFeatures"] = None
     initial_prompt: str | None = None
 
+    @field_validator("gallery", mode="before")
+    @classmethod
+    def normalize_gallery(cls, value):
+        if value is None:
+            return value
+        if not value:
+            return []
+        result = []
+        for item in value:
+            if isinstance(item, str):
+                result.append(GalleryItem(type="url", value=item))
+            elif isinstance(item, dict):
+                result.append(GalleryItem(**item))
+            elif isinstance(item, GalleryItem):
+                result.append(item)
+        return result
+
 
 class StorySettingsPatch(StorySettingsUpdate):
     # Optional: replace lorebook snapshot when provided

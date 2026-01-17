@@ -7,6 +7,7 @@ class SaveQueue {
   private pending: Map<string, Pending> = new Map()
   private timer: ReturnType<typeof setTimeout> | null = null
   private inFlight = false
+  private flushRequested = false
 
   queue(id: string, content: string, kind?: string) {
     this.pending.set(id, { content, kind })
@@ -19,7 +20,10 @@ class SaveQueue {
   }
 
   async flush(opts?: { keepalive?: boolean }) {
-    if (this.inFlight) return
+    if (this.inFlight) {
+      this.flushRequested = true
+      return
+    }
     this.inFlight = true
     try {
       const entries = Array.from(this.pending.entries())
@@ -59,6 +63,12 @@ class SaveQueue {
       }
     } finally {
       this.inFlight = false
+      if (this.flushRequested && this.pending.size > 0) {
+        this.flushRequested = false
+        void this.flush()
+        return
+      }
+      this.flushRequested = false
     }
   }
 }

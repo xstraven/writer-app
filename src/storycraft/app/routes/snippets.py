@@ -249,23 +249,22 @@ async def insert_below(
 ) -> Snippet:
     branch_name = (req.branch or "main").strip() or "main"
     parent_was_head = False
-    if req.set_active:
-        try:
-            branches = snippet_store.list_branches(req.story)
-            parent_was_head = any(b[1] == branch_name and b[2] == req.parent_snippet_id for b in branches)
-        except Exception:
-            parent_was_head = False
+    try:
+        branches = snippet_store.list_branches(req.story)
+        parent_was_head = any(b[1] == branch_name and b[2] == req.parent_snippet_id for b in branches)
+    except Exception:
+        parent_was_head = False
     try:
         row = snippet_store.insert_below(
             story=req.story,
             parent_snippet_id=req.parent_snippet_id,
             content=req.content,
             kind=req.kind,
-            set_active=req.set_active,
+            set_active=True,
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    if req.set_active and parent_was_head:
+    if parent_was_head:
         try:
             snippet_store.upsert_branch(
                 story=req.story,

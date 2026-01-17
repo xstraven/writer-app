@@ -3,9 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form
+import hashlib
 import os
 import uuid
 from pathlib import Path
+import re
 
 from ..models import ExperimentalFeatures, LoreEntryCreate, StorySettings, StorySettingsPatch
 from ..dependencies import (
@@ -20,6 +22,24 @@ from ..lorebook_store import LorebookStore
 
 router = APIRouter()
 IMAGES_DIR = Path("./data/images")
+_SAFE_DIR_RE = re.compile(r"[^a-zA-Z0-9_-]+")
+_CONTENT_TYPE_EXT = {
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
+
+
+def _safe_story_dir(story: str) -> str:
+    story = (story or "").strip()
+    if not story:
+        raise HTTPException(status_code=400, detail="Missing story name")
+    slug = _SAFE_DIR_RE.sub("_", story).strip("_").lower()
+    if not slug:
+        slug = "story"
+    digest = hashlib.sha256(story.encode("utf-8")).hexdigest()[:16]
+    return f"{slug}-{digest}"
 
 
 @router.get("/api/story-settings", response_model=StorySettings)
@@ -146,8 +166,8 @@ async def upload_gallery_image(
         raise HTTPException(status_code=400, detail="Missing story name")
 
     # Validate file type
-    allowed_types = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
-    if file.content_type not in allowed_types:
+    ext = _CONTENT_TYPE_EXT.get(file.content_type or "")
+    if not ext:
         raise HTTPException(status_code=400, detail=f"Invalid file type")
 
     # Validate file size (10MB max)
@@ -158,13 +178,15 @@ async def upload_gallery_image(
         raise HTTPException(status_code=400, detail="File too large (max 10MB)")
 
     # Create story directory
-    story_dir = IMAGES_DIR / story
+    story_dir = IMAGES_DIR / _safe_story_dir(story)
     story_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate unique filename
-    ext = Path(file.filename).suffix or ".jpg"
     unique_filename = f"{uuid.uuid4().hex}{ext}"
     file_path = story_dir / unique_filename
+    base_dir = IMAGES_DIR.resolve()
+    if base_dir not in file_path.resolve().parents:
+        raise HTTPException(status_code=400, detail="Invalid upload path")
 
     # Save file
     with open(file_path, "wb") as f:
@@ -176,7 +198,7 @@ async def upload_gallery_image(
         "filename": unique_filename,
         "original_filename": file.filename,
         "story": story,
-        "url": f"/api/images/{story}/{unique_filename}"
+        "url": f"/api/images/{story_dir.name}/{unique_filename}"
     }
 
 
@@ -188,10 +210,13 @@ async def delete_gallery_image(story: str, filename: str) -> dict:
         raise HTTPException(status_code=400, detail="Missing story or filename")
 
     # Prevent directory traversal
-    if ".." in filename or "/" in filename:
+    if ".." in filename or "/" in filename or "\\" in filename or Path(filename).name != filename:
         raise HTTPException(status_code=400, detail="Invalid filename")
 
-    file_path = IMAGES_DIR / story / filename
+    file_path = IMAGES_DIR / _safe_story_dir(story) / filename
+    base_dir = IMAGES_DIR.resolve()
+    if base_dir not in file_path.resolve().parents:
+        raise HTTPException(status_code=400, detail="Invalid file path")
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
 

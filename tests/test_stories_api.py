@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 
+def _gallery_values(gallery):
+    return [item["value"] if isinstance(item, dict) else item for item in (gallery or [])]
+
+
 def test_story_crud_and_duplication_flow(client):
     story = "Original Story"
     duplicate_name = "Duplicated Story"
@@ -75,7 +79,7 @@ def test_story_crud_and_duplication_flow(client):
     duplicate_settings = client.get("/api/story-settings", params={"story": duplicate_name}).json()
     assert duplicate_settings["synopsis"] == settings_payload["synopsis"]
     assert duplicate_settings["context"]["summary"] == settings_payload["context"]["summary"]
-    assert duplicate_settings["gallery"] == settings_payload["gallery"]
+    assert _gallery_values(duplicate_settings["gallery"]) == settings_payload["gallery"]
 
     duplicate_lore = client.get("/api/lorebook", params={"story": duplicate_name}).json()
     assert len(duplicate_lore) == 1

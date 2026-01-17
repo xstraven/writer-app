@@ -307,6 +307,7 @@ class SnippetStore:
         parent = self.get(parent_snippet_id)
         if not parent or parent.story != story:
             raise ValueError("parent snippet not found")
+        set_active = True
 
         def do_insert() -> SnippetRow:
             new_id = uuid.uuid4().hex
