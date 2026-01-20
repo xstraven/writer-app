@@ -18,7 +18,8 @@ __pycache__/
 
 # Project-specific
 assets/external/
-data/
+data/*
+!data/.gitkeep
 
 # Node (frontend)
 node_modules/
