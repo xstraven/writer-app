@@ -20,11 +20,11 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useAppStore } from '@/stores/appStore'
-import { createLoreEntry, updateLoreEntry, deleteLoreEntry, generateLorebook, getLorebook, saveStorySettings } from '@/lib/api'
+import { createLoreEntry, updateLoreEntry, deleteLoreEntry, generateLorebook, getLorebook, saveStorySettings, proposeLoreEntries, generateFromProposals } from '@/lib/api'
 import { toast } from 'sonner'
 import { getApiErrorMessage } from '@/lib/errors'
 import { uid } from '@/lib/utils'
-import type { LoreEntry, LoreEntryCreate, LoreEntryUpdate } from '@/lib/types'
+import type { LoreEntry, LoreEntryCreate, LoreEntryUpdate, ProposedLoreEntry } from '@/lib/types'
 
 interface EditingEntry extends Partial<LoreEntry> {
   isNew?: boolean
@@ -38,7 +38,8 @@ export function LorebookPanel() {
   const [isLoading, setIsLoading] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [showGenerateModal, setShowGenerateModal] = useState(false)
-  const [namesText, setNamesText] = useState('')
+  const [proposedEntities, setProposedEntities] = useState<ProposedLoreEntry[]>([])
+  const [selectedEntityNames, setSelectedEntityNames] = useState<Set<string>>(new Set())
 
   // Filter lorebook based on search
   const filteredLorebook = lorebook.filter(entry =>
@@ -146,6 +147,62 @@ export function LorebookPanel() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleProposeEntities = async () => {
+    if (!currentStory) return
+    setIsGenerating(true)
+    try {
+      const result = await proposeLoreEntries({
+        story: currentStory,
+        story_text: '',  // Will use current story text from backend
+        max_proposals: 10,
+      })
+      setProposedEntities(result.proposals)
+      setSelectedEntityNames(new Set(result.proposals.map(e => e.name)))  // Pre-select all
+      setShowGenerateModal(true)
+    } catch (error: any) {
+      toast.error(`Failed to propose entities: ${getApiErrorMessage(error)}`)
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const handleGenerateFromProposals = async () => {
+    if (!currentStory) return
+    const selectedNames = Array.from(selectedEntityNames)
+    if (selectedNames.length === 0) {
+      toast.error('Please select at least one entity')
+      return
+    }
+    setIsGenerating(true)
+    try {
+      const result = await generateFromProposals({
+        story: currentStory,
+        story_text: '',  // Will use current story text from backend
+        selected_names: selectedNames,
+      })
+      const updated = await getLorebook(currentStory)
+      setLorebook(updated)
+      toast.success(`Created ${result.created} lorebook ${result.created === 1 ? 'entry' : 'entries'}`)
+      setShowGenerateModal(false)
+      setProposedEntities([])
+      setSelectedEntityNames(new Set())
+    } catch (error: any) {
+      toast.error(`Failed to generate: ${getApiErrorMessage(error)}`)
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const toggleEntitySelection = (name: string) => {
+    const newSet = new Set(selectedEntityNames)
+    if (newSet.has(name)) {
+      newSet.delete(name)
+    } else {
+      newSet.add(name)
+    }
+    setSelectedEntityNames(newSet)
   }
 
   const updateEditingField = (field: keyof EditingEntry, value: any) => {
@@ -329,8 +386,8 @@ export function LorebookPanel() {
           <Plus className="h-3 w-3 mr-1" />
           Add
         </Button>
-        <Button size="sm" variant="outline" onClick={() => setShowGenerateModal(true)} disabled={isLoading || !!editingEntry}>
-          Generate
+        <Button size="sm" variant="outline" onClick={handleProposeEntities} disabled={isLoading || !!editingEntry || isGenerating}>
+          {isGenerating ? 'Proposing…' : 'Generate'}
         </Button>
         <Button size="sm" variant="ghost" className="text-neutral-500" disabled={isLoading || !!editingEntry} onClick={async () => {
           if (!confirm('Clear all lorebook entries for this story? This cannot be undone.')) return
@@ -436,44 +493,62 @@ export function LorebookPanel() {
         </div>
       </ScrollArea>
     </div>
-    {/* Generate Modal */}
+    {/* Entity Confirmation Modal */}
     {showGenerateModal && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20">
         <div className="bg-white rounded-md shadow-lg w-[520px] max-w-[95vw]">
           <div className="p-3 border-b flex items-center justify-between">
-            <div className="font-medium">Generate Lore Entries</div>
-            <button className="text-gray-500" onClick={() => setShowGenerateModal(false)}><X className="h-4 w-4" /></button>
+            <div className="font-medium">Confirm Lorebook Entries</div>
+            <button className="text-gray-500" onClick={() => {
+              if (!isGenerating) {
+                setShowGenerateModal(false)
+                setProposedEntities([])
+                setSelectedEntityNames(new Set())
+              }
+            }}><X className="h-4 w-4" /></button>
           </div>
           <div className="p-3 space-y-3">
-            <div className="text-sm text-gray-600">Enter one name per line. The assistant will infer kind, summary, tags, and keys from the current story. Names are preserved.</div>
-            <Textarea
-              value={namesText}
-              onChange={(e) => setNamesText(e.target.value)}
-              placeholder={"Mira\nThe Quiet War\nStormbreak Harbor"}
-              className="min-h-[120px]"
-            />
-            <div className="text-xs text-gray-500">Entries will be appended to the lorebook.</div>
+            <div className="text-sm text-gray-600">Select which entities should get lorebook entries:</div>
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              {proposedEntities.map((entity) => (
+                <div
+                  key={entity.name}
+                  className="flex items-start gap-3 p-3 border rounded hover:bg-gray-50 cursor-pointer"
+                  onClick={() => toggleEntitySelection(entity.name)}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedEntityNames.has(entity.name)}
+                    onChange={() => toggleEntitySelection(entity.name)}
+                    className="mt-1"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium">
+                      {entity.name}
+                      <span className="ml-2 text-xs text-gray-500 font-normal">
+                        ({entity.kind})
+                      </span>
+                    </div>
+                    <div className="text-sm text-gray-600 mt-1">
+                      {entity.reason}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="text-xs text-gray-500">
+              {selectedEntityNames.size} of {proposedEntities.length} selected
+            </div>
           </div>
           <div className="p-3 border-t flex items-center justify-end gap-2">
-            <Button variant="ghost" onClick={() => setShowGenerateModal(false)} disabled={isGenerating}>Cancel</Button>
-            <Button onClick={async () => {
-              const names = namesText.split(/\r?\n/).map(s => s.trim()).filter(Boolean)
-              if (names.length === 0) { toast.error('Please enter at least one name'); return }
-              setIsGenerating(true)
-              try {
-                const res = await generateLorebook({ story: currentStory, names, strategy: 'append' })
-                const updated = await getLorebook(currentStory)
-                setLorebook(updated)
-                toast.success(`Generated ${res.created} entr${res.created === 1 ? 'y' : 'ies'}`)
-                setShowGenerateModal(false)
-                setNamesText('')
-              } catch (error: any) {
-                toast.error(`Failed to generate lore: ${getApiErrorMessage(error)}`)
-              } finally {
-                setIsGenerating(false)
-              }
-            }} disabled={isGenerating}>
-              {isGenerating ? 'Generating…' : 'Generate'}
+            <Button variant="ghost" onClick={() => {
+              setShowGenerateModal(false)
+              setProposedEntities([])
+              setSelectedEntityNames(new Set())
+            }} disabled={isGenerating}>Cancel</Button>
+            <Button onClick={handleGenerateFromProposals} disabled={isGenerating}>
+              {isGenerating ? 'Generating…' : `Generate ${selectedEntityNames.size} ${selectedEntityNames.size === 1 ? 'Entry' : 'Entries'}`}
             </Button>
           </div>
         </div>

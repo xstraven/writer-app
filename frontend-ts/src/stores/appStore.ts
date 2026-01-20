@@ -1,20 +1,23 @@
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
-import type { 
-  Chunk, 
-  HistoryEntry, 
-  GenerationSettings, 
-  LoreEntry, 
+import type {
+  Chunk,
+  HistoryEntry,
+  GenerationSettings,
+  LoreEntry,
   MemoryState,
   ContextState,
   BranchInfo,
   TreeRow,
-  AppState as AppStateType
+  AppState as AppStateType,
+  ExperimentalFeatures,
+  GalleryItem,
 } from '@/lib/types'
 import { uid } from '@/lib/utils'
 import { saveQueue } from '@/lib/saveQueue'
 
 interface AppState extends AppStateType {
+  generationSettingsHydrated: boolean
   // Actions
   setCurrentStory: (story: string) => void
   setCurrentBranch: (name: string) => void
@@ -28,6 +31,7 @@ interface AppState extends AppStateType {
   setHoveredId: (id: string | null) => void
   setIsGenerating: (isGenerating: boolean) => void
   updateGenerationSettings: (settings: Partial<GenerationSettings>) => void
+  setGenerationSettingsHydrated: (hydrated: boolean) => void
   setSynopsis: (synopsis: string) => void
   setLorebook: (lorebook: LoreEntry[]) => void
   setMemory: (memory: MemoryState) => void
@@ -37,10 +41,17 @@ interface AppState extends AppStateType {
   pushHistory: (action: HistoryEntry['action'], before: Chunk[], after: Chunk[]) => void
   revertFromHistory: () => void
   clearHistory: () => void
+  setExperimental: (experimental: ExperimentalFeatures) => void
+  updateExperimental: (experimental: Partial<ExperimentalFeatures>) => void
   // Gallery
-  setGallery: (urls: string[]) => void
-  addGalleryImage: (url: string) => void
-  removeGalleryImage: (url: string) => void
+  setGallery: (items: GalleryItem[]) => void
+  addGalleryImage: (item: GalleryItem) => void
+  removeGalleryImage: (item: GalleryItem) => void
+}
+
+const defaultExperimental: ExperimentalFeatures = {
+  internal_editor_workflow: false,
+  dark_mode: false,
 }
 
 const initialState = {
@@ -61,6 +72,7 @@ const initialState = {
     max_context_window: 1000,
     base_instruction: 'Continue the story, matching established voice, tone, and point of view. Maintain continuity with prior events and details.',
   },
+  generationSettingsHydrated: false,
   synopsis: "Mira, a courier in a rain-soaked coastal city, discovers a message that could end a quiet war.",
   lorebook: [
     {
@@ -93,10 +105,12 @@ const initialState = {
     summary: "",
     npcs: [],
     objects: [],
+    system_prompt: undefined,
   },
   branches: [],
   treeRows: [],
   gallery: [],
+  experimental: { ...defaultExperimental },
 }
 
 export const useAppStore = create<AppState>()(
@@ -105,29 +119,39 @@ export const useAppStore = create<AppState>()(
       ...initialState,
 
       setCurrentStory: (story) => {
-        // Ensure pending edits are persisted before switching stories
-        (async () => {
-          try { await saveQueue.flush() } catch {}
-          set((state) => ({ 
-            currentStory: story,
-            // Reset per-story draft data so sync adopts backend for the selected story
-            chunks: [],
-            history: [],
-            editingId: null,
-            editingText: '',
-            hoveredId: null,
-          }))
-        })()
+        const currentStoryBefore = get().currentStory
+        if (currentStoryBefore === story) return // No-op if same story
+
+        // Flush previous story's pending edits with keepalive for reliability
+        // This is fire-and-forget but uses keepalive to survive if user navigates away
+        saveQueue.flush({ keepalive: true }).catch(() => {})
+
+        // Set new story state synchronously (saveQueue operates on snippet IDs,
+        // so clearing chunks doesn't lose queued data)
+        set({
+          currentStory: story,
+          // Reset per-story draft data so sync adopts backend for the selected story
+          chunks: [],
+          history: [],
+          editingId: null,
+          editingText: '',
+          hoveredId: null,
+          generationSettingsHydrated: false,
+          experimental: { ...defaultExperimental },
+        })
       },
-      
+
       setInstruction: (instruction) => set({ instruction }),
 
       setCurrentBranch: (name: string) => {
-        // Persist edits before switching active branch
-        (async () => {
-          try { await saveQueue.flush() } catch {}
-          set({ currentBranch: name })
-        })()
+        const currentBranchBefore = get().currentBranch
+        if (currentBranchBefore === name) return // No-op if same branch
+
+        // Flush pending edits with keepalive for reliability
+        saveQueue.flush({ keepalive: true }).catch(() => {})
+
+        // Update branch synchronously
+        set({ currentBranch: name })
       },
       
       setChunks: (chunks) => set({ chunks }),
@@ -164,6 +188,8 @@ export const useAppStore = create<AppState>()(
       updateGenerationSettings: (settings) => set((state) => ({
         generationSettings: { ...state.generationSettings, ...settings }
       })),
+
+      setGenerationSettingsHydrated: (hydrated) => set({ generationSettingsHydrated: hydrated }),
       
       setSynopsis: (synopsis) => set({ synopsis }),
       
@@ -184,13 +210,22 @@ export const useAppStore = create<AppState>()(
         }
         return { branches: filtered }
       }),
-      
+
       setTreeRows: (treeRows) => set({ treeRows }),
+
+      setExperimental: (experimental) =>
+        set({ experimental: experimental ? { ...defaultExperimental, ...experimental } : { ...defaultExperimental } }),
+
+      updateExperimental: (experimental) => set((state) => ({
+        experimental: { ...state.experimental, ...experimental },
+      })),
       
       // Gallery actions
-      setGallery: (gallery: string[]) => set({ gallery }),
-      addGalleryImage: (url: string) => set((state) => ({ gallery: [url, ...state.gallery] })),
-      removeGalleryImage: (url: string) => set((state) => ({ gallery: state.gallery.filter(u => u !== url) })),
+      setGallery: (gallery: GalleryItem[]) => set({ gallery }),
+      addGalleryImage: (item: GalleryItem) => set((state) => ({ gallery: [item, ...state.gallery] })),
+      removeGalleryImage: (item: GalleryItem) => set((state) => ({
+        gallery: state.gallery.filter(i => !(i.type === item.type && i.value === item.value))
+      })),
       
       pushHistory: (action, before, after) => set((state) => ({
         history: [{

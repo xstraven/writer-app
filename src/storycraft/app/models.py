@@ -2,8 +2,16 @@ from __future__ import annotations
 
 from typing import List, Optional
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 from typing import Literal
+
+
+class GalleryItem(BaseModel):
+    """Gallery image - either URL or uploaded file"""
+    type: Literal["url", "upload"] = "url"
+    value: str  # URL or filename
+    display_name: str | None = None
+    uploaded_at: datetime | None = None
 
 
 class LoreEntry(BaseModel):
@@ -60,15 +68,63 @@ class ContextState(BaseModel):
     summary: str = ""
     npcs: List[ContextItem] = Field(default_factory=list)
     objects: List[ContextItem] = Field(default_factory=list)
+    system_prompt: Optional[str] = None
+
+
+class EditorCandidateScore(BaseModel):
+    candidate: int
+    instruction_coverage: Optional[float] = None
+    continuity: Optional[float] = None
+    quality: Optional[float] = None
+    notes: Optional[str] = None
+
+    @field_validator("candidate")
+    @classmethod
+    def candidate_non_negative(cls, value: int) -> int:
+        return max(0, value)
+
+
+class InternalEditorSelection(BaseModel):
+    winner: int
+    reason: Optional[str] = None
+    scores: List[EditorCandidateScore] = Field(default_factory=list)
+
+    @field_validator("winner")
+    @classmethod
+    def winner_non_negative(cls, value: int) -> int:
+        return max(0, value)
+
+    @model_validator(mode="after")
+    def clamp_winner(self, info: ValidationInfo) -> "InternalEditorSelection":
+        limit = info.context.get("num_candidates")
+        if isinstance(limit, int) and limit > 0 and self.winner >= limit:
+            self.winner = max(0, limit - 1)
+        return self
+
+
+class LoreEntryDraft(BaseModel):
+    name: str
+    kind: str = "note"
+    summary: str
+    tags: List[str] = Field(default_factory=list)
+    keys: List[str] = Field(default_factory=list)
+    always_on: bool = False
+
+
+class SuggestContextResponse(ContextState):
+    system_prompt: str = Field(
+        default="",
+        description="System prompt used when generating context suggestions.",
+    )
 
 
 class ContinueRequest(BaseModel):
     draft_text: str
     instruction: str = ""
-    max_tokens: int = 512
+    max_tokens: int = 1024
     model: Optional[str] = None
     use_memory: bool = True
-    temperature: float = 0.7
+    temperature: float = 1.0
     # Optional override of the system prompt used for generation.
     system_prompt: Optional[str] = None
     # Optional user/LLM-provided context to enrich the prompt.
@@ -76,6 +132,8 @@ class ContinueRequest(BaseModel):
     use_context: bool = True
     # Optional story id for persistence/branching.
     story: Optional[str] = None
+    # Optional branch name for context and persistence (defaults to "main").
+    branch: Optional[str] = None
     # Optional lorebook items to include (IDs from lorebook)
     lore_ids: Optional[List[str]] = None
     # When true, do not persist generated continuation even if story is provided.
@@ -110,14 +168,18 @@ class AppPersistedState(BaseModel):
     draft_text: str = ""
     instruction: str = ""
     model: Optional[str] = None
-    temperature: float = 0.7
-    max_tokens: int = 512
+    temperature: float = 1.0
+    max_tokens: int = 1024
     system_prompt: Optional[str] = None
     include_memory: bool = True
     include_context: bool = True
     context: Optional[ContextState] = None
     generations: List[str] = Field(default_factory=list)
     gen_index: int = -1
+
+
+class ExperimentalFeatures(BaseModel):
+    internal_editor_workflow: bool = False
 
 
 class StorySettings(BaseModel):
@@ -131,9 +193,27 @@ class StorySettings(BaseModel):
     # Maximum context window (characters ÷ 3 heuristic used elsewhere)
     max_context_window: int | None = None
     context: ContextState | None = None
-    gallery: list[str] = Field(default_factory=list)
+    gallery: list[GalleryItem] = Field(default_factory=list)
     synopsis: str | None = None
     memory: MemoryState | None = None
+    experimental: Optional["ExperimentalFeatures"] = None
+    initial_prompt: str | None = None  # Original story seed prompt
+
+    @field_validator("gallery", mode="before")
+    @classmethod
+    def migrate_legacy_gallery(cls, value):
+        """Convert legacy URL strings to GalleryItem objects"""
+        if not value:
+            return []
+        result = []
+        for item in value:
+            if isinstance(item, str):
+                result.append(GalleryItem(type="url", value=item))
+            elif isinstance(item, dict):
+                result.append(GalleryItem(**item))
+            elif isinstance(item, GalleryItem):
+                result.append(item)
+        return result
 
 
 class StorySettingsUpdate(BaseModel):
@@ -145,15 +225,39 @@ class StorySettingsUpdate(BaseModel):
     base_instruction: str | None = None
     max_context_window: int | None = None
     context: ContextState | None = None
-    gallery: list[str] | None = None
+    gallery: list[GalleryItem] | None = None
     synopsis: str | None = None
     memory: MemoryState | None = None
+    experimental: Optional["ExperimentalFeatures"] = None
+    initial_prompt: str | None = None
+
+    @field_validator("gallery", mode="before")
+    @classmethod
+    def normalize_gallery(cls, value):
+        if value is None:
+            return value
+        if not value:
+            return []
+        result = []
+        for item in value:
+            if isinstance(item, str):
+                result.append(GalleryItem(type="url", value=item))
+            elif isinstance(item, dict):
+                result.append(GalleryItem(**item))
+            elif isinstance(item, GalleryItem):
+                result.append(item)
+        return result
 
 
 class StorySettingsPatch(StorySettingsUpdate):
     # Optional: replace lorebook snapshot when provided
     # Accept raw dicts to avoid requiring IDs when replacing the snapshot.
     lorebook: list[dict] | None = None
+
+
+class TruncateStoryResponse(BaseModel):
+    ok: bool = True
+    root_snippet: Snippet
 
 
 # --- Snippets & Branching ---
@@ -206,10 +310,10 @@ class RegenerateAIRequest(BaseModel):
     story: str
     target_snippet_id: str
     instruction: str = ""
-    max_tokens: int = 512
+    max_tokens: int = 1024
     model: Optional[str] = None
     use_memory: bool = True
-    temperature: float = 0.7
+    temperature: float = 1.0
     max_context_window: Optional[int] = None
     context: Optional[ContextState] = None
     use_context: bool = True
@@ -231,6 +335,7 @@ class InsertAboveRequest(BaseModel):
     content: str
     kind: str = "user"
     set_active: bool = True
+    branch: Optional[str] = None
 
 
 class InsertBelowRequest(BaseModel):
@@ -239,6 +344,7 @@ class InsertBelowRequest(BaseModel):
     content: str
     kind: str = "user"
     set_active: bool = True
+    branch: Optional[str] = None
 
 
 class DeleteSnippetResponse(BaseModel):
@@ -320,10 +426,16 @@ class SeedStoryRequest(BaseModel):
     story: str
     prompt: str
     model: Optional[str] = None
-    temperature: float = 0.7
-    max_tokens_first_chunk: int = 200
+    temperature: float = 1.0
+    max_tokens_first_chunk: int = 2048
     # When true, attempt to pick relevant lore entries by keyword match.
     use_lore: bool = True
+
+
+class ProposedLoreEntry(BaseModel):
+    name: str
+    kind: str  # character, location, faction, item, concept
+    reason: str  # 1-sentence explanation of importance
 
 
 class SeedStoryResponse(BaseModel):
@@ -332,6 +444,7 @@ class SeedStoryResponse(BaseModel):
     content: str
     synopsis: str = ""
     relevant_lore_ids: list[str] = Field(default_factory=list)
+    proposed_entities: list["ProposedLoreEntry"] = Field(default_factory=list)
 
 
 # --- Lorebook Generation ---
@@ -348,3 +461,38 @@ class LoreGenerateResponse(BaseModel):
     story: str
     created: int = 0
     total: int = 0
+
+
+class ProposeLoreEntriesRequest(BaseModel):
+    story: str
+    story_text: str
+    model: Optional[str] = None
+    max_proposals: int = 8  # Fewer than current 10
+
+
+class ProposeLoreEntriesResponse(BaseModel):
+    story: str
+    proposals: list[ProposedLoreEntry] = Field(default_factory=list)
+
+
+class GenerateFromProposalsRequest(BaseModel):
+    story: str
+    story_text: str
+    selected_names: list[str]  # User-confirmed names
+    model: Optional[str] = None
+
+
+# --- Story Import ---
+class ImportStoryRequest(BaseModel):
+    story: str
+    text: str
+    model: Optional[str] = None  # For lorebook proposal
+    target_chunk_tokens: int = 768  # Target tokens per chunk (512-1024 range)
+    generate_lore_proposals: bool = True
+
+
+class ImportStoryResponse(BaseModel):
+    story: str
+    chunks_created: int = 0
+    total_characters: int = 0
+    proposed_entities: list["ProposedLoreEntry"] = Field(default_factory=list)

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import logging
 import sys
 import traceback
 
 from fastapi import APIRouter, Depends, HTTPException
 
+logger = logging.getLogger(__name__)
+
+from ..editor_workflow import run_internal_editor_workflow
 from ..memory import continue_story, extract_memory_from_text
 from ..models import (
     AppendSnippetRequest,
@@ -22,6 +26,7 @@ from ..models import (
     UpdateSnippetRequest,
     UpsertBranchRequest,
 )
+from ..services.experimental import internal_editor_enabled
 from ..services.prompt_utils import merge_instruction
 from ..dependencies import (
     get_lorebook_store,
@@ -48,12 +53,19 @@ async def append_snippet(
         parent_id=req.parent_id,
         set_active=req.set_active,
     )
-    try:
-        if req.set_active is not False:
-            branch_name = (req.branch or "main").strip() or "main"
+    if req.set_active is not False:
+        branch_name = (req.branch or "main").strip() or "main"
+        try:
             snippet_store.upsert_branch(story=req.story, name=branch_name, head_id=row.id)
-    except Exception:
-        pass
+        except Exception as e:
+            logger.error(
+                f"Failed to update branch for story '{req.story}': {e}",
+                exc_info=True
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=f"Snippet created but failed to update branch head: {e}"
+            )
     return Snippet(**row.__dict__)
 
 
@@ -69,12 +81,19 @@ async def regenerate_snippet(
         kind=req.kind,
         set_active=req.set_active,
     )
-    try:
-        if req.set_active:
-            branch_name = (req.branch or "main").strip() or "main"
+    if req.set_active:
+        branch_name = (req.branch or "main").strip() or "main"
+        try:
             snippet_store.upsert_branch(story=req.story, name=branch_name, head_id=row.id)
-    except Exception:
-        pass
+        except Exception as e:
+            logger.error(
+                f"Failed to update branch for story '{req.story}': {e}",
+                exc_info=True
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=f"Snippet regenerated but failed to update branch head: {e}"
+            )
     return Snippet(**row.__dict__)
 
 
@@ -86,11 +105,18 @@ async def choose_active_child(
     snippet_store.choose_active_child(
         story=req.story, parent_id=req.parent_id, child_id=req.child_id
     )
+    branch_name = (req.branch or "main").strip() or "main"
     try:
-        branch_name = (req.branch or "main").strip() or "main"
         snippet_store.upsert_branch(story=req.story, name=branch_name, head_id=req.child_id)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(
+            f"Failed to update branch for story '{req.story}': {e}",
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Active child set but failed to update branch head: {e}"
+        )
     return {"ok": True}
 
 
@@ -99,7 +125,7 @@ async def regenerate_ai(
     req: RegenerateAIRequest,
     snippet_store: SnippetStore = Depends(get_snippet_store),
     lore_store: LorebookStore = Depends(get_lorebook_store),
-    story_settings: StorySettingsStore = Depends(get_story_settings_store),
+    story_settings_store: StorySettingsStore = Depends(get_story_settings_store),
 ) -> Snippet:
     target = snippet_store.get(req.target_snippet_id)
     if not target or target.story != req.story:
@@ -117,6 +143,20 @@ async def regenerate_ai(
     except Exception:
         pass
 
+    # Get adjacent chunks for context (helps LLM stitch text smoothly)
+    preceding_text = ""
+    following_text = ""
+    # Chunk above: the immediate parent's content
+    if parent_id:
+        parent_snippet = snippet_store.get(parent_id)
+        if parent_snippet:
+            preceding_text = parent_snippet.content or ""
+    # Chunk below: the active child's content (if exists)
+    if target.child_id:
+        child_snippet = snippet_store.get(target.child_id)
+        if child_snippet:
+            following_text = child_snippet.content or ""
+
     mem = None
     if req.use_memory and base_text.strip():
         mem = await extract_memory_from_text(text=base_text, model=req.model)
@@ -129,17 +169,34 @@ async def regenerate_ai(
             if entry:
                 lore_items.append(entry)
 
+    merged_instruction = merge_instruction(req.instruction, req.story, story_settings_store) or ""
+    generation_kwargs = {
+        "draft_text": base_text,
+        "instruction": merged_instruction,
+        "mem": mem,
+        "context": (req.context if req.use_context else None),
+        "model": req.model,
+        "max_tokens": req.max_tokens,
+        "temperature": req.temperature,
+        "history_text": base_text,
+        "lore_items": lore_items,
+        "preceding_text": preceding_text,
+        "following_text": following_text,
+    }
+
+    use_internal_editor = internal_editor_enabled(req.story, story_settings_store)
+
     try:
-        result = await continue_story(
-            draft_text=base_text,
-            instruction=merge_instruction(req.instruction, req.story, story_settings) or "",
-            mem=mem,
-            context=(req.context if req.use_context else None),
-            model=req.model,
-            max_tokens=req.max_tokens,
-            temperature=req.temperature,
-            lore_items=lore_items,
-        )
+        if use_internal_editor:
+            result = await run_internal_editor_workflow(
+                generation_kwargs=generation_kwargs,
+                user_instruction=req.instruction or "",
+                story_so_far=base_text,
+                draft_segment=base_text,
+                judge_model=req.model,
+            )
+        else:
+            result = await continue_story(**generation_kwargs)
     except Exception as e:
         traceback.print_exc(file=sys.stderr)
         raise HTTPException(status_code=502, detail=f"Regeneration failed: {e}")
@@ -151,12 +208,19 @@ async def regenerate_ai(
         kind="ai",
         set_active=req.set_active,
     )
-    try:
-        if req.set_active:
-            branch_name = (req.branch or "main").strip() or "main"
+    if req.set_active:
+        branch_name = (req.branch or "main").strip() or "main"
+        try:
             snippet_store.upsert_branch(story=req.story, name=branch_name, head_id=row.id)
-    except Exception:
-        pass
+        except Exception as e:
+            logger.error(
+                f"Failed to update branch for story '{req.story}': {e}",
+                exc_info=True
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=f"AI regeneration succeeded but failed to update branch head: {e}"
+            )
     return Snippet(**row.__dict__)
 
 
@@ -183,21 +247,59 @@ async def insert_below(
     req: InsertBelowRequest,
     snippet_store: SnippetStore = Depends(get_snippet_store),
 ) -> Snippet:
+    branch_name = (req.branch or "main").strip() or "main"
+    parent_was_head = False
+    try:
+        branches = snippet_store.list_branches(req.story)
+        parent_was_head = any(b[1] == branch_name and b[2] == req.parent_snippet_id for b in branches)
+    except Exception:
+        parent_was_head = False
     try:
         row = snippet_store.insert_below(
             story=req.story,
             parent_snippet_id=req.parent_snippet_id,
             content=req.content,
             kind=req.kind,
-            set_active=req.set_active,
+            set_active=True,
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    if parent_was_head:
+        try:
+            snippet_store.upsert_branch(
+                story=req.story,
+                name=branch_name,
+                head_id=row.id,
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to update branch for story '{req.story}': {e}",
+                exc_info=True
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=f"Snippet inserted but failed to update branch head: {e}"
+            )
     return Snippet(**row.__dict__)
 
 
 @router.put("/api/snippets/{snippet_id}", response_model=Snippet)
 async def update_snippet(
+    snippet_id: str,
+    patch: UpdateSnippetRequest,
+    snippet_store: SnippetStore = Depends(get_snippet_store),
+) -> Snippet:
+    row = snippet_store.update_snippet(
+        snippet_id=snippet_id, content=patch.content, kind=patch.kind
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Snippet not found")
+    return Snippet(**row.__dict__)
+
+
+# POST endpoint mirrors PUT for sendBeacon compatibility (sendBeacon can only POST)
+@router.post("/api/snippets/{snippet_id}/update", response_model=Snippet)
+async def update_snippet_post(
     snippet_id: str,
     patch: UpdateSnippetRequest,
     snippet_store: SnippetStore = Depends(get_snippet_store),
@@ -263,7 +365,27 @@ async def get_branch_path(
         except Exception:
             main_branch = None
         if main_branch:
-            path = snippet_store.path_from_head(story, main_branch[2])
+            # Validate branch head integrity
+            validation = snippet_store.validate_branch_head(story, main_branch[2])
+
+            if not validation["valid"]:
+                logger.warning(
+                    f"Corrupted main branch detected for story '{story}': "
+                    f"{validation['reason']}. Attempting repair..."
+                )
+
+                # Attempt auto-repair
+                repaired_head = snippet_store.repair_branch_head(story, "main")
+
+                if repaired_head:
+                    logger.info(f"Successfully repaired main branch for story '{story}'")
+                    path = snippet_store.path_from_head(story, repaired_head)
+                else:
+                    # Fallback to main_path if repair fails
+                    logger.warning(f"Repair failed, using main_path fallback for story '{story}'")
+                    path = snippet_store.main_path(story)
+            else:
+                path = snippet_store.path_from_head(story, main_branch[2])
         else:
             path = snippet_store.main_path(story)
 
@@ -324,6 +446,33 @@ async def delete_branch(
 ) -> dict:
     snippet_store.delete_branch(story=story, name=name)
     return {"ok": True}
+
+
+@router.get("/api/branches/health", response_model=dict)
+async def check_branch_health(
+    story: str,
+    snippet_store: SnippetStore = Depends(get_snippet_store),
+) -> dict:
+    """
+    Check integrity of all branches for a story.
+    Returns health status and any issues found.
+    """
+    branches = snippet_store.list_branches(story)
+    results = {}
+
+    for branch_row in branches:
+        name = branch_row[1]
+        head_id = branch_row[2]
+        validation = snippet_store.validate_branch_head(story, head_id)
+        results[name] = validation
+
+    all_valid = all(r["valid"] for r in results.values())
+
+    return {
+        "story": story,
+        "healthy": all_valid,
+        "branches": results,
+    }
 
 
 @router.get("/api/snippets/{snippet_id}", response_model=Snippet)

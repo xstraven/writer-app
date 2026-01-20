@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from storycraft.app.memory import CONTEXT_SUGGEST_SYSTEM
+
+
+def _gallery_values(gallery):
+    return [item["value"] if isinstance(item, dict) else item for item in (gallery or [])]
+
 
 def test_suggest_context_returns_structured_payload(client):
     response = client.post(
@@ -8,10 +14,11 @@ def test_suggest_context_returns_structured_payload(client):
     )
     assert response.status_code == 200
     data = response.json()
-    assert set(data.keys()) == {"summary", "npcs", "objects"}
+    assert set(data.keys()) == {"summary", "npcs", "objects", "system_prompt"}
     assert isinstance(data["summary"], str)
     assert isinstance(data["npcs"], list)
     assert isinstance(data["objects"], list)
+    assert data["system_prompt"] == CONTEXT_SUGGEST_SYSTEM
 
 
 def test_story_settings_persist_and_patch(client):
@@ -61,7 +68,7 @@ def test_story_settings_persist_and_patch(client):
     assert settings["context"]["summary"] == payload["context"]["summary"]
     assert settings["synopsis"] == payload["synopsis"]
     assert settings["memory"]["characters"][0]["label"] == "Captain Rhea"
-    assert settings["gallery"] == payload["gallery"]
+    assert _gallery_values(settings["gallery"]) == payload["gallery"]
 
     patch_payload = {
         "story": story,
@@ -85,6 +92,6 @@ def test_story_settings_persist_and_patch(client):
     assert final_response.status_code == 200
     final = final_response.json()
     assert final["synopsis"] == patch_payload["synopsis"]
-    assert final["gallery"] == patch_payload["gallery"]
+    assert _gallery_values(final["gallery"]) == patch_payload["gallery"]
     assert final["memory"]["characters"][0]["label"] == "Queen Mira"
     assert final["context"]["summary"] == payload["context"]["summary"]

@@ -6,6 +6,8 @@ import type {
   MemoryState,
   BranchPathResponse,
   AppendSnippetRequest,
+  InsertAboveRequest,
+  InsertBelowRequest,
   RegenerateAIRequest,
   ContinueRequest,
   ContinueResponse,
@@ -16,10 +18,18 @@ import type {
   SeedStoryResponse,
   LoreGenerateRequest,
   LoreGenerateResponse,
+  ProposeLoreEntriesRequest,
+  ProposeLoreEntriesResponse,
+  GenerateFromProposalsRequest,
   PromptPreviewRequest,
+  TruncateStoryResponse,
+  ImportStoryRequest,
+  ImportStoryResponse,
 } from './types';
 
 export const API_BASE = process.env.NEXT_PUBLIC_STORYCRAFT_API_BASE || 'http://localhost:8000';
+
+const GENERATION_TIMEOUT_MS = 120_000;
 
 const apiClient = axios.create({
   baseURL: API_BASE,
@@ -119,7 +129,7 @@ export const extractMemory = async (currentText: string, model?: string): Promis
 
 // Story continuation
 export const continueStory = async (request: ContinueRequest): Promise<ContinueResponse> => {
-  const response = await apiClient.post('/api/continue', request, { timeout: 60000 });
+  const response = await apiClient.post('/api/continue', request, { timeout: GENERATION_TIMEOUT_MS });
   return response.data;
 };
 
@@ -140,8 +150,18 @@ export const appendSnippet = async (request: AppendSnippetRequest): Promise<Snip
   return response.data;
 };
 
+export const insertSnippetAbove = async (request: InsertAboveRequest): Promise<Snippet> => {
+  const response = await apiClient.post('/api/snippets/insert-above', request)
+  return response.data
+}
+
+export const insertSnippetBelow = async (request: InsertBelowRequest): Promise<Snippet> => {
+  const response = await apiClient.post('/api/snippets/insert-below', request)
+  return response.data
+}
+
 export const regenerateSnippet = async (request: RegenerateAIRequest): Promise<Snippet> => {
-  const response = await apiClient.post('/api/snippets/regenerate-ai', request, { timeout: 60000 });
+  const response = await apiClient.post('/api/snippets/regenerate-ai', request, { timeout: GENERATION_TIMEOUT_MS });
   return response.data;
 };
 
@@ -315,13 +335,66 @@ export const saveStorySettings = async (
 
 // AI seeding: create a new story from a prompt
 export const seedStoryAI = async (payload: SeedStoryRequest): Promise<SeedStoryResponse> => {
-  // Seeding can take longer than default; allow up to 30s.
-  const response = await apiClient.post('/api/stories/seed-ai', payload, { timeout: 30000 })
+  const response = await apiClient.post('/api/stories/seed-ai', payload, { timeout: GENERATION_TIMEOUT_MS })
+  return response.data
+}
+
+// Import story from raw text
+export const importStory = async (payload: ImportStoryRequest): Promise<ImportStoryResponse> => {
+  const response = await apiClient.post('/api/stories/import', payload, { timeout: GENERATION_TIMEOUT_MS })
   return response.data
 }
 
 // Generate lorebook entries from current story text
 export const generateLorebook = async (payload: LoreGenerateRequest): Promise<LoreGenerateResponse> => {
-  const response = await apiClient.post('/api/lorebook/generate', payload, { timeout: 30000 })
+  const response = await apiClient.post('/api/lorebook/generate', payload, { timeout: GENERATION_TIMEOUT_MS })
   return response.data
 }
+
+// Propose lorebook entities without generating full entries
+export const proposeLoreEntries = async (payload: ProposeLoreEntriesRequest): Promise<ProposeLoreEntriesResponse> => {
+  const response = await apiClient.post('/api/lorebook/propose', payload, { timeout: GENERATION_TIMEOUT_MS })
+  return response.data
+}
+
+// Generate lorebook entries from user-confirmed proposals
+export const generateFromProposals = async (payload: GenerateFromProposalsRequest): Promise<LoreGenerateResponse> => {
+  const response = await apiClient.post('/api/lorebook/generate-from-proposals', payload, { timeout: GENERATION_TIMEOUT_MS })
+  return response.data
+}
+
+export const truncateStory = async (story: string): Promise<TruncateStoryResponse> => {
+  const response = await apiClient.post(`/api/stories/${encodeURIComponent(story)}/truncate`)
+  return response.data
+}
+
+// Gallery image upload/delete
+export const uploadGalleryImage = async (
+  story: string,
+  file: File
+): Promise<{ filename: string; url: string; original_filename: string }> => {
+  const formData = new FormData();
+  formData.append('story', story);
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE}/api/story-settings/upload-image`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
+    throw new Error(error.detail || 'Upload failed');
+  }
+
+  return response.json();
+};
+
+export const deleteGalleryImage = async (
+  story: string,
+  filename: string
+): Promise<void> => {
+  await apiClient.delete('/api/story-settings/delete-image', {
+    params: { story, filename }
+  });
+};

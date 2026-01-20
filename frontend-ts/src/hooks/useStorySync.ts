@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getBranchPath, getLorebook, loadAppState, getStorySettings } from '@/lib/api'
+import { loadGalleryFromLocalStorage } from './usePersistAppState'
 import { useAppStore } from '@/stores/appStore'
 import { toast } from 'sonner'
 import type { Chunk, Snippet } from '@/lib/types'
@@ -16,18 +17,19 @@ const snippetToChunk = (snippet: Snippet): Chunk => ({
 })
 
 export function useStorySync() {
-  const { 
-    currentStory, 
+  const {
+    currentStory,
     currentBranch,
-    setChunks, 
+    setChunks,
     chunks,
     setLorebook,
     setSynopsis,
     setContext,
     setMemory,
     updateGenerationSettings,
-    context,
     setGallery,
+    setGenerationSettingsHydrated,
+    setExperimental,
   } = useAppStore()
 
   // Query to load story branch from backend
@@ -72,6 +74,17 @@ export function useStorySync() {
     staleTime: 5 * 60 * 1000,
   })
 
+  const appliedStorySettingsFor = useRef<string | null>(null)
+  const appliedLegacyAppState = useRef<boolean>(false)
+
+  // Load gallery from localStorage when story changes
+  useEffect(() => {
+    if (currentStory) {
+      const savedGallery = loadGalleryFromLocalStorage(currentStory)
+      setGallery(savedGallery)
+    }
+  }, [currentStory, setGallery])
+
   // Sync backend chunks when branch data changes
   const lastBranchRef = useRef<string | null>(null)
   useEffect(() => {
@@ -89,6 +102,18 @@ export function useStorySync() {
     if (backendChunks.length === 0) {
       // Do not clobber local draft when backend is empty
       return
+    }
+
+    // CORRUPTION DETECTION: Check if backend path looks suspiciously short
+    if (chunks.length > 5 && backendChunks.length === 1) {
+      console.error(
+        `[useStorySync] Potential corruption: Local has ${chunks.length} chunks ` +
+        `but backend returned ${backendChunks.length}`
+      )
+      toast.error(
+        'Story sync issue detected. Refreshing may help. Check branch view if chunks are missing.',
+        { duration: 10000 }
+      )
     }
 
     // If frontend has no chunks, adopt backend entirely
@@ -127,8 +152,10 @@ export function useStorySync() {
 
   // Apply per-story settings when available
   useEffect(() => {
-    if (storySettings) {
-      const s = storySettings
+    if (storySettingsLoading) return
+
+    const applyStorySettings = (s: typeof storySettings) => {
+      if (!s) return
       if (s.context) setContext(s.context)
       if (typeof s.synopsis === 'string') setSynopsis(s.synopsis)
       if (s.memory) setMemory(s.memory)
@@ -140,21 +167,60 @@ export function useStorySync() {
       if ((s as any).base_instruction !== undefined && (s as any).base_instruction !== null) settingsToUpdate.base_instruction = (s as any).base_instruction || undefined
       if (s.max_context_window !== undefined && s.max_context_window !== null) settingsToUpdate.max_context_window = s.max_context_window
       if (Object.keys(settingsToUpdate).length > 0) updateGenerationSettings(settingsToUpdate)
-      // Gallery (UI-only, local state)
-      if (Array.isArray(s.gallery)) setGallery(s.gallery)
-      // Lorebook (if provided)
+      // Gallery is now loaded from localStorage, not from backend
+      // if (Array.isArray(s.gallery)) setGallery(s.gallery)
       if (Array.isArray((s as any).lorebook)) setLorebook((s as any).lorebook)
-    } else if (!storySettings && appStateData) {
-      // Legacy fallback path
-      if (appStateData.context) setContext(appStateData.context)
+      if ((s as any).experimental) setExperimental((s as any).experimental)
+    }
+
+    const applyLegacySettings = () => {
+      if (appStateData?.context) setContext(appStateData.context)
       const settingsToUpdate: any = {}
-      if (appStateData.temperature !== undefined) settingsToUpdate.temperature = appStateData.temperature
-      if (appStateData.max_tokens !== undefined) settingsToUpdate.max_tokens = appStateData.max_tokens
-      if (appStateData.model) settingsToUpdate.model = appStateData.model
-      if (appStateData.system_prompt) settingsToUpdate.system_prompt = appStateData.system_prompt
+      if (appStateData?.temperature !== undefined) settingsToUpdate.temperature = appStateData.temperature
+      if (appStateData?.max_tokens !== undefined) settingsToUpdate.max_tokens = appStateData.max_tokens
+      if (appStateData?.model) settingsToUpdate.model = appStateData.model
+      if (appStateData?.system_prompt) settingsToUpdate.system_prompt = appStateData.system_prompt
       if (Object.keys(settingsToUpdate).length > 0) updateGenerationSettings(settingsToUpdate)
     }
-  }, [storySettings, appStateData, setContext, updateGenerationSettings])
+
+    const storyId = currentStory || null
+
+    if (storySettings) {
+      if (!storyId || appliedStorySettingsFor.current !== storyId) {
+        applyStorySettings(storySettings)
+        if (storyId) appliedStorySettingsFor.current = storyId
+      }
+      setGenerationSettingsHydrated(true)
+      return
+    }
+
+    if (appStateData) {
+      const alreadyAppliedForStory = storyId && appliedStorySettingsFor.current === storyId
+      const alreadyAppliedLegacy = !storyId && appliedLegacyAppState.current
+      if (!alreadyAppliedForStory && !alreadyAppliedLegacy) {
+        applyLegacySettings()
+        if (storyId) appliedStorySettingsFor.current = storyId
+        else appliedLegacyAppState.current = true
+      }
+      setGenerationSettingsHydrated(true)
+      return
+    }
+
+    setGenerationSettingsHydrated(true)
+  }, [
+    storySettings,
+    storySettingsLoading,
+    appStateData,
+    currentStory,
+    setContext,
+    updateGenerationSettings,
+    setGenerationSettingsHydrated,
+    setSynopsis,
+    setMemory,
+    setGallery,
+    setLorebook,
+    setExperimental,
+  ])
 
   // Auto-sync when story changes
   useEffect(() => {

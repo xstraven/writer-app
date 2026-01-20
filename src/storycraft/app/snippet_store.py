@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -8,6 +9,8 @@ from typing import Iterable, List, Optional
 from supabase import Client
 
 from .services.supabase_client import get_supabase_client
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -73,6 +76,11 @@ class SnippetStore:
     def _fetch_story_snippets(self, story: str) -> List[dict]:
         res = self._table().select("*").eq("story", story).execute()
         return res.data or []
+
+    def _build_snippet_index(self, story: str) -> dict[str, SnippetRow]:
+        """Load all snippets for a story in one query and return a dict keyed by id."""
+        rows = self._fetch_story_snippets(story)
+        return {r["id"]: self._row_to_obj(r) for r in rows}
 
     def get(self, snippet_id: str) -> Optional[SnippetRow]:
         row = self._fetch_snippet(snippet_id)
@@ -167,15 +175,22 @@ class SnippetStore:
             raise ValueError("child is not a descendant of parent in this story")
         self._set_active_child(story, parent_id, child_id)
 
-    def main_path(self, story: str) -> List[SnippetRow]:
-        root = self._get_root(story)
-        if not root:
+    def _main_path_from_index(self, story: str, index: dict[str, SnippetRow]) -> List[SnippetRow]:
+        """Traverse main path using pre-built index (no additional queries)."""
+        if not index:
             return []
+        # Find root (snippet with no parent_id)
+        roots = [s for s in index.values() if s.parent_id is None]
+        if not roots:
+            return []
+        roots.sort(key=lambda s: s.created_at, reverse=True)
+        root = roots[0]
+        # Traverse in memory following child_id links
         path: List[SnippetRow] = [root]
         cursor = root
         visited = {root.id}
         while cursor.child_id:
-            child = self.get(cursor.child_id)
+            child = index.get(cursor.child_id)
             if not child or child.story != story or child.id in visited:
                 break
             path.append(child)
@@ -183,10 +198,17 @@ class SnippetStore:
             cursor = child
         return path
 
-    def path_from_head(self, story: str, head_id: str) -> List[SnippetRow]:
-        head = self.get(head_id)
+    def main_path(self, story: str) -> List[SnippetRow]:
+        # Load all snippets in one query for in-memory traversal
+        index = self._build_snippet_index(story)
+        return self._main_path_from_index(story, index)
+
+    def _path_from_head_with_index(self, story: str, head_id: str, index: dict[str, SnippetRow]) -> List[SnippetRow]:
+        """Traverse path from head to root using pre-built index (no additional queries)."""
+        head = index.get(head_id)
         if not head or head.story != story:
             return []
+        # Traverse backwards to root in memory following parent_id links
         chain: List[SnippetRow] = []
         cursor = head
         visited = set()
@@ -196,7 +218,7 @@ class SnippetStore:
             chain.append(cursor)
             visited.add(cursor.id)
             if cursor.parent_id:
-                parent = self.get(cursor.parent_id)
+                parent = index.get(cursor.parent_id)
                 if not parent or parent.story != story:
                     break
                 cursor = parent
@@ -204,6 +226,11 @@ class SnippetStore:
                 break
         chain.reverse()
         return chain
+
+    def path_from_head(self, story: str, head_id: str) -> List[SnippetRow]:
+        # Load all snippets in one query for in-memory traversal
+        index = self._build_snippet_index(story)
+        return self._path_from_head_with_index(story, head_id, index)
 
     @staticmethod
     def build_text(path: Iterable[SnippetRow]) -> str:
@@ -222,6 +249,10 @@ class SnippetStore:
         self._table().update(updates).eq("id", snippet_id).execute()
         return self.get(snippet_id)
 
+    def _supports_transactions(self) -> bool:
+        """Check if the client supports transactions."""
+        return hasattr(self._client, "transaction")
+
     def insert_above(
         self,
         *,
@@ -234,27 +265,35 @@ class SnippetStore:
         target = self.get(target_snippet_id)
         if not target or target.story != story:
             raise ValueError("target snippet not found")
-        old_parent_id = target.parent_id
-        new_id = uuid.uuid4().hex
-        self._table().insert(
-            {
-                "id": new_id,
-                "story": story,
-                "parent_id": old_parent_id,
-                "child_id": target.id,
-                "kind": kind,
-                "content": content,
-            }
-        ).execute()
-        self._table().update({"parent_id": new_id}).eq("id", target.id).execute()
-        if old_parent_id and set_active:
-            parent = self.get(old_parent_id)
-            if parent and parent.child_id == target.id:
-                self._set_active_child(story, old_parent_id, new_id)
-        new_row = self._fetch_snippet(new_id)
-        if not new_row:
-            raise RuntimeError("Failed to fetch inserted snippet")
-        return self._row_to_obj(new_row)
+
+        def do_insert() -> SnippetRow:
+            old_parent_id = target.parent_id
+            new_id = uuid.uuid4().hex
+            self._table().insert(
+                {
+                    "id": new_id,
+                    "story": story,
+                    "parent_id": old_parent_id,
+                    "child_id": target.id,
+                    "kind": kind,
+                    "content": content,
+                }
+            ).execute()
+            self._table().update({"parent_id": new_id}).eq("id", target.id).execute()
+            if old_parent_id and set_active:
+                parent = self.get(old_parent_id)
+                if parent and parent.child_id == target.id:
+                    self._set_active_child(story, old_parent_id, new_id)
+            new_row = self._fetch_snippet(new_id)
+            if not new_row:
+                raise RuntimeError("Failed to fetch inserted snippet")
+            return self._row_to_obj(new_row)
+
+        if self._supports_transactions():
+            with self._client.transaction():
+                return do_insert()
+        else:
+            return do_insert()
 
     def insert_below(
         self,
@@ -268,26 +307,35 @@ class SnippetStore:
         parent = self.get(parent_snippet_id)
         if not parent or parent.story != story:
             raise ValueError("parent snippet not found")
-        new_id = uuid.uuid4().hex
-        self._table().insert(
-            {
-                "id": new_id,
-                "story": story,
-                "parent_id": parent.id,
-                "child_id": None,
-                "kind": kind,
-                "content": content,
-            }
-        ).execute()
-        if parent.child_id:
-            self._table().update({"parent_id": new_id}).eq("id", parent.child_id).execute()
-            self._table().update({"child_id": parent.child_id}).eq("id", new_id).execute()
-        if set_active:
-            self._set_active_child(story, parent.id, new_id)
-        new_row = self._fetch_snippet(new_id)
-        if not new_row:
-            raise RuntimeError("Failed to fetch inserted snippet")
-        return self._row_to_obj(new_row)
+        set_active = True
+
+        def do_insert() -> SnippetRow:
+            new_id = uuid.uuid4().hex
+            self._table().insert(
+                {
+                    "id": new_id,
+                    "story": story,
+                    "parent_id": parent.id,
+                    "child_id": None,
+                    "kind": kind,
+                    "content": content,
+                }
+            ).execute()
+            if parent.child_id:
+                self._table().update({"parent_id": new_id}).eq("id", parent.child_id).execute()
+                self._table().update({"child_id": parent.child_id}).eq("id", new_id).execute()
+            if set_active:
+                self._set_active_child(story, parent.id, new_id)
+            new_row = self._fetch_snippet(new_id)
+            if not new_row:
+                raise RuntimeError("Failed to fetch inserted snippet")
+            return self._row_to_obj(new_row)
+
+        if self._supports_transactions():
+            with self._client.transaction():
+                return do_insert()
+        else:
+            return do_insert()
 
     def delete_snippet(self, *, story: str, snippet_id: str) -> bool:
         target = self.get(snippet_id)
@@ -295,24 +343,59 @@ class SnippetStore:
             return False
         if target.parent_id is None:
             raise ValueError("cannot delete the root snippet")
-        children = self.list_children(story, target.id)
-        if children:
-            active_child_id = target.child_id or children[-1].id
-            for child in children:
-                self._table().update({"parent_id": target.parent_id}).eq("id", child.id).execute()
-            parent = self.get(target.parent_id)
-            if parent and parent.child_id == target.id:
-                self._set_active_child(story, parent.id, active_child_id)
+
+        def do_delete() -> bool:
+            branch_rows = (
+                self._branches()
+                .select("name")
+                .eq("story", story)
+                .eq("head_id", snippet_id)
+                .execute()
+            )
+            branch_names = [row["name"] for row in branch_rows.data or [] if row.get("name")]
+            replacement_head_id: Optional[str] = None
+            children = self.list_children(story, target.id)
+            if children:
+                active_child_id = target.child_id or children[-1].id
+                for child in children:
+                    self._table().update({"parent_id": target.parent_id}).eq("id", child.id).execute()
+                parent = self.get(target.parent_id)
+                if parent and parent.child_id == target.id:
+                    self._set_active_child(story, parent.id, active_child_id)
+                replacement_head_id = active_child_id
+            else:
+                parent = self.get(target.parent_id)
+                if parent and parent.child_id == target.id:
+                    self._set_active_child(story, parent.id, None)
+                replacement_head_id = parent.id if parent else None
+            self._table().delete().eq("id", snippet_id).execute()
+            if branch_names:
+                if replacement_head_id:
+                    for name in branch_names:
+                        self._branches().upsert(
+                            {"story": story, "name": name, "head_id": replacement_head_id},
+                            on_conflict="story,name",
+                        ).execute()
+                else:
+                    for name in branch_names:
+                        self._branches().delete().eq("story", story).eq("name", name).execute()
+            return True
+
+        if self._supports_transactions():
+            with self._client.transaction():
+                return do_delete()
         else:
-            parent = self.get(target.parent_id)
-            if parent and parent.child_id == target.id:
-                self._set_active_child(story, parent.id, None)
-        self._table().delete().eq("id", snippet_id).execute()
-        return True
+            return do_delete()
 
     def delete_story(self, story: str) -> None:
         self._branches().delete().eq("story", story).execute()
         self._table().delete().eq("story", story).execute()
+
+    def truncate_story(self, story: str) -> SnippetRow:
+        """Remove all snippets for the story and return a fresh empty root snippet."""
+        self._branches().delete().eq("story", story).execute()
+        self._table().delete().eq("story", story).execute()
+        return self.create_snippet(story=story, content="", kind="user", parent_id=None)
 
     def list_stories(self) -> list[str]:
         res = self._table().select("story").execute()
@@ -324,10 +407,12 @@ class SnippetStore:
         self._table().delete().execute()
 
     def upsert_branch(self, *, story: str, name: str, head_id: str) -> None:
+        logger.info(f"Updating branch '{name}' for story '{story}' to head {head_id[:8]}...")
         self._branches().upsert(
             {"story": story, "name": name, "head_id": head_id},
             on_conflict="story,name",
         ).execute()
+        logger.info(f"Successfully updated branch '{name}' for story '{story}'")
 
     def list_branches(self, story: str) -> List[tuple]:
         res = (
@@ -350,6 +435,64 @@ class SnippetStore:
 
     def delete_branch(self, *, story: str, name: str) -> None:
         self._branches().delete().eq("story", story).eq("name", name).execute()
+
+    def validate_branch_head(self, story: str, head_id: str) -> dict:
+        """
+        Validate that head_id points to a valid path from root.
+        Returns dict with: { valid: bool, reason: str, path_length: int }
+        """
+        # Load all snippets once for all operations (1 query instead of 3+)
+        index = self._build_snippet_index(story)
+
+        # Check if head exists
+        head = index.get(head_id)
+        if not head or head.story != story:
+            return {"valid": False, "reason": "head_not_found", "path_length": 0}
+
+        # Traverse to root using shared index
+        path = self._path_from_head_with_index(story, head_id, index)
+        if not path:
+            return {"valid": False, "reason": "empty_path", "path_length": 0}
+
+        # Check if root has no parent
+        root = path[0]
+        if root.parent_id is not None:
+            return {"valid": False, "reason": "root_has_parent", "path_length": len(path)}
+
+        # Compare with main_path using shared index
+        main = self._main_path_from_index(story, index)
+        if not main:
+            return {"valid": True, "reason": "ok_empty_story", "path_length": len(path)}
+
+        # If head_path is shorter than main_path and doesn't share prefix, it's disconnected
+        main_ids = set(s.id for s in main)
+        path_ids = set(s.id for s in path)
+
+        # Check if head_path is a subset of main_path
+        if not path_ids.issubset(main_ids) and len(path) < len(main):
+            return {
+                "valid": False,
+                "reason": "disconnected_from_main",
+                "path_length": len(path),
+                "main_length": len(main)
+            }
+
+        return {"valid": True, "reason": "ok", "path_length": len(path)}
+
+    def repair_branch_head(self, story: str, name: str) -> Optional[str]:
+        """
+        Attempt to repair a corrupted branch head by finding the correct head.
+        Returns the new head_id or None if repair not possible.
+        """
+        # For 'main', use the last snippet in main_path
+        if name == "main":
+            main = self.main_path(story)
+            if main:
+                new_head_id = main[-1].id
+                self.upsert_branch(story=story, name=name, head_id=new_head_id)
+                return new_head_id
+
+        return None
 
     def _list_all_snippets(self, story: str) -> List[SnippetRow]:
         res = (

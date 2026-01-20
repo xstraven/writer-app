@@ -27,7 +27,14 @@ class OpenRouterClient:
             headers["Authorization"] = f"Bearer {self.api_key}"
         return headers
 
-    async def chat(self, *, messages: List[Dict[str, str]], model: Optional[str] = None, **kwargs: Any) -> Dict[str, Any]:
+    async def chat(
+        self,
+        *,
+        messages: List[Dict[str, str]],
+        model: Optional[str] = None,
+        timeout: Optional[float | httpx.Timeout] = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
         url = f"{self.base_url}{OPENROUTER_CHAT_COMPLETIONS}"
         payload: Dict[str, Any] = {
             "model": model or self.default_model,
@@ -48,8 +55,9 @@ class OpenRouterClient:
                 ],
                 "model": payload["model"],
             }
+        request_timeout: float | httpx.Timeout = timeout or 120
         try:
-            async with httpx.AsyncClient(timeout=60) as client:
+            async with httpx.AsyncClient(timeout=request_timeout) as client:
                 resp = await client.post(url, headers=self._headers(), json=payload)
                 resp.raise_for_status()
                 return resp.json()

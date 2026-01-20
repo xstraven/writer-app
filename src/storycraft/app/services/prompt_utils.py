@@ -12,28 +12,13 @@ def merge_instruction(
     story: Optional[str],
     story_settings: StorySettingsStore,
 ) -> Optional[str]:
+    """
+    Returns the instruction text as-is.
+    Note: The frontend now handles merging base_instruction with user instructions,
+    so we just pass through the instruction without additional wrapping.
+    """
     text = (user_instruction or "").strip()
-    if not text:
-        return None
-
-    base = None
-    if story:
-        try:
-            data = story_settings.get(story)
-        except Exception:
-            data = None
-        if isinstance(data, dict):
-            base_candidate = (data.get("base_instruction") or "").strip()
-            if base_candidate:
-                base = base_candidate
-
-    if not base:
-        base = (
-            "Continue the story, matching established voice, tone, and point of view. "
-            "Maintain continuity with prior events and details."
-        )
-
-    return base + "\n\nFollow this direction for the continuation:\n" + text
+    return text if text else None
 
 
 def select_lore_items(

@@ -7,6 +7,7 @@ class SaveQueue {
   private pending: Map<string, Pending> = new Map()
   private timer: ReturnType<typeof setTimeout> | null = null
   private inFlight = false
+  private flushRequested = false
 
   queue(id: string, content: string, kind?: string) {
     this.pending.set(id, { content, kind })
@@ -19,16 +20,20 @@ class SaveQueue {
   }
 
   async flush(opts?: { keepalive?: boolean }) {
-    if (this.inFlight) return
+    if (this.inFlight) {
+      this.flushRequested = true
+      return
+    }
     this.inFlight = true
     try {
       const entries = Array.from(this.pending.entries())
       this.pending.clear()
       for (const [id, { content, kind }] of entries) {
-        // Attempt keepalive fetch first for unload-safe delivery
+        // Attempt sendBeacon first for unload-safe delivery (uses POST endpoint)
         if (opts?.keepalive && typeof navigator !== 'undefined' && 'sendBeacon' in navigator) {
           try {
-            const url = `${API_BASE}/api/snippets/${encodeURIComponent(id)}`
+            // Use /update POST endpoint since sendBeacon can only send POST requests
+            const url = `${API_BASE}/api/snippets/${encodeURIComponent(id)}/update`
             const blob = new Blob([JSON.stringify({ content, kind })], { type: 'application/json' })
             const ok = (navigator as any).sendBeacon(url, blob)
             if (ok) continue
@@ -58,6 +63,12 @@ class SaveQueue {
       }
     } finally {
       this.inFlight = false
+      if (this.flushRequested && this.pending.size > 0) {
+        this.flushRequested = false
+        void this.flush()
+        return
+      }
+      this.flushRequested = false
     }
   }
 }

@@ -9,8 +9,9 @@ from typing import Any, Dict
 
 DEFAULTS: Dict[str, Any] = {
     "model": "deepseek/deepseek-chat-v3-0324",
-    "temperature": 0.7,
-    "max_tokens": 512,
+    "temperature": 1.0,
+    "max_tokens": 1024,
+    "max_context_window": 15000,
     "include_memory": True,
     "include_context": True,
     "system_prompt": (

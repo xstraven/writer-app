@@ -24,6 +24,8 @@ class PromptBuilder:
         self._lore: Optional[List[LoreEntry]] = None
         self._history_text: str = ""
         self._draft_text: str = ""
+        self._preceding_text: str = ""
+        self._following_text: str = ""
 
     def with_system(self, text: str) -> "PromptBuilder":
         self._system = text
@@ -51,6 +53,16 @@ class PromptBuilder:
 
     def with_draft_text(self, text: str) -> "PromptBuilder":
         self._draft_text = text.strip()
+        return self
+
+    def with_preceding_text(self, text: str) -> "PromptBuilder":
+        """Set the text immediately before the section being rewritten (for context)."""
+        self._preceding_text = text.strip()
+        return self
+
+    def with_following_text(self, text: str) -> "PromptBuilder":
+        """Set the text immediately after the section being rewritten (for stitching context)."""
+        self._following_text = text.strip()
         return self
 
     def build_messages(self) -> List[dict]:
@@ -82,6 +94,11 @@ class PromptBuilder:
         mem_block = _format_memory(self._memory)
         if mem_block:
             meta_parts.append(mem_block)
+        # Adjacent context for rewriting (helps LLM stitch text smoothly)
+        if self._preceding_text:
+            meta_parts.append("[Preceding Content]\n" + self._preceding_text)
+        if self._following_text:
+            meta_parts.append("[Following Content]\n" + self._following_text)
         # Prompt for generation (ALWAYS LAST). If not set, include a sensible default.
         prompt_text = (self._instruction or "").strip()
         if not prompt_text:
@@ -89,7 +106,7 @@ class PromptBuilder:
                 "Continue the story, matching established voice, tone, and point of view. "
                 "Maintain continuity with prior events and details."
             )
-        meta_parts.append("[Prompt]\n" + prompt_text)
+        meta_parts.append("[Task]\n" + prompt_text)
 
         meta_msg = "\n\n".join(meta_parts).strip()
 

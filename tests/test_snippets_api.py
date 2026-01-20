@@ -76,8 +76,9 @@ def test_update_and_delete_snippet(client):
     assert r.json() == {"ok": True}
 
     path_after = client.get("/api/snippets/path", params={"story": story}).json()
-    assert path_after["path"] == []
-    assert path_after["head_id"] is None
+    assert len(path_after["path"]) == 1
+    assert path_after["path"][0]["content"] == "A1"
+    assert path_after["head_id"] == path_after["path"][0]["id"]
 
     manual_path = client.get(
         "/api/snippets/path", params={"story": story, "head_id": root["id"]}

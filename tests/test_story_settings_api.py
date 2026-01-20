@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+from pathlib import PurePosixPath
+
+from storycraft.app.routes import story_settings as story_settings_routes
+
+
+def _gallery_values(gallery):
+    return [item["value"] if isinstance(item, dict) else item for item in (gallery or [])]
+
 
 def test_story_settings_roundtrip(client):
     story = "Settings Story"
@@ -36,9 +44,9 @@ def test_story_settings_roundtrip(client):
         "system_prompt",
         "max_context_window",
         "synopsis",
-        "gallery",
     ]:
         assert s.get(k) == payload[k]
+    assert _gallery_values(s.get("gallery")) == payload["gallery"]
     assert s["context"]["summary"] == "scene"
 
 
@@ -95,3 +103,38 @@ def test_story_settings_lorebook_replace(client):
     items = r.json()
     assert len(items) == 1
     assert items[0]["name"] == "Gamma"
+
+
+def test_story_settings_gallery_upload_and_delete(monkeypatch, client, tmp_path):
+    images_dir = tmp_path / "images"
+    monkeypatch.setattr(story_settings_routes, "IMAGES_DIR", images_dir)
+
+    story = "../../evil story"
+    files = {"file": ("test.html", b"fake", "image/png")}
+    response = client.post(
+        "/api/story-settings/upload-image",
+        data={"story": story},
+        files=files,
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    url_path = PurePosixPath(payload["url"])
+    safe_dir = url_path.parts[-2]
+    filename = url_path.name
+    file_path = images_dir / safe_dir / filename
+
+    assert filename.endswith(".png")
+    assert file_path.exists()
+
+    delete_response = client.delete(
+        "/api/story-settings/delete-image",
+        params={"story": story, "filename": filename},
+    )
+    assert delete_response.status_code == 200
+    assert not file_path.exists()
+
+    bad_delete = client.delete(
+        "/api/story-settings/delete-image",
+        params={"story": story, "filename": "../escape.png"},
+    )
+    assert bad_delete.status_code == 400

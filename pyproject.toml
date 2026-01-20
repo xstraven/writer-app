@@ -14,15 +14,15 @@ dependencies = [
   "python-multipart>=0.0.9",
   "supabase>=2.21.1",
   "psycopg[binary]>=3.2",
-  "modal>=1.1.4",
+  "modal>=1.2.1",
+  "openai>=1.35.0",
+  "instructor>=1.4.0",
+  "duckdb>=1.0.0",
 ]
 
 
 [dependency-groups]
-dev = [
-  "ruff>=0.5",
-  "pytest>=8.3",
-]
+dev = ["ruff>=0.5", "pytest>=8.3"]
 
 [tool.uv]
 default-groups = ["dev"]
@@ -37,6 +37,4 @@ build-backend = "hatchling.build"
 
 # Hatchling build config for src/ layout.
 [tool.hatch.build.targets.wheel]
-packages = [
-  "src/storycraft",
-]
+packages = ["src/storycraft"]

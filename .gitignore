@@ -1,9 +1,28 @@
+# Python
 __pycache__/
-.web
-.states
 *.py[cod]
 *.db
-assets/external/
+.venv/
 .env
+.env.local
+.pytest_cache/
+.ruff_cache/
+
+# Development
+.web
+.states
 .DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Project-specific
+assets/external/
 data/
+
+# Node (frontend)
+node_modules/
+.next/
+
+# UV package manager
+.uv-cache/

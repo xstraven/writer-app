@@ -1,18 +1,14 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Plus, BookText, FileText, MapPin } from 'lucide-react'
+import { BookText, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAppStore } from '@/stores/appStore'
 import { suggestContext } from '@/lib/api'
 import { Sparkles, Loader2 } from 'lucide-react'
-import { ContextPanel } from './ContextPanel'
 import { LorebookPanel } from './LorebookPanel'
-import { uid } from '@/lib/utils'
 
 export function ContextTabs() {
   const { synopsis, setSynopsis, chunks, generationSettings } = useAppStore()
@@ -33,14 +29,10 @@ export function ContextTabs() {
 
   return (
     <Tabs defaultValue="synopsis" className="w-full">
-      <TabsList className="grid grid-cols-3 w-full text-xs">
+      <TabsList className="grid grid-cols-2 w-full text-xs">
         <TabsTrigger value="synopsis" className="flex items-center gap-1">
           <FileText className="h-3 w-3" />
           Synopsis
-        </TabsTrigger>
-        <TabsTrigger value="context" className="flex items-center gap-1">
-          <MapPin className="h-3 w-3" />
-          Scene
         </TabsTrigger>
         <TabsTrigger value="lorebook" className="flex items-center gap-1">
           <BookText className="h-3 w-3" />
@@ -93,10 +85,6 @@ export function ContextTabs() {
           className="resize-none h-auto"
           placeholder="Short summary of the story to guide the model…"
         />
-      </TabsContent>
-
-      <TabsContent value="context" className="mt-3">
-        <ContextPanel />
       </TabsContent>
 
       <TabsContent value="lorebook" className="mt-3">

@@ -5,6 +5,13 @@ export interface Chunk {
   timestamp: number;
 }
 
+export interface GalleryItem {
+  type: "url" | "upload";
+  value: string;
+  display_name?: string;
+  uploaded_at?: string;
+}
+
 export interface LoreEntry {
   id: string;
   story: string;
@@ -56,6 +63,7 @@ export interface ContextState {
   summary: string;
   npcs: ContextItem[];
   objects: ContextItem[];
+  system_prompt?: string;
 }
 
 export interface Snippet {
@@ -81,6 +89,24 @@ export interface AppendSnippetRequest {
   kind?: string;
   parent_id?: string | null;
   set_active?: boolean | null;
+  branch?: string;
+}
+
+export interface InsertAboveRequest {
+  story: string;
+  target_snippet_id: string;
+  content: string;
+  kind?: string;
+  set_active?: boolean;
+  branch?: string;
+}
+
+export interface InsertBelowRequest {
+  story: string;
+  parent_snippet_id: string;
+  content: string;
+  kind?: string;
+  set_active?: boolean;
   branch?: string;
 }
 
@@ -111,6 +137,7 @@ export interface ContinueRequest {
   context?: ContextState | null;
   use_context?: boolean;
   story?: string | null;
+  branch?: string | null;
   lore_ids?: string[] | null;
   preview_only?: boolean;
 }
@@ -136,6 +163,11 @@ export interface GenerationSettings {
   system_prompt?: string;
   max_context_window?: number; // custom: used to limit draft context (chars = 3x)
   base_instruction?: string;
+}
+
+export interface ExperimentalFeatures {
+  internal_editor_workflow?: boolean;
+  dark_mode?: boolean;
 }
 
 export interface BranchInfo {
@@ -176,7 +208,18 @@ export interface PromptPreviewRequest {
   context?: ContextState | null;
 }
 
+export interface TruncateStoryResponse {
+  ok: boolean;
+  root_snippet: Snippet;
+}
+
 // --- AI Seed Story ---
+export interface ProposedLoreEntry {
+  name: string;
+  kind: string;
+  reason: string;
+}
+
 export interface SeedStoryRequest {
   story: string;
   prompt: string;
@@ -192,6 +235,7 @@ export interface SeedStoryResponse {
   content: string;
   synopsis: string;
   relevant_lore_ids: string[];
+  proposed_entities: ProposedLoreEntry[];
 }
 
 export interface LoreGenerateRequest {
@@ -208,6 +252,41 @@ export interface LoreGenerateResponse {
   total: number;
 }
 
+export interface ProposeLoreEntriesRequest {
+  story: string;
+  story_text: string;
+  model?: string | null;
+  max_proposals?: number;
+}
+
+export interface ProposeLoreEntriesResponse {
+  story: string;
+  proposals: ProposedLoreEntry[];
+}
+
+export interface GenerateFromProposalsRequest {
+  story: string;
+  story_text: string;
+  selected_names: string[];
+  model?: string | null;
+}
+
+// --- Story Import ---
+export interface ImportStoryRequest {
+  story: string;
+  text: string;
+  model?: string | null;
+  target_chunk_tokens?: number;
+  generate_lore_proposals?: boolean;
+}
+
+export interface ImportStoryResponse {
+  story: string;
+  chunks_created: number;
+  total_characters: number;
+  proposed_entities: ProposedLoreEntry[];
+}
+
 export interface AppState {
   currentStory: string;
   currentBranch: string;
@@ -219,13 +298,16 @@ export interface AppState {
   hoveredId: string | null;
   isGenerating: boolean;
   generationSettings: GenerationSettings;
+  // UI-only flag; not persisted to backend legacy state
+  generationSettingsHydrated?: boolean;
   synopsis: string;
   lorebook: LoreEntry[];
   memory: MemoryState;
   context: ContextState;
   branches: BranchInfo[];
   treeRows: TreeRow[];
-  gallery: string[];
+  gallery: GalleryItem[];
+  experimental: ExperimentalFeatures;
 }
 
 // Per-story settings payload persisted in backend
@@ -238,9 +320,11 @@ export interface StorySettingsPayload {
   base_instruction?: string | null;
   max_context_window?: number;
   context?: ContextState;
-  gallery?: string[];
+  gallery?: GalleryItem[];
   // Optional future fields: synopsis, memory
   synopsis?: string;
   memory?: MemoryState;
   lorebook?: LoreEntry[];
+  experimental?: ExperimentalFeatures;
+  initial_prompt?: string;
 }
