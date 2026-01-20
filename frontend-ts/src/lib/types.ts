@@ -168,6 +168,111 @@ export interface GenerationSettings {
 export interface ExperimentalFeatures {
   internal_editor_workflow?: boolean;
   dark_mode?: boolean;
+  rpg_mode?: boolean;
+}
+
+// --- RPG Mode Types ---
+
+export interface CharacterAttribute {
+  name: string;
+  value: number;
+  max_value: number;
+  description: string;
+}
+
+export interface CharacterSkill {
+  name: string;
+  level: number;
+  attribute: string;
+  description: string;
+}
+
+export interface InventoryItem {
+  name: string;
+  quantity: number;
+  item_type: string;
+  description: string;
+  effects: string;
+}
+
+export interface CharacterSheet {
+  name: string;
+  character_class: string;
+  level: number;
+  health: number;
+  max_health: number;
+  attributes: CharacterAttribute[];
+  skills: CharacterSkill[];
+  inventory: InventoryItem[];
+  backstory: string;
+  notes: string;
+}
+
+export interface GameSystem {
+  name: string;
+  core_mechanic: string;
+  attribute_names: string[];
+  difficulty_levels: Record<string, number>;
+  combat_rules: string;
+  skill_check_rules: string;
+  notes: string;
+}
+
+export interface RPGModeSettings {
+  enabled: boolean;
+  world_setting: string;
+  game_system?: GameSystem;
+  player_character?: CharacterSheet;
+  party_members: CharacterSheet[];
+  current_quest: string;
+  quest_log: string[];
+  session_notes: string;
+}
+
+export interface RPGSetupRequest {
+  story: string;
+  world_setting: string;
+  character_name?: string;
+  character_class?: string;
+  num_party_members?: number;
+  model?: string | null;
+  temperature?: number;
+}
+
+export interface RPGSetupResponse {
+  story: string;
+  game_system: GameSystem;
+  player_character: CharacterSheet;
+  party_members: CharacterSheet[];
+  opening_scene: string;
+  available_actions: string[];
+}
+
+export interface RPGActionRequest {
+  story: string;
+  action: string;
+  use_dice?: boolean;
+  model?: string | null;
+  temperature?: number;
+}
+
+export interface RPGActionResult {
+  check_type: string;
+  target_number: number;
+  roll_result: number;
+  modifier: number;
+  total: number;
+  success: boolean;
+  description: string;
+}
+
+export interface RPGActionResponse {
+  story: string;
+  narrative: string;
+  action_results: RPGActionResult[];
+  character_updates?: CharacterSheet;
+  available_actions: string[];
+  quest_update: string;
 }
 
 export interface BranchInfo {
@@ -308,6 +413,7 @@ export interface AppState {
   treeRows: TreeRow[];
   gallery: GalleryItem[];
   experimental: ExperimentalFeatures;
+  rpgModeSettings?: RPGModeSettings;
 }
 
 // Per-story settings payload persisted in backend
@@ -327,4 +433,5 @@ export interface StorySettingsPayload {
   lorebook?: LoreEntry[];
   experimental?: ExperimentalFeatures;
   initial_prompt?: string;
+  rpg_mode_settings?: RPGModeSettings;
 }
