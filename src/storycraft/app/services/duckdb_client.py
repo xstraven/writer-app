@@ -58,6 +58,53 @@ DDL_STATEMENTS = [
         value TEXT
     )
     """,
+    # Campaign tables for Group RPG
+    """
+    CREATE TABLE IF NOT EXISTS campaigns (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        world_setting TEXT NOT NULL,
+        game_system TEXT,
+        created_by TEXT NOT NULL,
+        invite_code TEXT UNIQUE,
+        status TEXT DEFAULT 'active',
+        current_turn_player_id TEXT,
+        turn_order TEXT,
+        turn_number INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_campaigns_invite ON campaigns(invite_code)",
+    """
+    CREATE TABLE IF NOT EXISTS players (
+        id TEXT PRIMARY KEY,
+        campaign_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        session_token TEXT,
+        character_sheet TEXT,
+        is_gm BOOLEAN DEFAULT FALSE,
+        turn_position INTEGER,
+        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_active_at TIMESTAMP
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_players_campaign ON players(campaign_id)",
+    "CREATE INDEX IF NOT EXISTS idx_players_session ON players(session_token)",
+    """
+    CREATE TABLE IF NOT EXISTS campaign_actions (
+        id TEXT PRIMARY KEY,
+        campaign_id TEXT NOT NULL,
+        player_id TEXT,
+        action_type TEXT NOT NULL,
+        content TEXT NOT NULL,
+        action_results TEXT,
+        turn_number INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_actions_campaign ON campaign_actions(campaign_id)",
 ]
 
 
@@ -67,7 +114,7 @@ class _DuckDBResult:
 
 
 # Tables that have a created_at column
-_TABLES_WITH_CREATED_AT = {"snippets", "branches"}
+_TABLES_WITH_CREATED_AT = {"snippets", "branches", "campaigns", "players", "campaign_actions"}
 
 
 class _DuckDBQuery:

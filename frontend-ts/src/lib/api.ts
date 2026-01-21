@@ -31,6 +31,23 @@ import type {
   RPGActionResponse,
   RPGModeSettings,
   CharacterSheet,
+  // Campaign types
+  Campaign,
+  CampaignWithPlayers,
+  CreateCampaignRequest,
+  CreateCampaignResponse,
+  JoinCampaignRequest,
+  JoinCampaignResponse,
+  CampaignAction,
+  CampaignActionRequest,
+  CampaignActionResponse,
+  TurnInfo,
+  StartCampaignRequest,
+  StartCampaignResponse,
+  EndTurnRequest,
+  Player,
+  AddLocalPlayerRequest,
+  AddLocalPlayerResponse,
 } from './types';
 
 export const API_BASE = process.env.NEXT_PUBLIC_STORYCRAFT_API_BASE || 'http://localhost:8000';
@@ -443,5 +460,115 @@ export const updateRPGSettings = async (
   const response = await apiClient.put('/api/rpg/settings', updates, {
     params: { story }
   });
+  return response.data;
+};
+
+// --- Group RPG Campaign API ---
+
+// Helper to get session token from localStorage
+const getSessionToken = (): string => {
+  if (typeof window === 'undefined') return '';
+  let token = localStorage.getItem('rpg_session_token');
+  if (!token) {
+    token = crypto.randomUUID();
+    localStorage.setItem('rpg_session_token', token);
+  }
+  return token;
+};
+
+// Create axios config with session token header
+const withSessionToken = () => ({
+  headers: { 'X-Session-Token': getSessionToken() },
+});
+
+export const listCampaigns = async (): Promise<CampaignWithPlayers[]> => {
+  const response = await apiClient.get('/api/campaigns', withSessionToken());
+  return response.data;
+};
+
+export const createCampaign = async (payload: CreateCampaignRequest): Promise<CreateCampaignResponse> => {
+  const response = await apiClient.post('/api/campaigns', payload, {
+    ...withSessionToken(),
+    timeout: GENERATION_TIMEOUT_MS,
+  });
+  return response.data;
+};
+
+export const getCampaign = async (campaignId: string): Promise<CampaignWithPlayers> => {
+  const response = await apiClient.get(`/api/campaigns/${campaignId}`, withSessionToken());
+  return response.data;
+};
+
+export const deleteCampaign = async (campaignId: string): Promise<void> => {
+  await apiClient.delete(`/api/campaigns/${campaignId}`, withSessionToken());
+};
+
+export const joinCampaign = async (payload: JoinCampaignRequest): Promise<JoinCampaignResponse> => {
+  const response = await apiClient.post('/api/campaigns/join', payload, {
+    ...withSessionToken(),
+    timeout: GENERATION_TIMEOUT_MS,
+  });
+  return response.data;
+};
+
+export const startCampaign = async (
+  campaignId: string,
+  payload: StartCampaignRequest
+): Promise<StartCampaignResponse> => {
+  const response = await apiClient.post(`/api/campaigns/${campaignId}/start`, payload, {
+    ...withSessionToken(),
+    timeout: GENERATION_TIMEOUT_MS,
+  });
+  return response.data;
+};
+
+export const getCampaignPlayers = async (campaignId: string): Promise<Player[]> => {
+  const response = await apiClient.get(`/api/campaigns/${campaignId}/players`, withSessionToken());
+  return response.data;
+};
+
+export const leaveCampaign = async (campaignId: string, playerId: string): Promise<void> => {
+  await apiClient.delete(`/api/campaigns/${campaignId}/players/${playerId}`, withSessionToken());
+};
+
+export const addLocalPlayer = async (
+  campaignId: string,
+  payload: AddLocalPlayerRequest
+): Promise<AddLocalPlayerResponse> => {
+  const response = await apiClient.post(`/api/campaigns/${campaignId}/players`, payload, {
+    ...withSessionToken(),
+    timeout: GENERATION_TIMEOUT_MS,
+  });
+  return response.data;
+};
+
+// Turn management
+export const getTurnInfo = async (campaignId: string): Promise<TurnInfo> => {
+  const response = await apiClient.get(`/api/campaigns/${campaignId}/turn`, withSessionToken());
+  return response.data;
+};
+
+export const getActionHistory = async (campaignId: string, limit?: number): Promise<CampaignAction[]> => {
+  const params = limit ? { limit } : {};
+  const response = await apiClient.get(`/api/campaigns/${campaignId}/history`, {
+    ...withSessionToken(),
+    params,
+  });
+  return response.data;
+};
+
+export const takeCampaignAction = async (
+  campaignId: string,
+  payload: CampaignActionRequest
+): Promise<CampaignActionResponse> => {
+  const response = await apiClient.post(`/api/campaigns/${campaignId}/action`, payload, {
+    ...withSessionToken(),
+    timeout: GENERATION_TIMEOUT_MS,
+  });
+  return response.data;
+};
+
+export const endTurn = async (campaignId: string, payload: EndTurnRequest): Promise<TurnInfo> => {
+  const response = await apiClient.post(`/api/campaigns/${campaignId}/end-turn`, payload, withSessionToken());
   return response.data;
 };

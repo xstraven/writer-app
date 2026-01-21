@@ -13,6 +13,7 @@ from .runtime import (
     state_store,
     story_settings_store,
 )
+from .routes.campaigns import router as campaigns_router
 from .routes.generation import router as generation_router
 from .routes.health import router as health_router
 from .routes.lorebook import router as lorebook_router
@@ -21,6 +22,7 @@ from .routes.snippets import router as snippets_router
 from .routes.state import router as state_router
 from .routes.stories import router as stories_router
 from .routes.story_settings import router as story_settings_router
+from .routes.turns import router as turns_router
 
 
 settings = get_settings()
@@ -51,6 +53,8 @@ app.include_router(generation_router)
 app.include_router(snippets_router)
 app.include_router(stories_router)
 app.include_router(rpg_router)
+app.include_router(campaigns_router)
+app.include_router(turns_router)
 
 
 # Re-export runtime stores for backward compatibility in tests

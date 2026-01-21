@@ -163,6 +163,7 @@ export interface GenerationSettings {
   system_prompt?: string;
   max_context_window?: number; // custom: used to limit draft context (chars = 3x)
   base_instruction?: string;
+  initial_prompt?: string;
 }
 
 export interface ExperimentalFeatures {
@@ -206,6 +207,10 @@ export interface CharacterSheet {
   inventory: InventoryItem[];
   backstory: string;
   notes: string;
+  // Narrative-focused fields (for PbtA-style games)
+  concept?: string;  // One-line character concept
+  special_trait?: string;  // What makes them unique
+  bonds?: string[];  // Connections to other characters
 }
 
 export interface GameSystem {
@@ -216,6 +221,11 @@ export interface GameSystem {
   combat_rules: string;
   skill_check_rules: string;
   notes: string;
+  // Narrative-focused options
+  style?: 'mechanical' | 'narrative' | 'hybrid';
+  tone?: string;
+  gm_principles?: string[];
+  player_moves?: string[];
 }
 
 export interface RPGModeSettings {
@@ -434,4 +444,137 @@ export interface StorySettingsPayload {
   experimental?: ExperimentalFeatures;
   initial_prompt?: string;
   rpg_mode_settings?: RPGModeSettings;
+}
+
+// --- Group RPG Campaign Types ---
+
+export type CampaignStatus = "lobby" | "active" | "paused" | "completed";
+
+export interface Campaign {
+  id: string;
+  name: string;
+  description: string;
+  world_setting: string;
+  game_system?: GameSystem;
+  created_by: string;
+  invite_code: string;
+  status: CampaignStatus;
+  current_turn_player_id: string | null;
+  turn_order: string[];
+  turn_number: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Player {
+  id: string;
+  campaign_id: string;
+  name: string;
+  session_token: string;
+  character_sheet?: CharacterSheet;
+  is_gm: boolean;
+  turn_position: number | null;
+  joined_at: string;
+  last_active_at: string | null;
+}
+
+export type CampaignActionType = "player_action" | "gm_narration" | "dice_roll" | "system";
+
+export interface CampaignAction {
+  id: string;
+  campaign_id: string;
+  player_id: string | null;
+  action_type: CampaignActionType;
+  content: string;
+  action_results: RPGActionResult[];
+  turn_number: number;
+  created_at: string;
+}
+
+export interface CampaignWithPlayers {
+  campaign: Campaign;
+  players: Player[];
+  your_player?: Player;
+}
+
+export interface CreateCampaignRequest {
+  name: string;
+  world_setting: string;
+  player_name: string;
+  character_name?: string;
+  character_class?: string;  // Or character concept for narrative games
+  character_special?: string;  // What makes this character special/unique
+  model?: string | null;
+  temperature?: number;
+  // Narrative options
+  tone?: 'family_friendly' | 'all_ages' | 'mature';
+  style?: 'narrative' | 'mechanical' | 'hybrid';
+}
+
+export interface CreateCampaignResponse {
+  campaign: Campaign;
+  player: Player;
+  game_system: GameSystem;
+}
+
+export interface JoinCampaignRequest {
+  invite_code: string;
+  player_name: string;
+  character_name?: string;
+  character_class?: string;
+}
+
+export interface JoinCampaignResponse {
+  campaign: Campaign;
+  player: Player;
+}
+
+export interface AddLocalPlayerRequest {
+  player_name: string;
+  character_name?: string;
+  character_class?: string;
+}
+
+export interface AddLocalPlayerResponse {
+  player: Player;
+}
+
+export interface CampaignActionRequest {
+  player_id: string;
+  action: string;
+  use_dice?: boolean;
+  model?: string | null;
+  temperature?: number;
+}
+
+export interface CampaignActionResponse {
+  action: CampaignAction;
+  narrative: string;
+  action_results: RPGActionResult[];
+  character_updates?: CharacterSheet;
+  available_actions: string[];
+  quest_update: string;
+}
+
+export interface TurnInfo {
+  campaign_id: string;
+  current_player_id: string | null;
+  current_player_name: string | null;
+  turn_number: number;
+  turn_order: string[];
+  player_names: Record<string, string>;
+}
+
+export interface StartCampaignRequest {
+  player_id: string;
+}
+
+export interface StartCampaignResponse {
+  campaign: Campaign;
+  opening_scene: string;
+  available_actions: string[];
+}
+
+export interface EndTurnRequest {
+  player_id: string;
 }

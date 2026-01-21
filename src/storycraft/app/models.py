@@ -211,9 +211,9 @@ class InventoryItem(BaseModel):
 
 
 class CharacterSheet(BaseModel):
-    """A character sheet with RPG attributes and stats"""
+    """A character sheet - can be detailed (D&D-style) or simple (narrative-focused)"""
     name: str
-    character_class: str = ""
+    character_class: str = ""  # Or "concept" for narrative games
     level: int = 1
     health: int = 10
     max_health: int = 10
@@ -222,17 +222,26 @@ class CharacterSheet(BaseModel):
     inventory: List[InventoryItem] = Field(default_factory=list)
     backstory: str = ""
     notes: str = ""
+    # Narrative-focused fields (for PbtA-style games)
+    concept: str = ""  # One-line character concept (e.g., "A curious young wizard seeking her lost mentor")
+    special_trait: str = ""  # What makes them unique (e.g., "Can speak to animals")
+    bonds: List[str] = Field(default_factory=list)  # Connections to other characters
 
 
 class GameSystem(BaseModel):
-    """A simple game system with rules for the RPG"""
+    """A game system - supports both mechanical (D&D) and narrative (PbtA) styles"""
     name: str = "Simple RPG System"
-    core_mechanic: str = ""  # e.g., "Roll d20 + attribute modifier"
+    core_mechanic: str = ""  # e.g., "Roll 2d6: 10+ success, 7-9 complication, 6- trouble"
     attribute_names: List[str] = Field(default_factory=list)
     difficulty_levels: dict = Field(default_factory=dict)  # e.g., {"easy": 10, "medium": 15, "hard": 20}
     combat_rules: str = ""
     skill_check_rules: str = ""
     notes: str = ""
+    # Narrative-focused options
+    style: Literal["mechanical", "narrative", "hybrid"] = "narrative"  # Default to narrative
+    tone: str = ""  # e.g., "family-friendly", "heroic", "gritty"
+    gm_principles: List[str] = Field(default_factory=list)  # Guiding principles for the AI GM
+    player_moves: List[str] = Field(default_factory=list)  # Things players can always do
 
 
 class RPGModeSettings(BaseModel):
@@ -623,3 +632,150 @@ class ImportStoryResponse(BaseModel):
     chunks_created: int = 0
     total_characters: int = 0
     proposed_entities: list["ProposedLoreEntry"] = Field(default_factory=list)
+
+
+# --- Group RPG Campaign Models ---
+
+class Campaign(BaseModel):
+    """A multiplayer RPG campaign/adventure"""
+    id: str
+    name: str
+    description: str = ""
+    world_setting: str
+    game_system: Optional[GameSystem] = None
+    created_by: str  # player_id of creator
+    invite_code: str  # 6-char alphanumeric for sharing
+    status: Literal["lobby", "active", "paused", "completed"] = "lobby"
+    current_turn_player_id: Optional[str] = None
+    turn_order: List[str] = Field(default_factory=list)  # player_ids
+    turn_number: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class Player(BaseModel):
+    """A player in a campaign with their character"""
+    id: str
+    campaign_id: str
+    name: str  # Display name
+    session_token: str  # For identifying returning players
+    character_sheet: Optional[CharacterSheet] = None
+    is_gm: bool = False
+    turn_position: Optional[int] = None  # 0-indexed position in turn order
+    joined_at: datetime
+    last_active_at: Optional[datetime] = None
+
+
+class CampaignAction(BaseModel):
+    """A single action in the campaign history"""
+    id: str
+    campaign_id: str
+    player_id: Optional[str] = None  # None for GM/system actions
+    action_type: Literal["player_action", "gm_narration", "dice_roll", "system"]
+    content: str
+    action_results: List[RPGActionResult] = Field(default_factory=list)
+    turn_number: int
+    created_at: datetime
+
+
+# --- Campaign Request/Response Models ---
+
+class CreateCampaignRequest(BaseModel):
+    """Request to create a new campaign"""
+    name: str
+    world_setting: str
+    player_name: str  # Creator's display name
+    character_name: Optional[str] = None
+    character_class: Optional[str] = None  # Or character concept for narrative games
+    character_special: Optional[str] = None  # What makes this character special/unique
+    model: Optional[str] = None
+    temperature: float = 0.8
+    # Narrative options
+    tone: Literal["family_friendly", "all_ages", "mature"] = "all_ages"
+    style: Literal["narrative", "mechanical", "hybrid"] = "narrative"  # Default to narrative-focused
+
+
+class CreateCampaignResponse(BaseModel):
+    """Response from creating a campaign"""
+    campaign: Campaign
+    player: Player
+    game_system: GameSystem
+
+
+class JoinCampaignRequest(BaseModel):
+    """Request to join an existing campaign"""
+    invite_code: str
+    player_name: str
+    character_name: Optional[str] = None
+    character_class: Optional[str] = None
+
+
+class JoinCampaignResponse(BaseModel):
+    """Response from joining a campaign"""
+    campaign: Campaign
+    player: Player
+
+
+class AddLocalPlayerRequest(BaseModel):
+    """Request to add a local player (same device, no session token required)"""
+    player_name: str
+    character_name: Optional[str] = None
+    character_class: Optional[str] = None
+
+
+class AddLocalPlayerResponse(BaseModel):
+    """Response from adding a local player"""
+    player: Player
+
+
+class CampaignActionRequest(BaseModel):
+    """Request to take an action in the campaign"""
+    player_id: str
+    action: str
+    use_dice: bool = True
+    model: Optional[str] = None
+    temperature: float = 0.8
+
+
+class CampaignActionResponse(BaseModel):
+    """Response from taking an action"""
+    action: CampaignAction
+    narrative: str
+    action_results: List[RPGActionResult] = Field(default_factory=list)
+    character_updates: Optional[CharacterSheet] = None
+    available_actions: List[str] = Field(default_factory=list)
+    quest_update: str = ""
+
+
+class TurnInfo(BaseModel):
+    """Current turn state for a campaign"""
+    campaign_id: str
+    current_player_id: Optional[str] = None
+    current_player_name: Optional[str] = None
+    turn_number: int
+    turn_order: List[str] = Field(default_factory=list)
+    player_names: dict = Field(default_factory=dict)  # player_id -> name mapping
+
+
+class StartCampaignRequest(BaseModel):
+    """Request to start a campaign (transition from lobby to active)"""
+    player_id: str  # Must be the creator
+
+
+class StartCampaignResponse(BaseModel):
+    """Response from starting a campaign"""
+    campaign: Campaign
+    opening_scene: str
+    available_actions: List[str] = Field(default_factory=list)
+
+
+class EndTurnRequest(BaseModel):
+    """Request to end the current turn"""
+    player_id: str
+
+
+class CampaignWithPlayers(BaseModel):
+    """Campaign with its players for listing"""
+    campaign: Campaign
+    players: List[Player] = Field(default_factory=list)
+    your_player: Optional[Player] = None  # The requesting player's info
