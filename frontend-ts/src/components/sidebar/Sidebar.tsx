@@ -8,7 +8,8 @@ import { Modal } from '@/components/ui/modal'
 import { GenerationSettings } from './GenerationSettings'
 import { ContextTabs } from './ContextTabs'
 import { InspirationGallery } from './InspirationGallery'
-import { ChevronDown } from 'lucide-react'
+import { RPGPanel } from './RPGPanel'
+import { ChevronDown, Dices } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { BranchesPanel } from './BranchesPanel'
 import { useAppStore } from '@/stores/appStore'
@@ -22,6 +23,7 @@ export function Sidebar() {
   const [openImgs, setOpenImgs] = useState(true)
   const [openStory, setOpenStory] = useState(true)
   const [openExperimental, setOpenExperimental] = useState(false)
+  const [openRPG, setOpenRPG] = useState(false)
 
   // Local modals/actions
   const [showBranches, setShowBranches] = useState(false)
@@ -258,6 +260,32 @@ export function Sidebar() {
                 />
               </label>
             </div>
+          </CardContent>
+        )}
+      </Card>
+
+      {/* RPG Mode (collapsible) */}
+      <Card className="shadow-sm">
+        <CardHeader className="pb-2">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between"
+            onClick={() => setOpenRPG(v => !v)}
+            aria-expanded={openRPG}
+          >
+            <div className="flex items-center gap-2">
+              <Dices className="h-4 w-4 text-purple-600" />
+              <CardTitle className="text-lg">RPG Mode</CardTitle>
+              <span className="text-[10px] uppercase tracking-wide text-purple-600 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/40 px-2 py-0.5 rounded">
+                New
+              </span>
+            </div>
+            <ChevronDown className={`h-4 w-4 transition-transform ${openRPG ? '' : '-rotate-90'}`} />
+          </button>
+        </CardHeader>
+        {openRPG && (
+          <CardContent>
+            <RPGPanel />
           </CardContent>
         )}
       </Card>

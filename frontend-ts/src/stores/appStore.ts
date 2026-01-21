@@ -12,6 +12,7 @@ import type {
   AppState as AppStateType,
   ExperimentalFeatures,
   GalleryItem,
+  RPGModeSettings,
 } from '@/lib/types'
 import { uid } from '@/lib/utils'
 import { saveQueue } from '@/lib/saveQueue'
@@ -47,6 +48,9 @@ interface AppState extends AppStateType {
   setGallery: (items: GalleryItem[]) => void
   addGalleryImage: (item: GalleryItem) => void
   removeGalleryImage: (item: GalleryItem) => void
+  // RPG Mode
+  setRpgModeSettings: (settings: RPGModeSettings | undefined) => void
+  updateRpgModeSettings: (settings: Partial<RPGModeSettings>) => void
 }
 
 const defaultExperimental: ExperimentalFeatures = {
@@ -111,6 +115,7 @@ const initialState = {
   treeRows: [],
   gallery: [],
   experimental: { ...defaultExperimental },
+  rpgModeSettings: undefined,
 }
 
 export const useAppStore = create<AppState>()(
@@ -138,6 +143,7 @@ export const useAppStore = create<AppState>()(
           hoveredId: null,
           generationSettingsHydrated: false,
           experimental: { ...defaultExperimental },
+          rpgModeSettings: undefined,
         })
       },
 
@@ -226,7 +232,15 @@ export const useAppStore = create<AppState>()(
       removeGalleryImage: (item: GalleryItem) => set((state) => ({
         gallery: state.gallery.filter(i => !(i.type === item.type && i.value === item.value))
       })),
-      
+
+      // RPG Mode actions
+      setRpgModeSettings: (rpgModeSettings: RPGModeSettings | undefined) => set({ rpgModeSettings }),
+      updateRpgModeSettings: (settings: Partial<RPGModeSettings>) => set((state) => ({
+        rpgModeSettings: state.rpgModeSettings
+          ? { ...state.rpgModeSettings, ...settings }
+          : undefined
+      })),
+
       pushHistory: (action, before, after) => set((state) => ({
         history: [{
           id: uid(),

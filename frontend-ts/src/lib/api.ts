@@ -25,6 +25,12 @@ import type {
   TruncateStoryResponse,
   ImportStoryRequest,
   ImportStoryResponse,
+  RPGSetupRequest,
+  RPGSetupResponse,
+  RPGActionRequest,
+  RPGActionResponse,
+  RPGModeSettings,
+  CharacterSheet,
 } from './types';
 
 export const API_BASE = process.env.NEXT_PUBLIC_STORYCRAFT_API_BASE || 'http://localhost:8000';
@@ -397,4 +403,45 @@ export const deleteGalleryImage = async (
   await apiClient.delete('/api/story-settings/delete-image', {
     params: { story, filename }
   });
+};
+
+// --- RPG Mode API ---
+
+export const setupRPGSession = async (payload: RPGSetupRequest): Promise<RPGSetupResponse> => {
+  const response = await apiClient.post('/api/rpg/setup', payload, { timeout: GENERATION_TIMEOUT_MS });
+  return response.data;
+};
+
+export const performRPGAction = async (payload: RPGActionRequest): Promise<RPGActionResponse> => {
+  const response = await apiClient.post('/api/rpg/action', payload, { timeout: GENERATION_TIMEOUT_MS });
+  return response.data;
+};
+
+export const getRPGState = async (story: string): Promise<RPGModeSettings | null> => {
+  try {
+    const response = await apiClient.get('/api/rpg/state', { params: { story } });
+    return response.data;
+  } catch {
+    return null;
+  }
+};
+
+export const updateRPGCharacter = async (
+  story: string,
+  character: CharacterSheet
+): Promise<{ ok: boolean; character: CharacterSheet }> => {
+  const response = await apiClient.put('/api/rpg/character', character, {
+    params: { story }
+  });
+  return response.data;
+};
+
+export const updateRPGSettings = async (
+  story: string,
+  updates: Partial<RPGModeSettings>
+): Promise<{ ok: boolean }> => {
+  const response = await apiClient.put('/api/rpg/settings', updates, {
+    params: { story }
+  });
+  return response.data;
 };

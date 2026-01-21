@@ -180,6 +180,131 @@ class AppPersistedState(BaseModel):
 
 class ExperimentalFeatures(BaseModel):
     internal_editor_workflow: bool = False
+    rpg_mode: bool = False
+
+
+# --- RPG Mode Models ---
+
+class CharacterAttribute(BaseModel):
+    """A single character attribute (e.g., Strength, Intelligence)"""
+    name: str
+    value: int
+    max_value: int = 20
+    description: str = ""
+
+
+class CharacterSkill(BaseModel):
+    """A skill or ability a character possesses"""
+    name: str
+    level: int = 1
+    attribute: str = ""  # Which attribute it's tied to
+    description: str = ""
+
+
+class InventoryItem(BaseModel):
+    """An item in a character's inventory"""
+    name: str
+    quantity: int = 1
+    item_type: str = "misc"  # weapon, armor, consumable, misc
+    description: str = ""
+    effects: str = ""  # Any special effects
+
+
+class CharacterSheet(BaseModel):
+    """A character sheet with RPG attributes and stats"""
+    name: str
+    character_class: str = ""
+    level: int = 1
+    health: int = 10
+    max_health: int = 10
+    attributes: List[CharacterAttribute] = Field(default_factory=list)
+    skills: List[CharacterSkill] = Field(default_factory=list)
+    inventory: List[InventoryItem] = Field(default_factory=list)
+    backstory: str = ""
+    notes: str = ""
+
+
+class GameSystem(BaseModel):
+    """A simple game system with rules for the RPG"""
+    name: str = "Simple RPG System"
+    core_mechanic: str = ""  # e.g., "Roll d20 + attribute modifier"
+    attribute_names: List[str] = Field(default_factory=list)
+    difficulty_levels: dict = Field(default_factory=dict)  # e.g., {"easy": 10, "medium": 15, "hard": 20}
+    combat_rules: str = ""
+    skill_check_rules: str = ""
+    notes: str = ""
+
+
+class RPGModeSettings(BaseModel):
+    """Settings for RPG mode within a story"""
+    enabled: bool = False
+    world_setting: str = ""  # The worldbuilding description
+    game_system: Optional[GameSystem] = None
+    player_character: Optional[CharacterSheet] = None
+    party_members: List[CharacterSheet] = Field(default_factory=list)
+    current_quest: str = ""
+    quest_log: List[str] = Field(default_factory=list)
+    session_notes: str = ""
+
+
+class RPGSetupRequest(BaseModel):
+    """Request to initialize an RPG session with worldbuilding"""
+    story: str
+    world_setting: str  # User's description of the world/setting
+    character_name: str = ""
+    character_class: str = ""
+    num_party_members: int = 0  # 0 for solo adventure
+    model: Optional[str] = None
+    temperature: float = 0.8
+
+
+class RPGSetupResponse(BaseModel):
+    """Response from RPG setup with generated system and characters"""
+    story: str
+    game_system: GameSystem
+    player_character: CharacterSheet
+    party_members: List[CharacterSheet] = Field(default_factory=list)
+    opening_scene: str
+    available_actions: List[str] = Field(default_factory=list)
+
+
+class RPGActionRequest(BaseModel):
+    """Request to perform an action in the RPG"""
+    story: str
+    action: str  # The action the player wants to take
+    use_dice: bool = True  # Whether to use dice rolls
+    model: Optional[str] = None
+    temperature: float = 0.8
+
+
+class RPGActionResult(BaseModel):
+    """Result of a single dice roll or check"""
+    check_type: str  # e.g., "Strength check", "Attack roll"
+    target_number: int = 0
+    roll_result: int = 0
+    modifier: int = 0
+    total: int = 0
+    success: bool = False
+    description: str = ""
+
+
+class RPGActionResponse(BaseModel):
+    """Response from an RPG action"""
+    story: str
+    narrative: str  # The story continuation
+    action_results: List[RPGActionResult] = Field(default_factory=list)
+    character_updates: Optional[CharacterSheet] = None  # Updated character if changed
+    available_actions: List[str] = Field(default_factory=list)
+    quest_update: str = ""  # Any quest progress
+
+
+class RPGCombatState(BaseModel):
+    """State of combat if in combat mode"""
+    in_combat: bool = False
+    turn_order: List[str] = Field(default_factory=list)
+    current_turn: int = 0
+    enemies: List[CharacterSheet] = Field(default_factory=list)
+    round_number: int = 1
 
 
 class StorySettings(BaseModel):
@@ -198,6 +323,7 @@ class StorySettings(BaseModel):
     memory: MemoryState | None = None
     experimental: Optional["ExperimentalFeatures"] = None
     initial_prompt: str | None = None  # Original story seed prompt
+    rpg_mode_settings: Optional["RPGModeSettings"] = None  # RPG game mode settings
 
     @field_validator("gallery", mode="before")
     @classmethod
@@ -230,6 +356,7 @@ class StorySettingsUpdate(BaseModel):
     memory: MemoryState | None = None
     experimental: Optional["ExperimentalFeatures"] = None
     initial_prompt: str | None = None
+    rpg_mode_settings: Optional["RPGModeSettings"] = None
 
     @field_validator("gallery", mode="before")
     @classmethod
