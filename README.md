@@ -1,12 +1,18 @@
-Storycraft — AI-Assisted Novel Writing
-======================================
+Storycraft — Group RPG Adventure Builder
+========================================
 
-Storycraft is a full-stack starter writer kit for collaborative fiction writing with LLM assist.
+Storycraft is a multiplayer tabletop RPG platform with an AI game master. Create collaborative storytelling adventures with friends or family, with the AI dynamically narrating and responding to player actions.
 
-![alt text](<Screenshot 2025-11-03 at 22.06.30.png>)
+**Features:**
+- **Multiplayer**: Hot-seat/turn-based play on the same device, or share invite codes with friends
+- **AI Game Master**: Generates worlds, characters, and narrates the adventure
+- **Two Game Styles**: Narrative-focused (PbtA-style 2d6) or traditional RPG (D&D-style d20)
+- **Family-Friendly Options**: Choose tone settings for kids, all ages, or mature audiences
+- **Voice Input**: Describe your world and actions using voice
 
-- **Backend**: FastAPI with auto-switching persistence (local DuckDB or cloud Supabase), modular routers under `src/storycraft/app/routes/`
-- **Frontend**: Next.js + React + Tailwind located in `frontend-ts/`
+**Stack:**
+- **Backend**: FastAPI with auto-switching persistence (local DuckDB or cloud Supabase)
+- **Frontend**: Next.js + React + Tailwind
 - **LLM**: OpenRouter chat completions (stubs enabled when no API key is present)
 - **Package managers**: `uv` for Python, `npm` for the frontend
 
@@ -76,6 +82,27 @@ The frontend works out of the box with zero configuration!
 NEXT_PUBLIC_STORYCRAFT_API_BASE=https://your-backend-url.com
 ```
 
+How to Play
+-----------
+
+1. **Create an Adventure**: Set up a world (fantasy, sci-fi, etc.), choose tone and style
+2. **Add Players**: Add local players for hot-seat play, or share the invite code
+3. **Start**: The AI generates an opening scene and custom game system
+4. **Take Turns**: Describe what your character does, the AI narrates the outcome
+5. **Collaborate**: Build the story together with "yes, and..." energy
+
+### Game Styles
+
+- **Collaborative Story** (Narrative): Focus on storytelling with simple 2d6 dice. Characters are defined by who they are, not stats. Inspired by Dungeon World/Powered by the Apocalypse.
+- **Story + Light Rules** (Hybrid): Storytelling with some game mechanics.
+- **Classic RPG** (Mechanical): Traditional d20 + modifiers with attributes, HP, and skills.
+
+### Tone Settings
+
+- **Family Fun**: Great for kids! No scary stuff, focuses on teamwork and wonder.
+- **All Ages**: Mild adventure peril, suitable for everyone.
+- **Mature**: Realistic stakes and consequences.
+
 Deployment
 ----------
 
@@ -113,12 +140,20 @@ The app automatically selects the database backend:
 Key Endpoints
 -------------
 
-- `GET /health` — API readiness probe.
-- `GET /api/stories` — list stories across stores.
-- `GET /api/snippets/path?story=...` — fetch the active branch text and metadata.
-- `POST /api/continue` — request an LLM continuation for the active draft.
-- `POST /api/prompt-preview` — inspect the prompt payload before sending to OpenRouter.
-- `GET/POST/PUT/DELETE /api/lorebook` — manage lore entries scoped per story.
+### Campaign/RPG Endpoints
+- `GET /api/campaigns` — list your campaigns
+- `POST /api/campaigns` — create a new campaign (generates game system + character)
+- `POST /api/campaigns/join` — join a campaign via invite code
+- `POST /api/campaigns/{id}/start` — start the adventure (GM only)
+- `POST /api/campaigns/{id}/action` — take an action (resolves dice, generates narrative)
+- `POST /api/campaigns/{id}/end-turn` — pass turn to next player
+- `POST /api/campaigns/{id}/players` — add a local player (hot-seat multiplayer)
+
+### Legacy Story Endpoints
+- `GET /api/stories` — list stories
+- `GET /api/snippets/path?story=...` — fetch the active branch text
+- `POST /api/continue` — request an LLM continuation
+- `GET/POST/PUT/DELETE /api/lorebook` — manage lore entries
 
 Testing & Tooling
 -----------------
@@ -127,12 +162,13 @@ Testing & Tooling
   - Tests automatically use in-memory storage (no database setup required)
 - Lint / format Python: `uv run ruff check .` and `uv run ruff format .`
 - Frontend lint: `cd frontend-ts && npm run lint`
+- Frontend build: `cd frontend-ts && npm run build`
 
 Project Layout
 --------------
 
 - `src/storycraft/app/` — FastAPI app (routers, services, stores, models)
-- `frontend-ts/` — Next.js app (components, hooks, Zustand store)
-- `tests/` — Pytest coverage for health, generation, snippets, and settings APIs
-- `data/` — Sample lore and local JSON defaults (base settings, etc.)
+- `frontend-ts/` — Next.js app (components, hooks, Zustand stores)
+- `tests/` — Pytest coverage for APIs
+- `data/` — Local database and sample data
 - `scripts/` — Utility scripts such as `setup_supabase.py`

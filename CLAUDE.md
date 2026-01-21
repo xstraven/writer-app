@@ -25,7 +25,9 @@ npm run lint       # Lint
 
 ## Architecture
 
-Storycraft is an AI-assisted fiction writing app with a FastAPI backend and Next.js frontend.
+Storycraft has two main modes:
+1. **Fiction Writing Mode**: AI-assisted collaborative fiction writing
+2. **Group RPG Adventure Builder**: Multiplayer tabletop RPG with AI game master
 
 ### Data Flow
 ```
@@ -42,25 +44,51 @@ Frontend (React + Zustand) → API calls (axios) → FastAPI → OpenRouter LLM
 - `stories.py` - Story CRUD
 - `lorebook.py` - Lore entries (characters, locations, items)
 - `story_settings.py` - Per-story settings
+- `campaigns.py` - Campaign CRUD, player management, game start
+- `turns.py` - Action resolution, turn management, dice rolling
 
 **Stores** (injected via FastAPI dependencies):
 - `snippet_store.py` - Story content as linked tree (parent_id/child_id)
 - `lorebook_store.py` - Lore entries with keyword triggers
 - `story_settings_store.py` - Per-story configuration
+- `campaign_store.py` - Campaign persistence
+- `player_store.py` - Player/character persistence
+- `campaign_action_store.py` - Game action history
 
 **Key Modules**:
 - `models.py` - All Pydantic request/response models
 - `prompt_builder.py` - Constructs multi-section prompts for LLM
 - `openrouter.py` - OpenRouter HTTP client (returns stubs when no API key)
-- `editor_workflow.py` - Experimental: generates 4 candidates, LLM picks best
 
 ### Frontend Structure (`frontend-ts/src/`)
-- `stores/appStore.ts` - Zustand global state (story, chunks, settings, lorebook)
-- `lib/api.ts` - Axios client with all API calls
-- `lib/types.ts` - TypeScript interfaces matching backend models
+
+**Stores**:
+- `stores/appStore.ts` - Fiction writing state (story, chunks, settings, lorebook)
+- `stores/campaignStore.ts` - RPG campaign state (campaign, players, actions, turns)
+
+**Pages** (`app/`):
+- `/` - Adventure lobby (campaign list)
+- `/campaigns/new` - Create new campaign
+- `/campaigns/join` - Join via invite code
+- `/campaigns/[id]` - Active game view
+
+**Components**:
+- `components/campaign/` - Campaign cards, forms (CreateCampaignForm, JoinCampaignForm, AddPlayerForm)
+- `components/rpg/` - Game UI (AdventureView, NarrativeLog, ActionInput, PartyPanel, CharacterCard, DiceResults)
+- `components/editor/` - Fiction writing editor
 - `components/sidebar/` - Settings panels (context, memory, lorebook, branches)
 
-### Story Branching Model
+### RPG Game System
+
+**Two Game Styles**:
+- **Narrative** (PbtA-style): 2d6 dice, outcomes are "full success" (10+), "partial success" (7-9), "miss" (6-). Characters have concept + special_trait, no stats.
+- **Mechanical** (D&D-style): d20 + modifiers vs difficulty. Characters have attributes, HP, skills.
+
+**Three Tone Settings**: `family_friendly`, `all_ages`, `mature` - affects content guidance in prompts.
+
+**Local Multiplayer**: Multiple players can share the same session token (hot-seat play). Click character cards to switch active player.
+
+### Story Branching Model (Fiction Mode)
 - **Snippet**: Individual text chunk (user or AI-generated)
 - **Tree Structure**: Snippets linked via `parent_id`/`child_id` forming branches
 - **Branch**: Named pointer to a snippet (head_id), default is "main"
