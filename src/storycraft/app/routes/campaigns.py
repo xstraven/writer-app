@@ -663,40 +663,89 @@ async def add_local_player(
     if campaign.status == "completed":
         raise HTTPException(status_code=400, detail="Campaign has ended")
 
-    # Generate character
+    # Generate character based on game style
     structured = get_structured_llm_client()
     char_name = (req.character_name or req.player_name).strip()
-    char_class = (req.character_class or "Adventurer").strip()
+    char_concept = (req.character_class or "Adventurer").strip()
 
     character_sheet = None
-    if campaign.game_system:
-        char_prompt = f"""Create a character sheet for a {char_class} named {char_name} in this world:
+    game_system = campaign.game_system
+    is_narrative_style = game_system and game_system.style == "narrative"
+
+    if game_system:
+        if is_narrative_style:
+            # Narrative character - focus on who they are, not stats
+            char_prompt = f"""Create a character for a collaborative storytelling game.
+
+Character Name: {char_name}
+Character Concept: {char_concept}
 
 World: {campaign.world_setting}
 
-Game System: {campaign.game_system.name}
-Attributes: {', '.join(campaign.game_system.attribute_names)}
+Create a simple, memorable character with:
+- A clear concept (one sentence describing who they are)
+- What makes them special or unique (their gift, talent, or defining trait)
+- A brief backstory (2-3 sentences) that connects them to the world
+- NO numbered stats or attributes - this is a narrative game
+
+Make them interesting and someone you'd want to go on an adventure with."""
+
+            default_char = CharacterSheet(
+                name=char_name,
+                character_class=char_concept,
+                concept=f"A {char_concept.lower()} ready for adventure",
+                special_trait="Has a knack for getting into and out of trouble",
+                backstory=f"{char_name} is a {char_concept.lower()} who has always dreamed of adventure.",
+                level=1,
+                health=10,
+                max_health=10,
+                attributes=[],
+                skills=[],
+                inventory=[],
+            )
+
+            try:
+                character_sheet = await structured.create(
+                    response_model=CharacterSheet,
+                    messages=[
+                        {"role": "system", "content": "Create a character for a collaborative storytelling game. Focus on personality and story, not game mechanics."},
+                        {"role": "user", "content": char_prompt},
+                    ],
+                    temperature=0.8,
+                    max_retries=2,
+                    fallback=lambda: default_char,
+                )
+            except Exception:
+                character_sheet = default_char
+        else:
+            # Traditional mechanical character
+            char_prompt = f"""Create a character sheet for a {char_concept} named {char_name} in this world:
+
+World: {campaign.world_setting}
+
+Game System: {game_system.name}
+Attributes: {', '.join(game_system.attribute_names)}
 
 Generate appropriate attributes (values 8-18), 3-4 starting skills, starting inventory, and a brief backstory."""
 
-        try:
-            character_sheet = await structured.create(
-                response_model=CharacterSheet,
-                messages=[
-                    {"role": "system", "content": "Create a player character for a tabletop RPG."},
-                    {"role": "user", "content": char_prompt},
-                ],
-                temperature=0.8,
-                max_retries=2,
-                fallback=lambda: _create_default_character(char_name, char_class, campaign.game_system),
-            )
-        except Exception:
-            character_sheet = _create_default_character(char_name, char_class, campaign.game_system)
+            try:
+                character_sheet = await structured.create(
+                    response_model=CharacterSheet,
+                    messages=[
+                        {"role": "system", "content": "Create a player character for a tabletop RPG."},
+                        {"role": "user", "content": char_prompt},
+                    ],
+                    temperature=0.8,
+                    max_retries=2,
+                    fallback=lambda: _create_default_character(char_name, char_concept, game_system),
+                )
+            except Exception:
+                character_sheet = _create_default_character(char_name, char_concept, game_system)
     else:
         # No game system yet, create minimal character
         character_sheet = CharacterSheet(
             name=char_name,
-            character_class=char_class,
+            character_class=char_concept,
             level=1,
             health=20,
             max_health=20,

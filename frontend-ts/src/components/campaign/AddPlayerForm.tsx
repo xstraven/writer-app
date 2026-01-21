@@ -102,14 +102,17 @@ export function AddPlayerForm({ campaignId, onPlayerAdded }: AddPlayerFormProps)
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="characterClass">Character Class/Role</Label>
+            <Label htmlFor="characterClass">Who is your character?</Label>
             <Input
               id="characterClass"
-              placeholder="Warrior, Mage, Rogue, Healer..."
+              placeholder="A brave knight, a clever inventor, a wise healer..."
               value={formData.characterClass}
               onChange={(e) => setFormData({ ...formData, characterClass: e.target.value })}
               disabled={isAdding}
             />
+            <p className="text-xs text-muted-foreground">
+              Describe who they are in a few words
+            </p>
           </div>
 
           <div className="flex gap-3 pt-2">

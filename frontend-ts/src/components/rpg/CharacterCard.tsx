@@ -1,6 +1,6 @@
 'use client';
 
-import { Heart, Shield, Crown, Swords } from 'lucide-react';
+import { Heart, Crown, Swords, Sparkles } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -16,6 +16,12 @@ interface CharacterCardProps {
 
 export function CharacterCard({ player, isCurrentTurn, isYou, onClick, clickable }: CharacterCardProps) {
   const character = player.character_sheet;
+
+  // Check if this is a narrative-style character (has concept or special_trait, no attributes)
+  const isNarrativeCharacter = character && (
+    (character.concept || character.special_trait) &&
+    (!character.attributes || character.attributes.length === 0)
+  );
 
   const healthPercent = character
     ? Math.round((character.health / character.max_health) * 100)
@@ -60,8 +66,27 @@ export function CharacterCard({ player, isCurrentTurn, isYou, onClick, clickable
           )}
         </div>
 
-        {character && (
+        {character && isNarrativeCharacter && (
           <>
+            {/* Narrative character display - concept and special trait */}
+            <div className="text-xs text-muted-foreground">
+              {character.concept || character.character_class}
+            </div>
+
+            {character.special_trait && (
+              <div className="flex items-start gap-1.5 text-xs">
+                <Sparkles className="h-3 w-3 text-amber-500 mt-0.5 shrink-0" />
+                <span className="text-muted-foreground italic">
+                  {character.special_trait}
+                </span>
+              </div>
+            )}
+          </>
+        )}
+
+        {character && !isNarrativeCharacter && (
+          <>
+            {/* Traditional RPG character display - level, HP, stats */}
             <div className="text-xs text-muted-foreground">
               Level {character.level} {character.character_class}
             </div>
@@ -82,7 +107,7 @@ export function CharacterCard({ player, isCurrentTurn, isYou, onClick, clickable
               />
             </div>
 
-            {character.attributes.length > 0 && (
+            {character.attributes && character.attributes.length > 0 && (
               <div className="grid grid-cols-2 gap-1 text-xs">
                 {character.attributes.slice(0, 4).map((attr) => (
                   <div key={attr.name} className="flex justify-between text-muted-foreground">
