@@ -114,7 +114,7 @@ class _DuckDBResult:
 
 
 # Tables that have a created_at column
-_TABLES_WITH_CREATED_AT = {"snippets", "branches", "campaigns", "players", "campaign_actions"}
+_TABLES_WITH_CREATED_AT = {"snippets", "branches", "campaigns", "campaign_actions"}
 
 
 class _DuckDBQuery:

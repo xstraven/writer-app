@@ -1,14 +1,13 @@
 'use client';
 
-import { use } from 'react';
 import { AdventureView } from '@/components/rpg/AdventureView';
 
 interface CampaignPageProps {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }
 
 export default function CampaignPage({ params }: CampaignPageProps) {
-  const { id } = use(params);
+  const { id } = params;
 
   return (
     <div className="min-h-screen bg-background">
