@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, UserPlus, Swords, Dices } from 'lucide-react';
+import { Plus, UserPlus, Swords, Dices, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CampaignList } from '@/components/campaign/CampaignList';
 import { useCampaignStore } from '@/stores/campaignStore';
@@ -66,6 +66,21 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
+        {/* Quick Start - Simple RPG */}
+        <div className="mb-8">
+          <Button
+            size="lg"
+            className="w-full h-20 text-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+            onClick={() => router.push('/simple-rpg')}
+          >
+            <Sparkles className="h-6 w-6 mr-3" />
+            <div className="text-left">
+              <div>Quick Adventure</div>
+              <div className="text-sm font-normal opacity-90">Family-friendly, no setup needed!</div>
+            </div>
+          </Button>
+        </div>
+
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 mb-8">
           <Button

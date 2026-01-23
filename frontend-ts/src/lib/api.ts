@@ -572,3 +572,110 @@ export const endTurn = async (campaignId: string, payload: EndTurnRequest): Prom
   const response = await apiClient.post(`/api/campaigns/${campaignId}/end-turn`, payload, withSessionToken());
   return response.data;
 };
+
+// --- Simple RPG API (frontend-only game state) ---
+
+import type {
+  SimpleAttribute,
+  SimplePlayer,
+  SimpleGameAction,
+  SimpleDiceResult,
+} from './types';
+
+export interface GenerateAttributesResponse {
+  attributes: SimpleAttribute[];
+}
+
+export interface GenerateOpeningResponse {
+  opening_scene: string;
+  suggested_actions: string[];
+}
+
+export interface ResolveActionResponse {
+  narrative: string;
+  dice_result?: {
+    attribute_used: string | null;
+    modifier: number;
+    roll: number;
+    total: number;
+    outcome: 'full_success' | 'partial_success' | 'miss';
+  };
+  suggested_actions: string[];
+}
+
+export const generateSimpleAttributes = async (
+  worldSetting: string,
+  model?: string
+): Promise<GenerateAttributesResponse> => {
+  const response = await apiClient.post('/api/simple-rpg/generate-attributes', {
+    world_setting: worldSetting,
+    model,
+  }, { timeout: GENERATION_TIMEOUT_MS });
+  return response.data;
+};
+
+export const generateSimpleOpening = async (
+  worldSetting: string,
+  players: SimplePlayer[],
+  model?: string
+): Promise<GenerateOpeningResponse> => {
+  // Convert frontend player format to API format
+  const apiPlayers = players.map(p => ({
+    id: p.id,
+    player_name: p.playerName,
+    character_name: p.characterName,
+    concept: p.concept,
+    attribute_scores: p.attributeScores,
+  }));
+
+  const response = await apiClient.post('/api/simple-rpg/generate-opening', {
+    world_setting: worldSetting,
+    players: apiPlayers,
+    model,
+  }, { timeout: GENERATION_TIMEOUT_MS });
+  return response.data;
+};
+
+export const resolveSimpleAction = async (
+  worldSetting: string,
+  actionHistory: SimpleGameAction[],
+  player: SimplePlayer,
+  action: string,
+  allPlayers: SimplePlayer[],
+  model?: string
+): Promise<ResolveActionResponse> => {
+  // Convert to API format
+  const apiHistory = actionHistory.slice(-20).map(a => ({
+    id: a.id,
+    type: a.type,
+    player_id: a.playerId,
+    player_name: a.playerName,
+    content: a.content,
+  }));
+
+  const apiPlayer = {
+    id: player.id,
+    player_name: player.playerName,
+    character_name: player.characterName,
+    concept: player.concept,
+    attribute_scores: player.attributeScores,
+  };
+
+  const apiAllPlayers = allPlayers.map(p => ({
+    id: p.id,
+    player_name: p.playerName,
+    character_name: p.characterName,
+    concept: p.concept,
+    attribute_scores: p.attributeScores,
+  }));
+
+  const response = await apiClient.post('/api/simple-rpg/resolve-action', {
+    world_setting: worldSetting,
+    action_history: apiHistory,
+    player: apiPlayer,
+    action,
+    all_players: apiAllPlayers,
+    model,
+  }, { timeout: GENERATION_TIMEOUT_MS });
+  return response.data;
+};

@@ -1,0 +1,9 @@
+{
+  "model": "deepseek/deepseek-chat-v3-0324",
+  "temperature": 1.0,
+  "max_tokens": 1024,
+  "max_context_window": 15000,
+  "include_memory": true,
+  "include_context": true,
+  "system_prompt": "You are an expert creative writing assistant. Continue the user's story in the same voice, tone, and perspective. Always preserve established canon, character continuity, and world-building details. If given instructions, apply them elegantly."
+}

@@ -18,6 +18,7 @@ from .routes.generation import router as generation_router
 from .routes.health import router as health_router
 from .routes.lorebook import router as lorebook_router
 from .routes.rpg_mode import router as rpg_router
+from .routes.simple_rpg import router as simple_rpg_router
 from .routes.snippets import router as snippets_router
 from .routes.state import router as state_router
 from .routes.stories import router as stories_router
@@ -53,6 +54,7 @@ app.include_router(generation_router)
 app.include_router(snippets_router)
 app.include_router(stories_router)
 app.include_router(rpg_router)
+app.include_router(simple_rpg_router)
 app.include_router(campaigns_router)
 app.include_router(turns_router)
 

@@ -578,3 +578,38 @@ export interface StartCampaignResponse {
 export interface EndTurnRequest {
   player_id: string;
 }
+
+// --- Simple RPG Types (frontend-only game state) ---
+
+export interface SimpleAttribute {
+  name: string;
+  description: string;
+}
+
+export interface SimplePlayer {
+  id: string;
+  playerName: string;
+  characterName: string;
+  concept: string;
+  attributeScores: Record<string, number>; // { "Strength": 2, "Charisma": -1 }
+}
+
+export interface SimpleGameAction {
+  id: string;
+  type: 'player_action' | 'gm_narration';
+  playerId?: string;
+  playerName?: string;
+  content: string;
+  diceResult?: SimpleDiceResult;
+  timestamp: number;
+}
+
+export interface SimpleDiceResult {
+  attributeUsed: string | null;
+  modifier: number;
+  roll: number;  // 2d6 total
+  total: number;
+  outcome: 'full_success' | 'partial_success' | 'miss';
+}
+
+export type SimpleGameStatus = 'setup' | 'players' | 'active';
