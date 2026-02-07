@@ -24,6 +24,7 @@ from .routes.state import router as state_router
 from .routes.stories import router as stories_router
 from .routes.story_settings import router as story_settings_router
 from .routes.turns import router as turns_router
+from .routes.world_building import router as world_building_router
 
 
 settings = get_settings()
@@ -57,6 +58,7 @@ app.include_router(rpg_router)
 app.include_router(simple_rpg_router)
 app.include_router(campaigns_router)
 app.include_router(turns_router)
+app.include_router(world_building_router)
 
 
 # Re-export runtime stores for backward compatibility in tests

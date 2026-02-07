@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Copy, Share2, Settings, Play, Users, Loader2 } from 'lucide-react';
+import { ArrowLeft, Copy, Share2, Settings, Play, Users, Loader2, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -60,10 +60,16 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
     setLastDiceResults,
     setSuggestedActions,
     setIsLoadingHistory,
+    ttsEnabled,
+    ttsAutoRead,
+    setTtsEnabled,
+    setTtsAutoRead,
   } = useCampaignStore();
 
   const [isLoading, setIsLoading] = useState(true);
   const [isStarting, setIsStarting] = useState(false);
+  const isTtsSupported =
+    typeof window !== 'undefined' && 'speechSynthesis' in window;
 
   // Check if we're in local multiplayer mode (multiple players on same device)
   // This is true when there are multiple players in the campaign
@@ -260,6 +266,37 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          {isTtsSupported && currentCampaign.status === 'active' && (
+            <div className="flex items-center gap-1">
+              <Button
+                variant={ttsEnabled ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => {
+                  const newEnabled = !ttsEnabled;
+                  setTtsEnabled(newEnabled);
+                  if (!newEnabled) setTtsAutoRead(false);
+                }}
+                title={ttsEnabled ? 'Disable narration voice' : 'Enable narration voice'}
+              >
+                {ttsEnabled ? (
+                  <Volume2 className="h-4 w-4 mr-1" />
+                ) : (
+                  <VolumeX className="h-4 w-4 mr-1" />
+                )}
+                TTS
+              </Button>
+              {ttsEnabled && (
+                <Button
+                  variant={ttsAutoRead ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setTtsAutoRead(!ttsAutoRead)}
+                  title={ttsAutoRead ? 'Disable auto-read' : 'Auto-read new narrations'}
+                >
+                  Auto
+                </Button>
+              )}
+            </div>
+          )}
           <Dialog>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm">

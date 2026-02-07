@@ -613,3 +613,49 @@ export interface SimpleDiceResult {
 }
 
 export type SimpleGameStatus = 'setup' | 'players' | 'active';
+
+// --- World Building Types ---
+
+export interface WorldAnalysisRequest {
+  world_description: string;
+  tone?: string;
+  style?: string;
+  model?: string | null;
+}
+
+export interface WorldQuestion {
+  id: string;
+  question: string;
+  category: string;
+  placeholder: string;
+}
+
+export interface WorldAnalysisResponse {
+  summary: string;
+  questions: WorldQuestion[];
+  detected_genre: string;
+  detected_themes: string[];
+  proposed_entries: ProposedLoreEntry[];
+}
+
+export interface WorldExpandRequest {
+  world_description: string;
+  answers: Record<string, string>;
+  tone?: string;
+  style?: string;
+  model?: string | null;
+}
+
+export interface WorldExpandResponse {
+  enriched_description: string;
+  follow_up_questions: WorldQuestion[];
+  proposed_entries: ProposedLoreEntry[];
+  world_summary: Record<string, string>;
+}
+
+export interface WorldConceptResponse {
+  name: string;
+  description: string;
+  genre: string;
+  key_details: string[];
+}

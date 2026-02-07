@@ -35,6 +35,12 @@ interface CampaignState {
   lastDiceResults: RPGActionResult[];
   suggestedActions: string[];
 
+  // TTS state
+  ttsEnabled: boolean;
+  ttsAutoRead: boolean;
+  ttsVoiceURI: string | null;
+  ttsRate: number;
+
   // Actions - Session
   initSession: () => void;
   setPlayerName: (name: string) => void;
@@ -65,6 +71,12 @@ interface CampaignState {
   setLastDiceResults: (results: RPGActionResult[]) => void;
   setSuggestedActions: (actions: string[]) => void;
 
+  // Actions - TTS
+  setTtsEnabled: (enabled: boolean) => void;
+  setTtsAutoRead: (autoRead: boolean) => void;
+  setTtsVoiceURI: (voiceURI: string | null) => void;
+  setTtsRate: (rate: number) => void;
+
   // Actions - Reset
   resetCurrentCampaign: () => void;
   resetAll: () => void;
@@ -88,6 +100,10 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
   isLoadingHistory: false,
   lastDiceResults: [],
   suggestedActions: [],
+  ttsEnabled: false,
+  ttsAutoRead: false,
+  ttsVoiceURI: null,
+  ttsRate: 1.0,
 
   // Session actions
   initSession: () => {
@@ -98,7 +114,18 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
       localStorage.setItem('rpg_session_token', token);
     }
     const savedName = localStorage.getItem('rpg_player_name') || '';
-    set({ sessionToken: token, playerName: savedName });
+    const ttsEnabled = localStorage.getItem('rpg_tts_enabled') === 'true';
+    const ttsAutoRead = localStorage.getItem('rpg_tts_auto_read') === 'true';
+    const ttsVoiceURI = localStorage.getItem('rpg_tts_voice_uri') || null;
+    const ttsRate = parseFloat(localStorage.getItem('rpg_tts_rate') || '1.0');
+    set({
+      sessionToken: token,
+      playerName: savedName,
+      ttsEnabled,
+      ttsAutoRead,
+      ttsVoiceURI,
+      ttsRate: isNaN(ttsRate) ? 1.0 : ttsRate,
+    });
   },
 
   setPlayerName: (name: string) => {
@@ -152,6 +179,36 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
   setIsPerformingAction: (performing) => set({ isPerformingAction: performing }),
   setLastDiceResults: (results) => set({ lastDiceResults: results }),
   setSuggestedActions: (actions) => set({ suggestedActions: actions }),
+
+  // TTS actions
+  setTtsEnabled: (enabled) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('rpg_tts_enabled', String(enabled));
+    }
+    set({ ttsEnabled: enabled });
+  },
+  setTtsAutoRead: (autoRead) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('rpg_tts_auto_read', String(autoRead));
+    }
+    set({ ttsAutoRead: autoRead });
+  },
+  setTtsVoiceURI: (voiceURI) => {
+    if (typeof window !== 'undefined') {
+      if (voiceURI) {
+        localStorage.setItem('rpg_tts_voice_uri', voiceURI);
+      } else {
+        localStorage.removeItem('rpg_tts_voice_uri');
+      }
+    }
+    set({ ttsVoiceURI: voiceURI });
+  },
+  setTtsRate: (rate) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('rpg_tts_rate', String(rate));
+    }
+    set({ ttsRate: rate });
+  },
 
   // Reset actions
   resetCurrentCampaign: () => set({

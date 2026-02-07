@@ -580,6 +580,11 @@ import type {
   SimplePlayer,
   SimpleGameAction,
   SimpleDiceResult,
+  WorldAnalysisRequest,
+  WorldAnalysisResponse,
+  WorldExpandRequest,
+  WorldExpandResponse,
+  WorldConceptResponse,
 } from './types';
 
 export interface GenerateAttributesResponse {
@@ -677,5 +682,22 @@ export const resolveSimpleAction = async (
     all_players: apiAllPlayers,
     model,
   }, { timeout: GENERATION_TIMEOUT_MS });
+  return response.data;
+};
+
+// --- World Building API ---
+
+export const analyzeWorld = async (payload: WorldAnalysisRequest): Promise<WorldAnalysisResponse> => {
+  const response = await apiClient.post('/api/world-building/analyze', payload, { timeout: GENERATION_TIMEOUT_MS });
+  return response.data;
+};
+
+export const expandWorld = async (payload: WorldExpandRequest): Promise<WorldExpandResponse> => {
+  const response = await apiClient.post('/api/world-building/expand', payload, { timeout: GENERATION_TIMEOUT_MS });
+  return response.data;
+};
+
+export const generateWorldConcept = async (genre?: string): Promise<WorldConceptResponse> => {
+  const response = await apiClient.post('/api/world-building/generate-concept', { genre }, { timeout: GENERATION_TIMEOUT_MS });
   return response.data;
 };

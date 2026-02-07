@@ -1,9 +1,12 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Dices, User, BookOpen, Settings } from 'lucide-react';
+import { NarrationSpeaker } from './NarrationSpeaker';
+import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis';
+import { useCampaignStore } from '@/stores/campaignStore';
 import type { CampaignAction, Player } from '@/lib/types';
 
 interface NarrativeLogProps {
@@ -14,6 +17,19 @@ interface NarrativeLogProps {
 export function NarrativeLog({ actions, players }: NarrativeLogProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const prevActionsLengthRef = useRef(actions.length);
+  const speakingActionIdRef = useRef<string | null>(null);
+
+  const { ttsEnabled, ttsAutoRead, ttsVoiceURI, ttsRate } = useCampaignStore();
+
+  const { speak, stop, pause, resume, isSpeaking, isPaused, isSupported } =
+    useSpeechSynthesis({
+      voiceURI: ttsVoiceURI,
+      rate: ttsRate,
+      onEnd: () => {
+        speakingActionIdRef.current = null;
+      },
+    });
 
   // Get player name by ID
   const getPlayerName = (playerId: string | null): string => {
@@ -26,6 +42,37 @@ export function NarrativeLog({ actions, players }: NarrativeLogProps) {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [actions.length]);
+
+  // Auto-read new GM narrations
+  useEffect(() => {
+    if (!ttsEnabled || !ttsAutoRead || !isSupported) return;
+    if (actions.length <= prevActionsLengthRef.current) {
+      prevActionsLengthRef.current = actions.length;
+      return;
+    }
+
+    // Check the newest action
+    const latest = actions[actions.length - 1];
+    prevActionsLengthRef.current = actions.length;
+
+    if (latest && latest.action_type === 'gm_narration') {
+      speakingActionIdRef.current = latest.id;
+      speak(latest.content);
+    }
+  }, [actions, ttsEnabled, ttsAutoRead, isSupported, speak]);
+
+  const handleSpeak = useCallback(
+    (action: CampaignAction) => {
+      speakingActionIdRef.current = action.id;
+      speak(action.content);
+    },
+    [speak]
+  );
+
+  const handleStop = useCallback(() => {
+    speakingActionIdRef.current = null;
+    stop();
+  }, [stop]);
 
   const getActionIcon = (type: string) => {
     switch (type) {
@@ -57,6 +104,8 @@ export function NarrativeLog({ actions, players }: NarrativeLogProps) {
     }
   };
 
+  const showTts = ttsEnabled && isSupported;
+
   return (
     <ScrollArea className="h-[400px] rounded-md border" ref={scrollRef}>
       <div className="p-4 space-y-4">
@@ -69,7 +118,7 @@ export function NarrativeLog({ actions, players }: NarrativeLogProps) {
         {actions.map((action, idx) => (
           <div
             key={action.id || idx}
-            className={`p-3 rounded-r-md border-l-4 ${getActionStyle(action.action_type)}`}
+            className={`group p-3 rounded-r-md border-l-4 ${getActionStyle(action.action_type)}`}
           >
             <div className="flex items-center gap-2 mb-2 text-xs text-muted-foreground">
               {getActionIcon(action.action_type)}
@@ -86,6 +135,20 @@ export function NarrativeLog({ actions, players }: NarrativeLogProps) {
                 <Badge variant="outline" className="text-xs px-1.5 py-0">
                   Turn {action.turn_number}
                 </Badge>
+              )}
+              {showTts && action.action_type === 'gm_narration' && (
+                <NarrationSpeaker
+                  isSpeaking={
+                    isSpeaking && speakingActionIdRef.current === action.id
+                  }
+                  isPaused={
+                    isPaused && speakingActionIdRef.current === action.id
+                  }
+                  onSpeak={() => handleSpeak(action)}
+                  onPause={pause}
+                  onResume={resume}
+                  onStop={handleStop}
+                />
               )}
             </div>
 

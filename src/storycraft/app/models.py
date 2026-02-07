@@ -779,3 +779,61 @@ class CampaignWithPlayers(BaseModel):
     campaign: Campaign
     players: List[Player] = Field(default_factory=list)
     your_player: Optional[Player] = None  # The requesting player's info
+
+
+# --- World Building Models ---
+
+class WorldAnalysisRequest(BaseModel):
+    """Request to analyze a world description and generate follow-up questions."""
+    world_description: str
+    tone: str = "all_ages"
+    style: str = "narrative"
+    model: Optional[str] = None
+
+
+class WorldQuestion(BaseModel):
+    """A targeted follow-up question about the world."""
+    id: str
+    question: str
+    category: str  # "conflict", "setting", "culture", "magic", "history"
+    placeholder: str  # example answer
+
+
+class WorldAnalysisResponse(BaseModel):
+    """Response from analyzing a world description."""
+    summary: str
+    questions: List[WorldQuestion]
+    detected_genre: str
+    detected_themes: List[str]
+    proposed_entries: List[ProposedLoreEntry]
+
+
+class WorldExpandRequest(BaseModel):
+    """Request to expand a world with answered questions."""
+    world_description: str
+    answers: dict  # question_id -> answer
+    tone: str = "all_ages"
+    style: str = "narrative"
+    model: Optional[str] = None
+
+
+class WorldExpandResponse(BaseModel):
+    """Response from expanding a world."""
+    enriched_description: str
+    follow_up_questions: List[WorldQuestion]
+    proposed_entries: List[ProposedLoreEntry]
+    world_summary: dict = Field(default_factory=dict)  # section -> content
+
+
+class WorldConceptRequest(BaseModel):
+    """Request to generate a random world concept."""
+    genre: Optional[str] = None
+    model: Optional[str] = None
+
+
+class WorldConceptResponse(BaseModel):
+    """A generated world concept."""
+    name: str
+    description: str
+    genre: str
+    key_details: List[str]

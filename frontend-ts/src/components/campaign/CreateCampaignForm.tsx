@@ -2,16 +2,18 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Sparkles, Users, BookOpen, Swords } from 'lucide-react';
+import { Loader2, Sparkles, Users, BookOpen, Swords, Wand2, Dices } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { VoiceInput } from '@/components/ui/voice-input';
-import { createCampaign } from '@/lib/api';
+import { createCampaign, generateWorldConcept } from '@/lib/api';
 import { useCampaignStore } from '@/stores/campaignStore';
+import { WorldBuilder } from './WorldBuilder';
 import { toast } from 'sonner';
+import type { ProposedLoreEntry } from '@/lib/types';
 
 // Default to OpenAI model for voice-enabled campaigns (better for multimodal)
 const DEFAULT_VOICE_MODEL = 'openai/gpt-4o';
@@ -19,12 +21,42 @@ const DEFAULT_VOICE_MODEL = 'openai/gpt-4o';
 type GameTone = 'family_friendly' | 'all_ages' | 'mature';
 type GameStyle = 'narrative' | 'mechanical' | 'hybrid';
 
+const GENRE_STARTERS: Record<string, { label: string; prompt: string }> = {
+  fantasy: {
+    label: 'Fantasy',
+    prompt: 'A magical realm of kingdoms, dragons, and ancient prophecies. Heroes wield swords and sorcery as they quest across enchanted lands.',
+  },
+  scifi: {
+    label: 'Sci-Fi',
+    prompt: 'A vast galaxy of starships, alien civilizations, and advanced technology. Explorers chart unknown systems while interstellar politics simmer.',
+  },
+  modern: {
+    label: 'Modern',
+    prompt: 'The modern world, but with a twist -- hidden supernatural forces lurk beneath the surface of everyday life. Those who know the truth must navigate both worlds.',
+  },
+  horror: {
+    label: 'Horror',
+    prompt: 'A world where darkness creeps at the edges of reality. Something ancient and terrible has awakened, and ordinary people must face extraordinary terror.',
+  },
+  historical: {
+    label: 'Historical',
+    prompt: 'A dramatized historical period where real events mix with adventure. Intrigue, exploration, and the clash of cultures define the era.',
+  },
+  mashup: {
+    label: 'Mashup',
+    prompt: 'A wild collision of genres -- maybe cowboys ride dinosaurs in space, or Victorian detectives solve crimes in a cyberpunk city. Anything goes!',
+  },
+};
+
 export function CreateCampaignForm() {
   const router = useRouter();
   const { playerName, setPlayerName, addCampaign } = useCampaignStore();
 
   const [isCreating, setIsCreating] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isSurprising, setIsSurprising] = useState(false);
+  const [showWorldBuilder, setShowWorldBuilder] = useState(false);
+  const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     worldSetting: '',
@@ -35,6 +67,40 @@ export function CreateCampaignForm() {
     tone: 'all_ages' as GameTone,
     style: 'narrative' as GameStyle,
   });
+
+  const handleGenreSelect = (genreKey: string) => {
+    const genre = GENRE_STARTERS[genreKey];
+    if (!genre) return;
+    setSelectedGenre(genreKey);
+    setFormData((prev) => ({ ...prev, worldSetting: genre.prompt }));
+  };
+
+  const handleSurpriseMe = async () => {
+    setIsSurprising(true);
+    try {
+      const concept = await generateWorldConcept(selectedGenre || undefined);
+      setFormData((prev) => ({
+        ...prev,
+        name: prev.name || concept.name,
+        worldSetting: concept.description,
+      }));
+      toast.success(`Generated: ${concept.name}`);
+    } catch (err) {
+      console.error('Surprise Me failed:', err);
+      toast.error('Failed to generate world concept');
+    } finally {
+      setIsSurprising(false);
+    }
+  };
+
+  const handleWorldBuilderComplete = (
+    enrichedDescription: string,
+    _acceptedEntries: ProposedLoreEntry[]
+  ) => {
+    setFormData((prev) => ({ ...prev, worldSetting: enrichedDescription }));
+    setShowWorldBuilder(false);
+    toast.success('World description updated!');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,6 +145,23 @@ export function CreateCampaignForm() {
     }
   };
 
+  // Show WorldBuilder overlay
+  if (showWorldBuilder) {
+    return (
+      <Card className="w-full max-w-4xl mx-auto">
+        <CardContent className="pt-6">
+          <WorldBuilder
+            worldDescription={formData.worldSetting}
+            tone={formData.tone}
+            style={formData.style}
+            onComplete={handleWorldBuilderComplete}
+            onCancel={() => setShowWorldBuilder(false)}
+          />
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
@@ -108,6 +191,48 @@ export function CreateCampaignForm() {
                 disabled={isCreating}
                 continuous={false}
               />
+            </div>
+          </div>
+
+          {/* Genre Quick-Select */}
+          <div className="space-y-2">
+            <Label>Pick a Genre (optional)</Label>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(GENRE_STARTERS).map(([key, genre]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => handleGenreSelect(key)}
+                  disabled={isCreating || isSurprising}
+                  className={`px-3 py-1.5 rounded-full text-sm border transition-all ${
+                    selectedGenre === key
+                      ? 'border-primary bg-primary/10 ring-1 ring-primary font-medium'
+                      : 'border-border hover:border-primary/50 text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {genre.label}
+                </button>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleSurpriseMe}
+                disabled={isCreating || isSurprising}
+                className="rounded-full"
+              >
+                {isSurprising ? (
+                  <>
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Dices className="mr-1 h-3 w-3" />
+                    Surprise Me
+                  </>
+                )}
+              </Button>
             </div>
           </div>
 
@@ -141,9 +266,23 @@ You can also click the microphone button to describe your world using voice inpu
               onChange={(e) => setFormData({ ...formData, worldSetting: e.target.value })}
               disabled={isCreating}
             />
-            <p className="text-xs text-muted-foreground">
-              The AI will create a custom game system based on your world description.
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                The AI will create a custom game system based on your world description.
+              </p>
+              {formData.worldSetting.trim().length > 10 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowWorldBuilder(true)}
+                  disabled={isCreating}
+                >
+                  <Wand2 className="mr-1 h-3 w-3" />
+                  Expand World
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Game Style Options */}
@@ -217,52 +356,84 @@ You can also click the microphone button to describe your world using voice inpu
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="playerName">Your Name *</Label>
-                <Input
-                  id="playerName"
-                  placeholder="Your display name"
-                  value={formData.playerName}
-                  onChange={(e) => setFormData({ ...formData, playerName: e.target.value })}
-                  disabled={isCreating}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="playerName"
+                    placeholder="Your display name"
+                    value={formData.playerName}
+                    onChange={(e) => setFormData({ ...formData, playerName: e.target.value })}
+                    disabled={isCreating}
+                    className="flex-1"
+                  />
+                  <VoiceInput
+                    onTranscript={(text) => setFormData({ ...formData, playerName: text })}
+                    disabled={isCreating}
+                    continuous={false}
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="characterName">Character Name</Label>
-                <Input
-                  id="characterName"
-                  placeholder="Thorin, Aria, Luna..."
-                  value={formData.characterName}
-                  onChange={(e) => setFormData({ ...formData, characterName: e.target.value })}
-                  disabled={isCreating}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="characterName"
+                    placeholder="Thorin, Aria, Luna..."
+                    value={formData.characterName}
+                    onChange={(e) => setFormData({ ...formData, characterName: e.target.value })}
+                    disabled={isCreating}
+                    className="flex-1"
+                  />
+                  <VoiceInput
+                    onTranscript={(text) => setFormData({ ...formData, characterName: text })}
+                    disabled={isCreating}
+                    continuous={false}
+                  />
+                </div>
               </div>
 
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="characterConcept">
                   {formData.style === 'narrative' ? 'Who is your character?' : 'Character Class/Role'}
                 </Label>
-                <Input
-                  id="characterConcept"
-                  placeholder={formData.style === 'narrative'
-                    ? "A curious young wizard, a brave knight, a clever inventor..."
-                    : "Warrior, Mage, Rogue, Healer..."
-                  }
-                  value={formData.characterConcept}
-                  onChange={(e) => setFormData({ ...formData, characterConcept: e.target.value })}
-                  disabled={isCreating}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="characterConcept"
+                    placeholder={formData.style === 'narrative'
+                      ? "A curious young wizard, a brave knight, a clever inventor..."
+                      : "Warrior, Mage, Rogue, Healer..."
+                    }
+                    value={formData.characterConcept}
+                    onChange={(e) => setFormData({ ...formData, characterConcept: e.target.value })}
+                    disabled={isCreating}
+                    className="flex-1"
+                  />
+                  <VoiceInput
+                    onTranscript={(text) => setFormData({ ...formData, characterConcept: text })}
+                    disabled={isCreating}
+                    continuous={false}
+                  />
+                </div>
               </div>
 
               {formData.style === 'narrative' && (
                 <div className="space-y-2 md:col-span-2">
                   <Label htmlFor="characterSpecial">What makes them special? (optional)</Label>
-                  <Input
-                    id="characterSpecial"
-                    placeholder="Can talk to animals, has a magic compass, never gives up..."
-                    value={formData.characterSpecial}
-                    onChange={(e) => setFormData({ ...formData, characterSpecial: e.target.value })}
-                    disabled={isCreating}
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      id="characterSpecial"
+                      placeholder="Can talk to animals, has a magic compass, never gives up..."
+                      value={formData.characterSpecial}
+                      onChange={(e) => setFormData({ ...formData, characterSpecial: e.target.value })}
+                      disabled={isCreating}
+                      className="flex-1"
+                    />
+                    <VoiceInput
+                      onTranscript={(text) => setFormData({ ...formData, characterSpecial: text })}
+                      disabled={isCreating}
+                      continuous={false}
+                    />
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     Give your character a unique gift, talent, or trait that makes them memorable!
                   </p>
