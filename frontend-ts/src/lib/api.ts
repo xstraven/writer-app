@@ -48,6 +48,7 @@ import type {
   Player,
   AddLocalPlayerRequest,
   AddLocalPlayerResponse,
+  BatchAddPlayersResponse,
 } from './types';
 
 export const API_BASE = process.env.NEXT_PUBLIC_STORYCRAFT_API_BASE || 'http://localhost:8000';
@@ -539,6 +540,18 @@ export const addLocalPlayer = async (
     ...withSessionToken(),
     timeout: GENERATION_TIMEOUT_MS,
   });
+  return response.data;
+};
+
+export const addLocalPlayersBatch = async (
+  campaignId: string,
+  players: AddLocalPlayerRequest[]
+): Promise<BatchAddPlayersResponse> => {
+  const response = await apiClient.post(
+    `/api/campaigns/${campaignId}/players/batch`,
+    { players },
+    { ...withSessionToken(), timeout: GENERATION_TIMEOUT_MS },
+  );
   return response.data;
 };
 

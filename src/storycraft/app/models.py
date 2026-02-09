@@ -721,11 +721,22 @@ class AddLocalPlayerRequest(BaseModel):
     player_name: str
     character_name: Optional[str] = None
     character_class: Optional[str] = None
+    character_special: Optional[str] = None
 
 
 class AddLocalPlayerResponse(BaseModel):
     """Response from adding a local player"""
     player: Player
+
+
+class BatchAddPlayersRequest(BaseModel):
+    """Request to add multiple local players at once"""
+    players: List[AddLocalPlayerRequest]
+
+
+class BatchAddPlayersResponse(BaseModel):
+    """Response from adding multiple local players"""
+    players: List[Player]
 
 
 class CampaignActionRequest(BaseModel):
@@ -772,6 +783,7 @@ class StartCampaignResponse(BaseModel):
 class EndTurnRequest(BaseModel):
     """Request to end the current turn"""
     player_id: str
+    next_player_id: Optional[str] = None  # Pass to a specific player (PbtA-style)
 
 
 class CampaignWithPlayers(BaseModel):

@@ -11,6 +11,38 @@ import { useSimpleGameStore } from '@/stores/simpleGameStore';
 import { generateSimpleAttributes } from '@/lib/api';
 import type { SimpleAttribute } from '@/lib/types';
 
+interface AdventureTemplate {
+  title: string;
+  tagline: string;
+  emoji: string;
+  name: string;
+  worldSetting: string;
+}
+
+const ADVENTURE_TEMPLATES: AdventureTemplate[] = [
+  {
+    title: 'Dragon\'s Peak',
+    tagline: 'Classic fantasy quest to slay a dragon',
+    emoji: '\uD83D\uDC09',
+    name: 'The Dragon of Ashenmount',
+    worldSetting: 'The kingdom of Valdris lives in the shadow of Ashenmount, a volcanic peak where the ancient red dragon Scorrath has awoken after centuries of slumber. Villages burn, livestock vanishes, and the king\'s armies have failed. A band of unlikely heroes — gathered at the last free tavern in the foothills — must climb the mountain, navigate its treacherous caverns, and confront the dragon before the entire realm is reduced to cinders. Ancient dwarven tunnels, enchanted forests, and a cunning dragon who speaks in riddles await.',
+  },
+  {
+    title: 'Star Wanderers',
+    tagline: 'Sci-fi exploration of a ghost ship',
+    emoji: '\uD83D\uDE80',
+    name: 'The Silent Meridian',
+    worldSetting: 'The year is 3147. Your salvage crew aboard the tugship Penelope has picked up a distress beacon from the UES Meridian — a colony ship that vanished 80 years ago carrying 10,000 settlers. Now it drifts in the Oort Cloud, dark and silent. Scans show life support is active but no life signs. The ship\'s AI is still running, sending garbled warnings. Your crew needs the salvage money, but something went very wrong on the Meridian. Flickering lights, sealed bulkheads, and log entries that stop mid-sentence hint at a mystery that could change humanity\'s understanding of deep space.',
+  },
+  {
+    title: 'Enchanted Academy',
+    tagline: 'Magical school adventure for all ages',
+    emoji: '\u2728',
+    name: 'Secrets of Thornberry Academy',
+    worldSetting: 'Thornberry Academy is a grand, sprawling school of magic hidden in an enchanted forest where the trees whisper and the hallways rearrange themselves on weekends. Students learn potion-brewing, creature-taming, and spell-weaving. But this semester, something strange is happening: paintings are going blank, the library books are rewriting themselves, and a mysterious door has appeared in the basement that no teacher will talk about. The headmaster has gone on an unexplained "sabbatical." It\'s up to a group of first-year students to uncover the secret before the whole academy unravels.',
+  },
+];
+
 export function GameSetup() {
   const {
     adventureName,
@@ -25,6 +57,11 @@ export function GameSetup() {
   const [localSetting, setLocalSetting] = useState(worldSetting);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleTemplateSelect = (template: AdventureTemplate) => {
+    setLocalName(template.name);
+    setLocalSetting(template.worldSetting);
+  };
 
   const handleGenerateAttributes = async () => {
     if (!localSetting.trim()) {
@@ -69,6 +106,43 @@ export function GameSetup() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Quick-Start Templates */}
+          <div className="space-y-2">
+            <Label>Quick Start</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {ADVENTURE_TEMPLATES.map((template) => (
+                <button
+                  key={template.title}
+                  type="button"
+                  onClick={() => handleTemplateSelect(template)}
+                  disabled={isGenerating}
+                  className={`p-3 rounded-lg border text-left transition-all group ${
+                    localName === template.name
+                      ? 'border-primary bg-primary/10 ring-1 ring-primary'
+                      : 'border-border hover:border-primary/50 hover:bg-primary/5'
+                  }`}
+                >
+                  <div className="text-2xl mb-1">{template.emoji}</div>
+                  <div className="font-medium text-sm group-hover:text-primary transition-colors">
+                    {template.title}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {template.tagline}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">or describe your own</span>
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="adventure-name">Adventure Name (optional)</Label>
             <Input

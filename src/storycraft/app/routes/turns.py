@@ -122,9 +122,9 @@ async def take_action(
     if not player or player.campaign_id != campaign_id:
         raise HTTPException(status_code=404, detail="Player not found in campaign")
 
-    # Verify it's the player's turn
+    # Loose turns: any player can act. Track who went last.
     if campaign.current_turn_player_id != req.player_id:
-        raise HTTPException(status_code=403, detail="It's not your turn")
+        campaign_store.set_turn(campaign_id, req.player_id, campaign.turn_number)
 
     # Verify session owns this player
     if x_session_token and player.session_token != x_session_token:
@@ -476,10 +476,6 @@ async def end_turn(
     if campaign.status != "active":
         raise HTTPException(status_code=400, detail="Campaign is not active")
 
-    # Verify it's the player's turn
-    if campaign.current_turn_player_id != req.player_id:
-        raise HTTPException(status_code=403, detail="It's not your turn")
-
     # Verify session owns this player
     player = player_store.get(req.player_id)
     if x_session_token and player and player.session_token != x_session_token:
@@ -489,13 +485,13 @@ async def end_turn(
     action_store.create(
         campaign_id=campaign_id,
         action_type="system",
-        content=f"{player.name if player else 'Player'} ended their turn.",
+        content=f"{player.name if player else 'Player'} passed the turn.",
         player_id=req.player_id,
         turn_number=campaign.turn_number,
     )
 
-    # Advance to next player
-    campaign = campaign_store.advance_turn(campaign_id)
+    # Advance to the specified player, or next in order
+    campaign = campaign_store.advance_turn(campaign_id, next_player_id=req.next_player_id)
 
     players = player_store.get_by_campaign(campaign_id)
     player_names = {p.id: p.name for p in players}

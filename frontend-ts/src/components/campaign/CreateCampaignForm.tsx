@@ -2,14 +2,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Sparkles, Users, BookOpen, Swords, Wand2, Dices } from 'lucide-react';
+import { Loader2, Sparkles, Users, BookOpen, Swords, Wand2, Dices, UserPlus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { VoiceInput } from '@/components/ui/voice-input';
-import { createCampaign, generateWorldConcept } from '@/lib/api';
+import { createCampaign, generateWorldConcept, addLocalPlayersBatch } from '@/lib/api';
 import { useCampaignStore } from '@/stores/campaignStore';
 import { WorldBuilder } from './WorldBuilder';
 import { toast } from 'sonner';
@@ -20,6 +20,54 @@ const DEFAULT_VOICE_MODEL = 'openai/gpt-4o';
 
 type GameTone = 'family_friendly' | 'all_ages' | 'mature';
 type GameStyle = 'narrative' | 'mechanical' | 'hybrid';
+
+interface AdventureTemplate {
+  title: string;
+  tagline: string;
+  emoji: string;
+  name: string;
+  worldSetting: string;
+  tone: GameTone;
+  style: GameStyle;
+  characterConcept: string;
+  characterSpecial: string;
+}
+
+const ADVENTURE_TEMPLATES: AdventureTemplate[] = [
+  {
+    title: 'Dragon\'s Peak',
+    tagline: 'Classic fantasy quest to slay a dragon',
+    emoji: '\uD83D\uDC09',
+    name: 'The Dragon of Ashenmount',
+    worldSetting: 'The kingdom of Valdris lives in the shadow of Ashenmount, a volcanic peak where the ancient red dragon Scorrath has awoken after centuries of slumber. Villages burn, livestock vanishes, and the king\'s armies have failed. A band of unlikely heroes — gathered at the last free tavern in the foothills — must climb the mountain, navigate its treacherous caverns, and confront the dragon before the entire realm is reduced to cinders. Ancient dwarven tunnels, enchanted forests, and a cunning dragon who speaks in riddles await.',
+    tone: 'all_ages',
+    style: 'narrative',
+    characterConcept: 'A young village blacksmith who dreams of adventure',
+    characterSpecial: 'Can sense the heat of dragon-fire before it strikes',
+  },
+  {
+    title: 'Star Wanderers',
+    tagline: 'Sci-fi exploration of a ghost ship',
+    emoji: '\uD83D\uDE80',
+    name: 'The Silent Meridian',
+    worldSetting: 'The year is 3147. Your salvage crew aboard the tugship Penelope has picked up a distress beacon from the UES Meridian — a colony ship that vanished 80 years ago carrying 10,000 settlers. Now it drifts in the Oort Cloud, dark and silent. Scans show life support is active but no life signs. The ship\'s AI is still running, sending garbled warnings. Your crew needs the salvage money, but something went very wrong on the Meridian. Flickering lights, sealed bulkheads, and log entries that stop mid-sentence hint at a mystery that could change humanity\'s understanding of deep space.',
+    tone: 'mature',
+    style: 'hybrid',
+    characterConcept: 'A veteran salvage engineer with a troubled past',
+    characterSpecial: 'Has an uncanny intuition for mechanical systems — can "hear" when machines are wrong',
+  },
+  {
+    title: 'Enchanted Academy',
+    tagline: 'Magical school adventure for all ages',
+    emoji: '\u2728',
+    name: 'Secrets of Thornberry Academy',
+    worldSetting: 'Thornberry Academy is a grand, sprawling school of magic hidden in an enchanted forest where the trees whisper and the hallways rearrange themselves on weekends. Students learn potion-brewing, creature-taming, and spell-weaving. But this semester, something strange is happening: paintings are going blank, the library books are rewriting themselves, and a mysterious door has appeared in the basement that no teacher will talk about. The headmaster has gone on an unexplained "sabbatical." It\'s up to a group of first-year students to uncover the secret before the whole academy unravels.',
+    tone: 'family_friendly',
+    style: 'narrative',
+    characterConcept: 'An eager first-year student who got their acceptance letter by surprise',
+    characterSpecial: 'Can talk to the school\'s magical creatures and understand their warnings',
+  },
+];
 
 const GENRE_STARTERS: Record<string, { label: string; prompt: string }> = {
   fantasy: {
@@ -53,10 +101,17 @@ export function CreateCampaignForm() {
   const { playerName, setPlayerName, addCampaign } = useCampaignStore();
 
   const [isCreating, setIsCreating] = useState(false);
+  const [creatingPhase, setCreatingPhase] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isSurprising, setIsSurprising] = useState(false);
   const [showWorldBuilder, setShowWorldBuilder] = useState(false);
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
+  const [friends, setFriends] = useState<Array<{
+    playerName: string;
+    characterName: string;
+    characterConcept: string;
+    characterSpecial: string;
+  }>>([]);
   const [formData, setFormData] = useState({
     name: '',
     worldSetting: '',
@@ -67,6 +122,20 @@ export function CreateCampaignForm() {
     tone: 'all_ages' as GameTone,
     style: 'narrative' as GameStyle,
   });
+
+  const handleTemplateSelect = (template: AdventureTemplate) => {
+    setFormData((prev) => ({
+      ...prev,
+      name: template.name,
+      worldSetting: template.worldSetting,
+      tone: template.tone,
+      style: template.style,
+      characterConcept: template.characterConcept,
+      characterSpecial: template.characterSpecial,
+    }));
+    setSelectedGenre(null);
+    toast.success(`Loaded "${template.title}" template`);
+  };
 
   const handleGenreSelect = (genreKey: string) => {
     const genre = GENRE_STARTERS[genreKey];
@@ -111,6 +180,7 @@ export function CreateCampaignForm() {
     }
 
     setIsCreating(true);
+    setCreatingPhase('Creating adventure...');
 
     try {
       const response = await createCampaign({
@@ -125,23 +195,44 @@ export function CreateCampaignForm() {
         style: formData.style,
       });
 
-      // Save player name for future use
       setPlayerName(formData.playerName.trim());
 
-      // Add to campaigns list
+      const validFriends = friends.filter((f) => f.playerName.trim());
+      let allPlayers = [response.player];
+
+      if (validFriends.length > 0) {
+        setCreatingPhase(`Generating characters for ${validFriends.length} friend${validFriends.length > 1 ? 's' : ''}...`);
+        try {
+          const batchResponse = await addLocalPlayersBatch(
+            response.campaign.id,
+            validFriends.map((f) => ({
+              player_name: f.playerName.trim(),
+              character_name: f.characterName.trim() || undefined,
+              character_class: f.characterConcept.trim() || undefined,
+              character_special: f.characterSpecial.trim() || undefined,
+            })),
+          );
+          allPlayers = [response.player, ...batchResponse.players];
+        } catch (err) {
+          console.error('Failed to add friends:', err);
+          toast.error('Friends can be added in the lobby');
+        }
+      }
+
       addCampaign({
         campaign: response.campaign,
-        players: [response.player],
+        players: allPlayers,
         your_player: response.player,
       });
 
-      toast.success('Adventure created! Share the invite code with friends.');
+      toast.success('Adventure created!');
       router.push(`/campaigns/${response.campaign.id}`);
     } catch (error: any) {
       console.error('Failed to create campaign:', error);
       toast.error(error.response?.data?.detail || 'Failed to create adventure');
     } finally {
       setIsCreating(false);
+      setCreatingPhase('');
     }
   };
 
@@ -175,6 +266,42 @@ export function CreateCampaignForm() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Quick-Start Templates */}
+          <div className="space-y-2">
+            <Label>Quick Start — Pick a Template</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {ADVENTURE_TEMPLATES.map((template) => (
+                <button
+                  key={template.title}
+                  type="button"
+                  onClick={() => handleTemplateSelect(template)}
+                  disabled={isCreating}
+                  className="p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/5 text-left transition-all group"
+                >
+                  <div className="text-2xl mb-1">{template.emoji}</div>
+                  <div className="font-medium text-sm group-hover:text-primary transition-colors">
+                    {template.title}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {template.tagline}
+                  </div>
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Select a template to pre-fill the form, or create your own below.
+            </p>
+          </div>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">or build your own</span>
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="name">Adventure Name *</Label>
             <div className="flex gap-2">
@@ -442,6 +569,111 @@ You can also click the microphone button to describe your world using voice inpu
             </div>
           </div>
 
+          {/* Party Members */}
+          <div className="border-t pt-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-sm font-medium">Party Members (optional)</h3>
+                <p className="text-xs text-muted-foreground">Add friends who will play with you</p>
+              </div>
+              {friends.length < 3 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setFriends([...friends, { playerName: '', characterName: '', characterConcept: '', characterSpecial: '' }])}
+                  disabled={isCreating}
+                >
+                  <UserPlus className="h-4 w-4 mr-1" />
+                  Add a Friend
+                </Button>
+              )}
+            </div>
+
+            {friends.length === 0 && (
+              <p className="text-xs text-muted-foreground italic">
+                You can add friends now or later in the lobby.
+              </p>
+            )}
+
+            <div className="space-y-3">
+              {friends.map((friend, idx) => (
+                <div key={idx} className="p-3 rounded-lg border border-border space-y-3 relative">
+                  <button
+                    type="button"
+                    onClick={() => setFriends(friends.filter((_, i) => i !== idx))}
+                    disabled={isCreating}
+                    className="absolute top-2 right-2 p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                  <div className="text-xs font-medium text-muted-foreground">Friend {idx + 1}</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Player Name *</Label>
+                      <Input
+                        placeholder="Friend's name"
+                        value={friend.playerName}
+                        onChange={(e) => {
+                          const updated = [...friends];
+                          updated[idx] = { ...updated[idx], playerName: e.target.value };
+                          setFriends(updated);
+                        }}
+                        disabled={isCreating}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Character Name</Label>
+                      <Input
+                        placeholder="Thorin, Aria, Luna..."
+                        value={friend.characterName}
+                        onChange={(e) => {
+                          const updated = [...friends];
+                          updated[idx] = { ...updated[idx], characterName: e.target.value };
+                          setFriends(updated);
+                        }}
+                        disabled={isCreating}
+                      />
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <Label className="text-xs">
+                        {formData.style === 'narrative' ? 'Who is their character?' : 'Character Class/Role'}
+                      </Label>
+                      <Input
+                        placeholder={formData.style === 'narrative'
+                          ? "A brave knight, a clever inventor..."
+                          : "Warrior, Mage, Rogue..."
+                        }
+                        value={friend.characterConcept}
+                        onChange={(e) => {
+                          const updated = [...friends];
+                          updated[idx] = { ...updated[idx], characterConcept: e.target.value };
+                          setFriends(updated);
+                        }}
+                        disabled={isCreating}
+                      />
+                    </div>
+                    {formData.style === 'narrative' && (
+                      <div className="space-y-1 md:col-span-2">
+                        <Label className="text-xs">What makes them special?</Label>
+                        <Input
+                          placeholder="Can talk to animals, has a magic compass..."
+                          value={friend.characterSpecial}
+                          onChange={(e) => {
+                            const updated = [...friends];
+                            updated[idx] = { ...updated[idx], characterSpecial: e.target.value };
+                            setFriends(updated);
+                          }}
+                          disabled={isCreating}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="flex gap-3 pt-4">
             <Button
               type="button"
@@ -455,7 +687,7 @@ You can also click the microphone button to describe your world using voice inpu
               {isCreating ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating Adventure...
+                  {creatingPhase || 'Creating Adventure...'}
                 </>
               ) : (
                 'Create Adventure'

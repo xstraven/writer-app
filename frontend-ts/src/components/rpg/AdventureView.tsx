@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Copy, Share2, Settings, Play, Users, Loader2, Volume2, VolumeX } from 'lucide-react';
+import { ArrowLeft, Copy, Share2, Settings, Play, Users, UserPlus, Loader2, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -105,9 +105,9 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
     loadCampaign();
   }, [loadCampaign]);
 
-  // Poll for updates when it's not your turn
+  // Poll for updates (loose turns — always poll so all players see changes)
   useEffect(() => {
-    if (!currentCampaign || currentCampaign.status !== 'active' || isMyTurn) return;
+    if (!currentCampaign || currentCampaign.status !== 'active') return;
 
     const pollInterval = setInterval(async () => {
       try {
@@ -120,13 +120,13 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
       } catch (error) {
         console.error('Poll failed:', error);
       }
-    }, 5000); // Poll every 5 seconds
+    }, 5000);
 
     return () => clearInterval(pollInterval);
-  }, [campaignId, currentCampaign, isMyTurn, updateTurn, setActionHistory]);
+  }, [campaignId, currentCampaign, updateTurn, setActionHistory]);
 
   const handleTakeAction = async (action: string) => {
-    if (!currentPlayer || !isMyTurn) return;
+    if (!currentPlayer) return;
 
     setIsPerformingAction(true);
     setLastDiceResults([]);
@@ -165,11 +165,14 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
     }
   };
 
-  const handleEndTurn = async () => {
-    if (!currentPlayer || !isMyTurn) return;
+  const handleEndTurn = async (nextPlayerId?: string) => {
+    if (!currentPlayer) return;
 
     try {
-      const turnInfo = await endTurn(campaignId, { player_id: currentPlayer.id });
+      const turnInfo = await endTurn(campaignId, {
+        player_id: currentPlayer.id,
+        next_player_id: nextPlayerId,
+      });
       updateTurn(turnInfo);
       toast.success(`Turn passed to ${turnInfo.current_player_name}`);
     } catch (error: any) {
@@ -355,28 +358,60 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
             </div>
 
             <div className="border-t pt-4">
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-sm font-medium">Players ({allPlayers.length})</h4>
-                <AddPlayerForm
-                  campaignId={campaignId}
-                  onPlayerAdded={(player) => {
-                    setAllPlayers([...allPlayers, player]);
-                  }}
-                />
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-medium">Party ({allPlayers.length})</h4>
               </div>
-              <div className="space-y-2">
+
+              {allPlayers.length === 1 && (
+                <p className="text-sm text-amber-600 dark:text-amber-400 mb-3">
+                  Add friends for the best experience!
+                </p>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {allPlayers.map((player) => (
-                  <div key={player.id} className="flex items-center justify-between p-2 bg-accent/50 rounded">
-                    <span>
-                      {player.character_sheet?.name || player.name}
-                      {player.character_sheet && ` (${player.character_sheet.character_class})`}
-                    </span>
-                    <div className="flex gap-2">
-                      {player.is_gm && <Badge>GM</Badge>}
-                      {player.id === currentPlayer?.id && <Badge variant="outline">You</Badge>}
+                  <div key={player.id} className="p-3 bg-accent/50 rounded-lg space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-sm">
+                        {player.character_sheet?.name || player.name}
+                      </span>
+                      <div className="flex gap-1">
+                        {player.is_gm && <Badge className="text-xs">GM</Badge>}
+                        {player.id === currentPlayer?.id && <Badge variant="outline" className="text-xs">You</Badge>}
+                      </div>
                     </div>
+                    {player.character_sheet && (
+                      <p className="text-xs text-muted-foreground">
+                        {player.character_sheet.character_class}
+                        {player.character_sheet.special_trait && ` — ${player.character_sheet.special_trait}`}
+                      </p>
+                    )}
+                    {player.character_sheet?.name && player.name !== player.character_sheet.name && (
+                      <p className="text-xs text-muted-foreground/60">
+                        Player: {player.name}
+                      </p>
+                    )}
                   </div>
                 ))}
+
+                {allPlayers.length < 5 && (
+                  <AddPlayerForm
+                    campaignId={campaignId}
+                    gameStyle={currentCampaign.game_system?.name?.toLowerCase().includes('narrative') ? 'narrative' : undefined}
+                    onPlayerAdded={(player) => {
+                      setAllPlayers([...allPlayers, player]);
+                    }}
+                    trigger={
+                      <button
+                        type="button"
+                        className="flex flex-col items-center justify-center gap-1 p-3 rounded-lg border-2 border-dashed border-muted-foreground/25 hover:border-muted-foreground/50 hover:bg-accent/30 transition-colors min-h-[72px] cursor-pointer"
+                      >
+                        <UserPlus className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">Add a friend</span>
+                      </button>
+                    }
+                  />
+                )}
               </div>
             </div>
 
@@ -436,6 +471,8 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
                   suggestedActions={suggestedActions}
                   onTakeAction={handleTakeAction}
                   onEndTurn={handleEndTurn}
+                  allPlayers={allPlayers}
+                  currentPlayer={currentPlayer}
                 />
               </CardContent>
             </Card>

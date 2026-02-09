@@ -20,16 +20,21 @@ import type { Player } from '@/lib/types';
 interface AddPlayerFormProps {
   campaignId: string;
   onPlayerAdded: (player: Player) => void;
+  gameStyle?: 'narrative' | 'mechanical' | 'hybrid';
+  trigger?: React.ReactNode;
 }
 
-export function AddPlayerForm({ campaignId, onPlayerAdded }: AddPlayerFormProps) {
+export function AddPlayerForm({ campaignId, onPlayerAdded, gameStyle, trigger }: AddPlayerFormProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [formData, setFormData] = useState({
     playerName: '',
     characterName: '',
     characterClass: '',
+    characterSpecial: '',
   });
+
+  const isNarrative = gameStyle === 'narrative';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,13 +51,13 @@ export function AddPlayerForm({ campaignId, onPlayerAdded }: AddPlayerFormProps)
         player_name: formData.playerName.trim(),
         character_name: formData.characterName.trim() || undefined,
         character_class: formData.characterClass.trim() || undefined,
+        character_special: formData.characterSpecial.trim() || undefined,
       });
 
       toast.success(`${response.player.character_sheet?.name || formData.playerName} joined the party!`);
       onPlayerAdded(response.player);
 
-      // Reset form and close dialog
-      setFormData({ playerName: '', characterName: '', characterClass: '' });
+      setFormData({ playerName: '', characterName: '', characterClass: '', characterSpecial: '' });
       setIsOpen(false);
     } catch (error: any) {
       console.error('Failed to add player:', error);
@@ -65,16 +70,18 @@ export function AddPlayerForm({ campaignId, onPlayerAdded }: AddPlayerFormProps)
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <UserPlus className="h-4 w-4 mr-1" />
-          Add Player
-        </Button>
+        {trigger || (
+          <Button variant="outline" size="sm">
+            <UserPlus className="h-4 w-4 mr-1" />
+            Add Player
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add Another Player</DialogTitle>
           <DialogDescription>
-            Add a local player to join the adventure. Great for playing together on the same device!
+            Add a friend to join the adventure. The AI will generate their character.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -82,7 +89,7 @@ export function AddPlayerForm({ campaignId, onPlayerAdded }: AddPlayerFormProps)
             <Label htmlFor="playerName">Player Name *</Label>
             <Input
               id="playerName"
-              placeholder="Player's display name"
+              placeholder="Friend's display name"
               value={formData.playerName}
               onChange={(e) => setFormData({ ...formData, playerName: e.target.value })}
               disabled={isAdding}
@@ -102,10 +109,15 @@ export function AddPlayerForm({ campaignId, onPlayerAdded }: AddPlayerFormProps)
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="characterClass">Who is your character?</Label>
+            <Label htmlFor="characterClass">
+              {isNarrative ? 'Who is their character?' : 'Character Class/Role'}
+            </Label>
             <Input
               id="characterClass"
-              placeholder="A brave knight, a clever inventor, a wise healer..."
+              placeholder={isNarrative
+                ? "A brave knight, a clever inventor, a wise healer..."
+                : "Warrior, Mage, Rogue, Healer..."
+              }
               value={formData.characterClass}
               onChange={(e) => setFormData({ ...formData, characterClass: e.target.value })}
               disabled={isAdding}
@@ -114,6 +126,19 @@ export function AddPlayerForm({ campaignId, onPlayerAdded }: AddPlayerFormProps)
               Describe who they are in a few words
             </p>
           </div>
+
+          {isNarrative && (
+            <div className="space-y-2">
+              <Label htmlFor="characterSpecial">What makes them special?</Label>
+              <Input
+                id="characterSpecial"
+                placeholder="Can talk to animals, has a magic compass..."
+                value={formData.characterSpecial}
+                onChange={(e) => setFormData({ ...formData, characterSpecial: e.target.value })}
+                disabled={isAdding}
+              />
+            </div>
+          )}
 
           <div className="flex gap-3 pt-2">
             <Button

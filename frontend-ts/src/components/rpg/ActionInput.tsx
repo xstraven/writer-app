@@ -1,11 +1,17 @@
 'use client';
 
 import { useState, useEffect, useCallback, KeyboardEvent } from 'react';
-import { Loader2, SkipForward, Dices, Mic, Keyboard } from 'lucide-react';
+import { Loader2, SkipForward, Dices, Mic, Keyboard, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { VoiceInput } from '@/components/ui/voice-input';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import type { Player } from '@/lib/types';
 
 const VOICE_MODE_KEY = 'storycraft-voice-mode';
 
@@ -14,7 +20,9 @@ interface ActionInputProps {
   isPerforming: boolean;
   suggestedActions: string[];
   onTakeAction: (action: string) => void;
-  onEndTurn: () => void;
+  onEndTurn: (nextPlayerId?: string) => void;
+  allPlayers?: Player[];
+  currentPlayer?: Player | null;
 }
 
 export function ActionInput({
@@ -23,10 +31,13 @@ export function ActionInput({
   suggestedActions,
   onTakeAction,
   onEndTurn,
+  allPlayers = [],
+  currentPlayer,
 }: ActionInputProps) {
   const [action, setAction] = useState('');
   const [voiceMode, setVoiceMode] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [passOpen, setPassOpen] = useState(false);
 
   // Load voice mode preference from localStorage
   useEffect(() => {
@@ -57,7 +68,7 @@ export function ActionInput({
   }, []);
 
   const handleSubmit = () => {
-    if (!action.trim() || !isYourTurn || isPerforming) return;
+    if (!action.trim() || isPerforming) return;
     onTakeAction(action.trim());
     setAction('');
   };
@@ -70,25 +81,25 @@ export function ActionInput({
   };
 
   const handleSuggestionClick = (suggestion: string) => {
-    if (!isYourTurn || isPerforming) return;
+    if (isPerforming) return;
     onTakeAction(suggestion);
   };
+
+  const otherPlayers = allPlayers.filter((p) => p.id !== currentPlayer?.id);
 
   return (
     <div className="space-y-3">
       <div className="relative">
         <Textarea
           placeholder={
-            isYourTurn
-              ? voiceMode
-                ? "Tap the mic and speak your action..."
-                : "What do you do? (Ctrl+Enter to submit)"
-              : "Waiting for your turn..."
+            voiceMode
+              ? "Tap the mic and speak your action..."
+              : "What do you do? (Ctrl+Enter to submit)"
           }
           value={action}
           onChange={(e) => setAction(e.target.value)}
           onKeyDown={handleKeyDown}
-          disabled={!isYourTurn || isPerforming}
+          disabled={isPerforming}
           className={`min-h-[80px] pr-24 resize-none ${
             isYourTurn ? 'border-green-500/50 focus:border-green-500' : ''
           } ${isListening ? 'border-red-500/50' : ''}`}
@@ -98,13 +109,13 @@ export function ActionInput({
             <VoiceInput
               onTranscript={handleTranscript}
               onPartialTranscript={handlePartialTranscript}
-              disabled={!isYourTurn || isPerforming}
+              disabled={isPerforming}
             />
           )}
           <Button
             size="sm"
             onClick={handleSubmit}
-            disabled={!action.trim() || !isYourTurn || isPerforming}
+            disabled={!action.trim() || isPerforming}
           >
             {isPerforming ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -140,7 +151,7 @@ export function ActionInput({
         </div>
       )}
 
-      {suggestedActions.length > 0 && isYourTurn && !isPerforming && (
+      {suggestedActions.length > 0 && !isPerforming && (
         <div className="flex flex-wrap gap-2">
           <span className="text-xs text-muted-foreground">Quick actions:</span>
           {suggestedActions.map((suggestion, idx) => (
@@ -156,17 +167,54 @@ export function ActionInput({
         </div>
       )}
 
-      {isYourTurn && !isPerforming && (
+      {!isPerforming && (
         <div className="flex justify-end">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onEndTurn}
-            className="text-muted-foreground"
-          >
-            <SkipForward className="h-4 w-4 mr-1" />
-            End Turn
-          </Button>
+          {otherPlayers.length > 0 ? (
+            <Popover open={passOpen} onOpenChange={setPassOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-muted-foreground"
+                >
+                  <SkipForward className="h-4 w-4 mr-1" />
+                  Pass Turn
+                  <ChevronDown className="h-3 w-3 ml-1" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-48 p-1" align="end">
+                <div className="space-y-0.5">
+                  <button
+                    type="button"
+                    onClick={() => { onEndTurn(); setPassOpen(false); }}
+                    className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-accent transition-colors"
+                  >
+                    Next in order
+                  </button>
+                  {otherPlayers.map((player) => (
+                    <button
+                      key={player.id}
+                      type="button"
+                      onClick={() => { onEndTurn(player.id); setPassOpen(false); }}
+                      className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-accent transition-colors"
+                    >
+                      {player.character_sheet?.name || player.name}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onEndTurn()}
+              className="text-muted-foreground"
+            >
+              <SkipForward className="h-4 w-4 mr-1" />
+              Pass Turn
+            </Button>
+          )}
         </div>
       )}
     </div>

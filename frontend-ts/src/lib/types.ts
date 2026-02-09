@@ -533,10 +533,19 @@ export interface AddLocalPlayerRequest {
   player_name: string;
   character_name?: string;
   character_class?: string;
+  character_special?: string;
 }
 
 export interface AddLocalPlayerResponse {
   player: Player;
+}
+
+export interface BatchAddPlayersRequest {
+  players: AddLocalPlayerRequest[];
+}
+
+export interface BatchAddPlayersResponse {
+  players: Player[];
 }
 
 export interface CampaignActionRequest {
@@ -577,6 +586,7 @@ export interface StartCampaignResponse {
 
 export interface EndTurnRequest {
   player_id: string;
+  next_player_id?: string;
 }
 
 // --- Simple RPG Types (frontend-only game state) ---

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import random
 from typing import List, Optional
 
@@ -31,6 +32,8 @@ from ..models import (
     StartCampaignResponse,
     AddLocalPlayerRequest,
     AddLocalPlayerResponse,
+    BatchAddPlayersRequest,
+    BatchAddPlayersResponse,
 )
 from ..openrouter import OpenRouterClient
 from ..player_store import PlayerStore
@@ -71,6 +74,95 @@ def _create_default_character(name: str, char_class: str, system: GameSystem) ->
         ],
         backstory=f"A {char_class} seeking adventure and fortune.",
     )
+
+
+async def _generate_character_sheet(
+    char_name: str,
+    char_concept: str,
+    char_special: Optional[str],
+    campaign: Campaign,
+) -> CharacterSheet:
+    """Generate a character sheet for a player, using LLM with fallback defaults."""
+    structured = get_structured_llm_client()
+    game_system = campaign.game_system
+    is_narrative_style = game_system and game_system.style == "narrative"
+
+    if not game_system:
+        return CharacterSheet(
+            name=char_name,
+            character_class=char_concept,
+            level=1,
+            health=20,
+            max_health=20,
+        )
+
+    if is_narrative_style:
+        special_line = f"\nWhat Makes Them Special: {char_special}" if char_special else ""
+        char_prompt = f"""Create a character for a collaborative storytelling game.
+
+Character Name: {char_name}
+Character Concept: {char_concept}{special_line}
+
+World: {campaign.world_setting}
+
+Create a simple, memorable character with:
+- A clear concept (one sentence describing who they are)
+- What makes them special or unique (their gift, talent, or defining trait)
+- A brief backstory (2-3 sentences) that connects them to the world
+- NO numbered stats or attributes - this is a narrative game
+
+Make them interesting and someone you'd want to go on an adventure with."""
+
+        default_char = CharacterSheet(
+            name=char_name,
+            character_class=char_concept,
+            concept=f"A {char_concept.lower()} ready for adventure",
+            special_trait=char_special or "Has a knack for getting into and out of trouble",
+            backstory=f"{char_name} is a {char_concept.lower()} who has always dreamed of adventure.",
+            level=1,
+            health=10,
+            max_health=10,
+            attributes=[],
+            skills=[],
+            inventory=[],
+        )
+
+        try:
+            return await structured.create(
+                response_model=CharacterSheet,
+                messages=[
+                    {"role": "system", "content": "Create a character for a collaborative storytelling game. Focus on personality and story, not game mechanics."},
+                    {"role": "user", "content": char_prompt},
+                ],
+                temperature=0.8,
+                max_retries=2,
+                fallback=lambda: default_char,
+            )
+        except Exception:
+            return default_char
+    else:
+        char_prompt = f"""Create a character sheet for a {char_concept} named {char_name} in this world:
+
+World: {campaign.world_setting}
+
+Game System: {game_system.name}
+Attributes: {', '.join(game_system.attribute_names)}
+
+Generate appropriate attributes (values 8-18), 3-4 starting skills, starting inventory, and a brief backstory."""
+
+        try:
+            return await structured.create(
+                response_model=CharacterSheet,
+                messages=[
+                    {"role": "system", "content": "Create a player character for a tabletop RPG."},
+                    {"role": "user", "content": char_prompt},
+                ],
+                temperature=0.8,
+                max_retries=2,
+                fallback=lambda: _create_default_character(char_name, char_concept, game_system),
+            )
+        except Exception:
+            return _create_default_character(char_name, char_concept, game_system)
 
 
 @router.get("", response_model=List[CampaignWithPlayers])
@@ -647,12 +739,7 @@ async def add_local_player(
     campaign_store: CampaignStore = Depends(get_campaign_store),
     player_store: PlayerStore = Depends(get_player_store),
 ) -> AddLocalPlayerResponse:
-    """Add a local player to a campaign (for hot-seat multiplayer).
-
-    This endpoint allows adding multiple players from the same device/session.
-    The player is associated with the current session token but doesn't require
-    a unique session token per player.
-    """
+    """Add a local player to a campaign (for hot-seat multiplayer)."""
     if not req.player_name or not req.player_name.strip():
         raise HTTPException(status_code=400, detail="Player name is required")
 
@@ -663,114 +750,87 @@ async def add_local_player(
     if campaign.status == "completed":
         raise HTTPException(status_code=400, detail="Campaign has ended")
 
-    # Generate character based on game style
-    structured = get_structured_llm_client()
     char_name = (req.character_name or req.player_name).strip()
     char_concept = (req.character_class or "Adventurer").strip()
 
-    character_sheet = None
-    game_system = campaign.game_system
-    is_narrative_style = game_system and game_system.style == "narrative"
+    character_sheet = await _generate_character_sheet(
+        char_name, char_concept, req.character_special, campaign,
+    )
 
-    if game_system:
-        if is_narrative_style:
-            # Narrative character - focus on who they are, not stats
-            char_prompt = f"""Create a character for a collaborative storytelling game.
-
-Character Name: {char_name}
-Character Concept: {char_concept}
-
-World: {campaign.world_setting}
-
-Create a simple, memorable character with:
-- A clear concept (one sentence describing who they are)
-- What makes them special or unique (their gift, talent, or defining trait)
-- A brief backstory (2-3 sentences) that connects them to the world
-- NO numbered stats or attributes - this is a narrative game
-
-Make them interesting and someone you'd want to go on an adventure with."""
-
-            default_char = CharacterSheet(
-                name=char_name,
-                character_class=char_concept,
-                concept=f"A {char_concept.lower()} ready for adventure",
-                special_trait="Has a knack for getting into and out of trouble",
-                backstory=f"{char_name} is a {char_concept.lower()} who has always dreamed of adventure.",
-                level=1,
-                health=10,
-                max_health=10,
-                attributes=[],
-                skills=[],
-                inventory=[],
-            )
-
-            try:
-                character_sheet = await structured.create(
-                    response_model=CharacterSheet,
-                    messages=[
-                        {"role": "system", "content": "Create a character for a collaborative storytelling game. Focus on personality and story, not game mechanics."},
-                        {"role": "user", "content": char_prompt},
-                    ],
-                    temperature=0.8,
-                    max_retries=2,
-                    fallback=lambda: default_char,
-                )
-            except Exception:
-                character_sheet = default_char
-        else:
-            # Traditional mechanical character
-            char_prompt = f"""Create a character sheet for a {char_concept} named {char_name} in this world:
-
-World: {campaign.world_setting}
-
-Game System: {game_system.name}
-Attributes: {', '.join(game_system.attribute_names)}
-
-Generate appropriate attributes (values 8-18), 3-4 starting skills, starting inventory, and a brief backstory."""
-
-            try:
-                character_sheet = await structured.create(
-                    response_model=CharacterSheet,
-                    messages=[
-                        {"role": "system", "content": "Create a player character for a tabletop RPG."},
-                        {"role": "user", "content": char_prompt},
-                    ],
-                    temperature=0.8,
-                    max_retries=2,
-                    fallback=lambda: _create_default_character(char_name, char_concept, game_system),
-                )
-            except Exception:
-                character_sheet = _create_default_character(char_name, char_concept, game_system)
-    else:
-        # No game system yet, create minimal character
-        character_sheet = CharacterSheet(
-            name=char_name,
-            character_class=char_concept,
-            level=1,
-            health=20,
-            max_health=20,
-        )
-
-    # Get current player count for turn position
     existing_players = player_store.get_by_campaign(campaign.id)
     turn_position = len(existing_players)
 
-    # Create player - use the same session token but mark as a local player
-    # Local players share the session token but have unique IDs
     player = player_store.create(
         campaign_id=campaign.id,
         name=req.player_name.strip(),
-        session_token=x_session_token,  # Same session token as requester
+        session_token=x_session_token,
         character_sheet=character_sheet,
         is_gm=False,
         turn_position=turn_position,
     )
 
-    # Update turn order
     new_turn_order = campaign.turn_order + [player.id]
     campaign_store.update(campaign.id, turn_order=new_turn_order)
 
     return AddLocalPlayerResponse(player=player)
+
+
+@router.post("/{campaign_id}/players/batch", response_model=BatchAddPlayersResponse)
+async def add_local_players_batch(
+    campaign_id: str,
+    req: BatchAddPlayersRequest,
+    x_session_token: Optional[str] = Header(None, alias="X-Session-Token"),
+    campaign_store: CampaignStore = Depends(get_campaign_store),
+    player_store: PlayerStore = Depends(get_player_store),
+) -> BatchAddPlayersResponse:
+    """Add multiple local players at once with parallel character generation."""
+    if len(req.players) == 0:
+        raise HTTPException(status_code=400, detail="At least one player is required")
+    if len(req.players) > 4:
+        raise HTTPException(status_code=400, detail="Maximum 4 players per batch")
+
+    campaign = campaign_store.get(campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    if campaign.status == "completed":
+        raise HTTPException(status_code=400, detail="Campaign has ended")
+
+    # Generate all character sheets in parallel
+    generation_tasks = []
+    for p in req.players:
+        if not p.player_name or not p.player_name.strip():
+            raise HTTPException(status_code=400, detail="All players must have a name")
+        char_name = (p.character_name or p.player_name).strip()
+        char_concept = (p.character_class or "Adventurer").strip()
+        generation_tasks.append(
+            _generate_character_sheet(char_name, char_concept, p.character_special, campaign)
+        )
+
+    character_sheets = await asyncio.gather(*generation_tasks)
+
+    # Create players sequentially (turn positions need ordering)
+    existing_players = player_store.get_by_campaign(campaign.id)
+    turn_position = len(existing_players)
+    created_players = []
+
+    for p, character_sheet in zip(req.players, character_sheets):
+        player = player_store.create(
+            campaign_id=campaign.id,
+            name=p.player_name.strip(),
+            session_token=x_session_token,
+            character_sheet=character_sheet,
+            is_gm=False,
+            turn_position=turn_position,
+        )
+        created_players.append(player)
+        turn_position += 1
+
+    # Update turn order with all new players
+    new_turn_order = campaign.turn_order + [p.id for p in created_players]
+    campaign_store.update(campaign.id, turn_order=new_turn_order)
+
+    return BatchAddPlayersResponse(players=created_players)
 
 
 @router.delete("/{campaign_id}/players/{player_id}")

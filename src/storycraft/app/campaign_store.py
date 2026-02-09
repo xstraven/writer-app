@@ -187,19 +187,27 @@ class CampaignStore:
             turn_number=turn_number,
         )
 
-    def advance_turn(self, campaign_id: str) -> Optional[Campaign]:
-        """Advance to the next player's turn."""
+    def advance_turn(
+        self, campaign_id: str, *, next_player_id: Optional[str] = None
+    ) -> Optional[Campaign]:
+        """Advance to the next player's turn, or a specific player if given."""
         campaign = self.get(campaign_id)
         if not campaign or not campaign.turn_order:
             return campaign
 
+        new_turn_number = campaign.turn_number + 1
+
+        # If a specific player is requested and valid, pass to them
+        if next_player_id and next_player_id in campaign.turn_order:
+            return self.set_turn(campaign_id, next_player_id, new_turn_number)
+
+        # Otherwise advance to next in order
         current_idx = 0
         if campaign.current_turn_player_id in campaign.turn_order:
             current_idx = campaign.turn_order.index(campaign.current_turn_player_id)
 
         next_idx = (current_idx + 1) % len(campaign.turn_order)
         next_player = campaign.turn_order[next_idx]
-        new_turn_number = campaign.turn_number + 1
 
         return self.set_turn(campaign_id, next_player, new_turn_number)
 
