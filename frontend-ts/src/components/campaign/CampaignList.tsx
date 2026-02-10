@@ -1,6 +1,7 @@
 'use client';
 
 import { CampaignCard } from './CampaignCard';
+import { useTranslations } from 'next-intl';
 import type { CampaignWithPlayers } from '@/lib/types';
 
 interface CampaignListProps {
@@ -9,6 +10,7 @@ interface CampaignListProps {
 }
 
 export function CampaignList({ campaigns, isLoading }: CampaignListProps) {
+  const t = useTranslations('campaign.list');
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -25,9 +27,9 @@ export function CampaignList({ campaigns, isLoading }: CampaignListProps) {
   if (campaigns.length === 0) {
     return (
       <div className="text-center py-12">
-        <p className="text-muted-foreground text-lg">No adventures yet</p>
+        <p className="text-muted-foreground text-lg">{t('noAdventures')}</p>
         <p className="text-sm text-muted-foreground mt-1">
-          Create a new adventure or join one with an invite code
+          {t('createOrJoinHint')}
         </p>
       </div>
     );

@@ -2,16 +2,23 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, UserPlus, Swords, Dices, Sparkles } from 'lucide-react';
+import { Plus, UserPlus, Swords, Dices, Sparkles, Languages } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CampaignList } from '@/components/campaign/CampaignList';
 import { useCampaignStore } from '@/stores/campaignStore';
+import { useLocaleStore } from '@/stores/localeStore';
 import { listCampaigns } from '@/lib/api';
 import { useExperimentalDarkMode } from '@/hooks/useExperimentalDarkMode';
+import { useTranslations } from 'next-intl';
+import { useActiveLocale, type Locale } from '@/hooks/useActiveLocale';
 
 export default function Home() {
   const router = useRouter();
   useExperimentalDarkMode();
+  const t = useTranslations('home');
+  const currentLocale = useActiveLocale();
+  const { setOverrideLocale } = useLocaleStore();
 
   const {
     campaigns,
@@ -54,11 +61,28 @@ export default function Home() {
                 <Dices className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">RPG Adventure Builder</h1>
+                <h1 className="text-2xl font-bold">{t('title')}</h1>
                 <p className="text-sm text-muted-foreground">
-                  Create and play tabletop adventures with friends
+                  {t('description')}
                 </p>
               </div>
+            </div>
+
+            {/* Language Selector */}
+            <div className="flex items-center gap-2">
+              <Languages className="h-4 w-4 text-muted-foreground" />
+              <Select
+                value={currentLocale}
+                onValueChange={(value) => setOverrideLocale(value as Locale)}
+              >
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="en">🇺🇸 English</SelectItem>
+                  <SelectItem value="de">🇩🇪 Deutsch</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>
@@ -75,8 +99,8 @@ export default function Home() {
           >
             <Sparkles className="h-6 w-6 mr-3" />
             <div className="text-left">
-              <div>Quick Adventure</div>
-              <div className="text-sm font-normal opacity-90">Family-friendly, no setup needed!</div>
+              <div>{t('quickAdventureTitle')}</div>
+              <div className="text-sm font-normal opacity-90">{t('quickAdventureDescription')}</div>
             </div>
           </Button>
         </div>
@@ -89,7 +113,7 @@ export default function Home() {
             onClick={() => router.push('/campaigns/new')}
           >
             <Plus className="h-5 w-5 mr-2" />
-            Create New Adventure
+            {t('createButton')}
           </Button>
           <Button
             size="lg"
@@ -98,7 +122,7 @@ export default function Home() {
             onClick={() => router.push('/campaigns/join')}
           >
             <UserPlus className="h-5 w-5 mr-2" />
-            Join Adventure
+            {t('joinButton')}
           </Button>
         </div>
 
@@ -107,7 +131,7 @@ export default function Home() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold flex items-center gap-2">
               <Swords className="h-5 w-5" />
-              Your Adventures
+              {t('yourAdventures')}
             </h2>
           </div>
 
@@ -118,7 +142,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t mt-auto">
         <div className="max-w-7xl mx-auto px-4 py-4 text-center text-sm text-muted-foreground">
-          Powered by AI Game Master
+          {t('footer')}
         </div>
       </footer>
     </div>

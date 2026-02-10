@@ -24,10 +24,12 @@ import { Modal } from '@/components/ui/modal'
 import { useAppStore } from '@/stores/appStore'
 import { getStories, healthCheck, llmHealthCheck, seedStoryAI, appendSnippet, generateFromProposals, importStory } from '@/lib/api'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import type { ProposedLoreEntry } from '@/lib/types'
 
 export function TopNavigation() {
   const { currentStory, setCurrentStory } = useAppStore()
+  const tToast = useTranslations('toast')
   const [stories, setStories] = useState<string[]>([])
   const [apiStatus, setApiStatus] = useState<'checking' | 'ok' | 'error'>('checking')
   const [apiMessage, setApiMessage] = useState('')
@@ -81,7 +83,7 @@ export function TopNavigation() {
       setStories(result)
     } catch (error) {
       console.error('Failed to load stories:', error)
-      toast.error('Failed to load stories')
+      toast.error(tToast('storiesLoadFailed'))
     }
   }
 
@@ -116,10 +118,10 @@ export function TopNavigation() {
       await appendSnippet({ story: newStoryName, content: '', kind: 'user', parent_id: null, set_active: true, branch: 'main' })
       await loadStories()
       setCurrentStory(newStoryName)
-      toast.success(`Story "${newStoryName}" created`)
+      toast.success(tToast('storyCreated', { storyName: newStoryName }))
     } catch (error) {
       console.error('Failed to create story:', error)
-      toast.error(`Failed to create story: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error(tToast('storyCreateFailed', { error: error instanceof Error ? error.message : 'Unknown error' }))
     }
   }
 
@@ -132,7 +134,7 @@ export function TopNavigation() {
   const handleSeedStory = async () => {
     const prompt = seedPrompt.trim()
     if (!prompt) {
-      toast.error('Please enter a prompt')
+      toast.error(tToast('enterPrompt'))
       return
     }
     // Determine name
@@ -162,11 +164,11 @@ export function TopNavigation() {
         })
         setShowEntityConfirmation(true)
       } else {
-        toast.success('Story starter generated!')
+        toast.success(tToast('storyStarterGenerated'))
       }
     } catch (error) {
       console.error('Failed to seed story:', error)
-      toast.error(`Failed to seed story: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error(tToast('storySeedFailed', { error: error instanceof Error ? error.message : 'Unknown error' }))
     } finally {
       setSeeding(false)
     }
@@ -179,7 +181,7 @@ export function TopNavigation() {
     if (selectedNames.length === 0) {
       setShowEntityConfirmation(false)
       setCurrentStoryContext(null)
-      toast.info('Story created without lorebook entries')
+      toast.info(tToast('storyCreatedWithoutLorebook'))
       return
     }
 
@@ -191,14 +193,14 @@ export function TopNavigation() {
         selected_names: selectedNames,
       })
 
-      toast.success(`Created ${result.created} lorebook ${result.created === 1 ? 'entry' : 'entries'}`)
+      toast.success(tToast('lorebookEntriesCreated', { count: result.created }))
       setShowEntityConfirmation(false)
       setProposedEntities([])
       setSelectedEntityNames(new Set())
       setCurrentStoryContext(null)
     } catch (error) {
       console.error('Failed to generate lorebook:', error)
-      toast.error(`Failed to generate lorebook: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error(tToast('lorebookGenerateFailed', { error: error instanceof Error ? error.message : 'Unknown error' }))
     } finally {
       setSeeding(false)
     }
@@ -229,7 +231,7 @@ export function TopNavigation() {
   const handleImportStory = async () => {
     const text = importText.trim()
     if (!text) {
-      toast.error('Please enter or upload text to import')
+      toast.error(tToast('enterTextToImport'))
       return
     }
 
@@ -249,7 +251,7 @@ export function TopNavigation() {
       setCurrentStory(storyName)
       setShowImport(false)
 
-      toast.success(`Imported ${result.chunks_created} chunks (${result.total_characters.toLocaleString()} characters)`)
+      toast.success(tToast('storyImported', { chunks: result.chunks_created, characters: result.total_characters.toLocaleString() }))
 
       // Show entity confirmation if proposals exist
       if (result.proposed_entities && result.proposed_entities.length > 0) {
@@ -263,7 +265,7 @@ export function TopNavigation() {
       }
     } catch (error) {
       console.error('Failed to import story:', error)
-      toast.error(`Failed to import story: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error(tToast('storyImportFailed', { error: error instanceof Error ? error.message : 'Unknown error' }))
     } finally {
       setImporting(false)
     }
@@ -562,7 +564,7 @@ export function TopNavigation() {
                 setProposedEntities([])
                 setSelectedEntityNames(new Set())
                 setCurrentStoryContext(null)
-                toast.info('Story created without lorebook entries')
+                toast.info(tToast('storyCreatedWithoutLorebook'))
               }}
               disabled={seeding}
             >

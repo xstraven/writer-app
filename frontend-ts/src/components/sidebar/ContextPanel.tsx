@@ -11,9 +11,11 @@ import { Modal } from '@/components/ui/modal'
 import { useAppStore } from '@/stores/appStore'
 import { suggestContext } from '@/lib/api'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import type { ContextItem } from '@/lib/types'
 
 export function ContextPanel() {
+  const tToast = useTranslations('toast')
   const { context, setContext, chunks, generationSettings } = useAppStore()
   const [isGenerating, setIsGenerating] = useState(false)
   const [query, setQuery] = useState('')
@@ -34,23 +36,23 @@ export function ContextPanel() {
 
   const addNpc = () => {
     if (!newNpcName.trim() || !newNpcDetail.trim()) {
-      toast.error("Please fill in both name and detail")
+      toast.error(tToast('fillNameAndDetail'))
       return
     }
-    
+
     const newNpc: ContextItem = {
       label: newNpcName.trim(),
       detail: newNpcDetail.trim(),
     }
-    
+
     setContext({
       ...context,
       npcs: [...context.npcs, newNpc]
     })
-    
+
     setNewNpcName('')
     setNewNpcDetail('')
-    toast.success("NPC added")
+    toast.success(tToast('npcAdded'))
   }
 
   const removeNpc = (index: number) => {
@@ -58,28 +60,28 @@ export function ContextPanel() {
       ...context,
       npcs: context.npcs.filter((_, i) => i !== index)
     })
-    toast.success("NPC removed")
+    toast.success(tToast('npcRemoved'))
   }
 
   const addObject = () => {
     if (!newObjectName.trim() || !newObjectDetail.trim()) {
-      toast.error("Please fill in both name and detail")
+      toast.error(tToast('fillNameAndDetail'))
       return
     }
-    
+
     const newObject: ContextItem = {
       label: newObjectName.trim(),
       detail: newObjectDetail.trim(),
     }
-    
+
     setContext({
       ...context,
       objects: [...context.objects, newObject]
     })
-    
+
     setNewObjectName('')
     setNewObjectDetail('')
-    toast.success("Object added")
+    toast.success(tToast('objectAdded'))
   }
 
   const removeObject = (index: number) => {
@@ -87,12 +89,12 @@ export function ContextPanel() {
       ...context,
       objects: context.objects.filter((_, i) => i !== index)
     })
-    toast.success("Object removed")
+    toast.success(tToast('objectRemoved'))
   }
 
   const handleAutoGenerate = async () => {
     if (chunks.length === 0) {
-      toast.error("No story content to generate context from")
+      toast.error(tToast('noContentForContext'))
       return
     }
 
@@ -101,10 +103,10 @@ export function ContextPanel() {
       const draftText = chunks.map(c => c.text).join('\n\n')
       const result = await suggestContext(draftText, generationSettings.model)
       setContext(result)
-      toast.success("Context auto-generated from story")
+      toast.success(tToast('contextGenerated'))
     } catch (error) {
       console.error('Context generation failed:', error)
-      toast.error(`Failed to generate context: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error(tToast('contextGenerateFailed', { error: error instanceof Error ? error.message : 'Unknown error' }))
     } finally {
       setIsGenerating(false)
     }
@@ -113,7 +115,7 @@ export function ContextPanel() {
   const clearContext = () => {
     if (!confirm('Clear the entire scene context? This cannot be undone.')) return
     setContext({ summary: "", npcs: [], objects: [], system_prompt: context.system_prompt })
-    toast.success("Context cleared")
+    toast.success(tToast('contextCleared'))
   }
 
   const renderContextItems = (

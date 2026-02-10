@@ -8,16 +8,18 @@ import { GameSetup } from '@/components/simple-rpg/GameSetup';
 import { PlayerSetup } from '@/components/simple-rpg/PlayerSetup';
 import { SimpleGameView } from '@/components/simple-rpg/SimpleGameView';
 import { useExperimentalDarkMode } from '@/hooks/useExperimentalDarkMode';
+import { useTranslations } from 'next-intl';
 
 export default function SimpleRPGPage() {
   const router = useRouter();
   useExperimentalDarkMode();
+  const t = useTranslations('simpleRpg.page');
 
   const { status, adventureName, resetGame } = useSimpleGameStore();
 
   const handleReset = () => {
     if (status === 'active') {
-      if (!confirm('Are you sure you want to start a new game? Current progress will be lost.')) {
+      if (!confirm(t('resetConfirm'))) {
         return;
       }
     }
@@ -37,7 +39,7 @@ export default function SimpleRPGPage() {
                 onClick={() => router.push('/')}
               >
                 <ArrowLeft className="h-4 w-4 mr-1" />
-                Back
+                {t('back')}
               </Button>
               <div className="h-6 w-px bg-border" />
               <div className="flex items-center gap-2">
@@ -48,11 +50,11 @@ export default function SimpleRPGPage() {
                   <h1 className="font-bold">
                     {status === 'active' && adventureName
                       ? adventureName
-                      : 'Quick Adventure'}
+                      : t('quickAdventure')}
                   </h1>
                   {status !== 'setup' && (
                     <p className="text-xs text-muted-foreground">
-                      Family-friendly fun!
+                      {t('familyFriendly')}
                     </p>
                   )}
                 </div>
@@ -66,7 +68,7 @@ export default function SimpleRPGPage() {
                 onClick={handleReset}
               >
                 <RotateCcw className="h-4 w-4 mr-1" />
-                New Game
+                {t('newGame')}
               </Button>
             )}
           </div>
@@ -83,9 +85,9 @@ export default function SimpleRPGPage() {
       {/* Footer */}
       <footer className="border-t mt-auto">
         <div className="max-w-7xl mx-auto px-4 py-4 text-center text-sm text-muted-foreground">
-          {status === 'setup' && 'Step 1 of 3: Create Your Adventure'}
-          {status === 'players' && 'Step 2 of 3: Add Heroes'}
-          {status === 'active' && 'Adventure in Progress'}
+          {status === 'setup' && t('step1')}
+          {status === 'players' && t('step2')}
+          {status === 'active' && t('step3')}
         </div>
       </footer>
     </div>

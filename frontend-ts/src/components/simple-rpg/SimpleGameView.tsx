@@ -10,9 +10,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSimpleGameStore } from '@/stores/simpleGameStore';
 import { resolveSimpleAction } from '@/lib/api';
 import { SimpleDiceResults } from './SimpleDiceResults';
+import { useTranslations } from 'next-intl';
 import type { SimpleGameAction, SimpleDiceResult } from '@/lib/types';
 
 export function SimpleGameView() {
+  const t = useTranslations('simpleRpg.game');
+
   const {
     worldSetting,
     players,
@@ -101,7 +104,7 @@ export function SimpleGameView() {
       const errorAction: SimpleGameAction = {
         id: crypto.randomUUID(),
         type: 'gm_narration',
-        content: 'The story continues... (There was an issue with the AI. Please try again!)',
+        content: t('errorMessage'),
         timestamp: Date.now(),
       };
       addAction(errorAction);
@@ -135,9 +138,9 @@ export function SimpleGameView() {
                   <Dices className="h-5 w-5 text-amber-600" />
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Turn {turnNumber}</div>
+                  <div className="text-sm text-muted-foreground">{t('turn', { number: turnNumber })}</div>
                   <div className="font-bold">
-                    {currentPlayer?.characterName}&apos;s Turn
+                    {t('turnOf', { characterName: currentPlayer?.characterName })}
                   </div>
                 </div>
               </div>
@@ -156,7 +159,7 @@ export function SimpleGameView() {
           <CardHeader className="pb-2">
             <CardTitle className="text-lg flex items-center gap-2">
               <BookOpen className="h-4 w-4" />
-              Story
+              {t('storyTitle')}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -168,7 +171,7 @@ export function SimpleGameView() {
                 {isGenerating && (
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    The story unfolds...
+                    {t('storyUnfolds')}
                   </div>
                 )}
                 <div ref={endRef} />
@@ -182,7 +185,7 @@ export function SimpleGameView() {
           <CardContent className="p-4 space-y-3">
             <div className="relative">
               <Textarea
-                placeholder={`What does ${currentPlayer?.characterName} do? (Ctrl+Enter to submit)`}
+                placeholder={t('actionPlaceholder', { characterName: currentPlayer?.characterName })}
                 value={actionText}
                 onChange={(e) => setActionText(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -200,7 +203,7 @@ export function SimpleGameView() {
                 ) : (
                   <>
                     <Send className="h-4 w-4 mr-1" />
-                    Go!
+                    {t('goButton')}
                   </>
                 )}
               </Button>
@@ -208,7 +211,7 @@ export function SimpleGameView() {
 
             {suggestedActions.length > 0 && !isGenerating && (
               <div className="flex flex-wrap gap-2">
-                <span className="text-xs text-muted-foreground">Ideas:</span>
+                <span className="text-xs text-muted-foreground">{t('ideasLabel')}</span>
                 {suggestedActions.slice(0, 4).map((suggestion, idx) => (
                   <Badge
                     key={idx}
@@ -231,7 +234,7 @@ export function SimpleGameView() {
           <CardHeader className="pb-2">
             <CardTitle className="text-lg flex items-center gap-2">
               <Users className="h-4 w-4" />
-              Heroes
+              {t('heroesTitle')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -248,7 +251,7 @@ export function SimpleGameView() {
                   {player.characterName}
                   {idx === currentPlayerIndex && (
                     <Badge variant="default" className="ml-2 text-xs">
-                      Active
+                      {t('activeBadge')}
                     </Badge>
                   )}
                 </div>
@@ -273,6 +276,8 @@ export function SimpleGameView() {
 }
 
 function ActionEntry({ action }: { action: SimpleGameAction }) {
+  const t = useTranslations('simpleRpg.game');
+
   if (action.type === 'player_action') {
     return (
       <div className="p-3 rounded-lg border-l-4 border-l-blue-500 bg-blue-500/5">
@@ -291,7 +296,7 @@ function ActionEntry({ action }: { action: SimpleGameAction }) {
     <div className="p-3 rounded-lg border-l-4 border-l-amber-500 bg-amber-500/5">
       <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
         <BookOpen className="h-3 w-3" />
-        <span className="font-medium text-amber-600">Game Master</span>
+        <span className="font-medium text-amber-600">{t('gameMaster')}</span>
       </div>
       <div className="text-sm whitespace-pre-wrap">{action.content}</div>
     </div>

@@ -4,6 +4,7 @@ import './globals.css'
 import { QueryProvider } from '@/components/providers/QueryProvider'
 import { SaveLifecycle } from '@/components/providers/SaveLifecycle'
 import { ToastProvider } from '@/components/providers/ToastProvider'
+import { I18nProvider } from '@/components/providers/I18nProvider'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { cn } from '@/lib/utils'
 
@@ -24,9 +25,11 @@ export default function RootLayout({
       <body className={cn(inter.className, 'bg-background text-foreground transition-colors')}>
         <ErrorBoundary>
           <QueryProvider>
-            <SaveLifecycle />
-            {children}
-            <ToastProvider />
+            <I18nProvider>
+              <SaveLifecycle />
+              {children}
+              <ToastProvider />
+            </I18nProvider>
           </QueryProvider>
         </ErrorBoundary>
       </body>

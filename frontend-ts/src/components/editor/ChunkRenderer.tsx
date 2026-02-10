@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Modal } from '@/components/ui/modal'
 import { useAppStore } from '@/stores/appStore'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import type { Chunk } from '@/lib/types'
 import { deleteSnippet as apiDeleteSnippet, createBranch, getBranches, insertSnippetAbove, insertSnippetBelow, getBranchPath, continueStory } from '@/lib/api'
 import { saveQueue } from '@/lib/saveQueue'
@@ -20,6 +21,7 @@ interface ChunkRendererProps {
 }
 
 export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
+  const tToast = useTranslations('toast')
   const queryClient = useQueryClient()
   const {
     hoveredId,
@@ -108,7 +110,7 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
     const currentChunks = state.chunks
     const targetIndex = currentChunks.findIndex(item => item.id === chunk.id)
     if (targetIndex === -1) {
-      toast.error('Could not locate target chunk')
+      toast.error(tToast('chunkNotFound'))
       return
     }
 
@@ -176,12 +178,12 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
       pushHistory('edit', before, finalChunks)
 
       queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory, currentBranch] })
-      toast.success(direction === 'above' ? 'Inserted chunk above' : 'Inserted chunk below')
+      toast.success(direction === 'above' ? tToast('chunkInsertedAbove') : tToast('chunkInsertedBelow'))
       focusChunkById(created.id)
     } catch (error) {
       console.error('Failed to insert chunk:', error)
       setChunks(before)
-      toast.error(`Failed to insert chunk: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error(tToast('chunkInsertFailed', { error: error instanceof Error ? error.message : 'Unknown error' }))
     }
   }
 
@@ -196,18 +198,18 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
       await apiDeleteSnippet(chunk.id, currentStory)
       // Invalidate branch cache to let useStorySync refetch and reconcile
       queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory, currentBranch] })
-      toast.success('Chunk deleted')
+      toast.success(tToast('chunkDeleted'))
     } catch (error) {
       console.error('Failed to delete chunk:', error)
       setChunks(before) // rollback
-      toast.error(`Failed to delete chunk: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error(tToast('chunkDeleteFailed', { error: error instanceof Error ? error.message : 'Unknown error' }))
     }
   }
 
   const handleBranchFrom = async () => {
     const name = window.prompt('Enter new branch name')?.trim()
     if (!name) {
-      toast.error('Branch name is required')
+      toast.error(tToast('branchNameRequired'))
       return
     }
     try {
@@ -220,10 +222,10 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
       } catch {}
       // Refresh to load the selected branch path
       queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory, name] })
-      toast.success(`Created branch "${name}"`)
+      toast.success(tToast('branchCreatedFrom', { name }))
     } catch (error) {
       console.error('Failed to create branch:', error)
-      toast.error(`Failed to create branch: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error(tToast('branchCreateFailed', { error: error instanceof Error ? error.message : 'Unknown error' }))
     }
   }
 
@@ -235,7 +237,7 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
 
   const handleGenerateRewrite = async () => {
     if (!rewriteInstruction.trim()) {
-      toast.error('Please enter rewrite instructions')
+      toast.error(tToast('enterRewriteInstructions'))
       return
     }
 
@@ -260,7 +262,7 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
       setRewrittenText(response.continuation)
     } catch (error) {
       console.error('Failed to rewrite:', error)
-      toast.error(`Rewrite failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error(tToast('rewriteFailed', { error: error instanceof Error ? error.message : 'Unknown error' }))
     } finally {
       setIsRewriting(false)
     }
@@ -275,7 +277,7 @@ export function ChunkRenderer({ chunk, index }: ChunkRendererProps) {
       saveQueue.queue(chunk.id, rewrittenText, kind)
       const after = chunks.map(c => c.id === chunk.id ? { ...c, text: rewrittenText } : c)
       pushHistory('edit', before, after)
-      toast.success('Rewrite accepted')
+      toast.success(tToast('rewriteAccepted'))
     }
     setShowRewriteModal(false)
     setRewrittenText(null)

@@ -26,6 +26,7 @@ class SimpleAttribute(BaseModel):
 class GenerateAttributesRequest(BaseModel):
     world_setting: str
     model: Optional[str] = None
+    language: str = "en"
 
 
 class GenerateAttributesResponse(BaseModel):
@@ -44,6 +45,7 @@ class GenerateOpeningRequest(BaseModel):
     world_setting: str
     players: List[SimplePlayerInput]
     model: Optional[str] = None
+    language: str = "en"
 
 
 class GenerateOpeningResponse(BaseModel):
@@ -74,6 +76,7 @@ class ResolveActionRequest(BaseModel):
     action: str
     all_players: List[SimplePlayerInput]
     model: Optional[str] = None
+    language: str = "en"  # Language for AI responses (en, de, etc.)
 
 
 class ResolveActionResponse(BaseModel):
@@ -114,7 +117,15 @@ async def generate_attributes(req: GenerateAttributesRequest) -> GenerateAttribu
     class AttributeList(BaseModel):
         attributes: List[SimpleAttribute]
 
+    # Language-specific instructions
+    language_instructions = {
+        "de": "WICHTIG: Generiere alle Attributnamen und Beschreibungen auf Deutsch.",
+        "en": "Generate all attribute names and descriptions in English.",
+    }.get(req.language, "Generate all attribute names and descriptions in English.")
+
     prompt = f"""You are designing a simple tabletop RPG for a specific adventure setting.
+
+{language_instructions}
 
 ADVENTURE SETTING: {req.world_setting}
 
@@ -200,7 +211,15 @@ async def generate_opening(req: GenerateOpeningRequest) -> GenerateOpeningRespon
         )
     party_desc = "\n".join(party_lines)
 
+    # Language-specific instructions
+    language_instructions = {
+        "de": "WICHTIG: Schreibe die gesamte Eröffnungsszene und alle Aktionsvorschläge auf Deutsch.",
+        "en": "Write the entire opening scene and action suggestions in English.",
+    }.get(req.language, "Write the entire opening scene and action suggestions in English.")
+
     prompt = f"""You are the Game Master for a family-friendly tabletop adventure.
+
+{language_instructions}
 
 ADVENTURE SETTING:
 {req.world_setting}
@@ -300,6 +319,12 @@ async def resolve_action(req: ResolveActionRequest) -> ResolveActionResponse:
         attribute_used: Optional[str] = None
         why: str = ""
 
+    # Language-specific analysis instructions
+    analysis_language_system = {
+        "de": "Du entscheidest, wann Würfelwürfe ein familienfreundliches Abenteuer spannender machen.",
+        "en": "You decide when dice rolls add excitement to a family-friendly adventure.",
+    }.get(req.language, "You decide when dice rolls add excitement to a family-friendly adventure.")
+
     analysis_prompt = f"""A player is taking an action in a family-friendly adventure game.
 
 SETTING: {req.world_setting}
@@ -329,7 +354,7 @@ If no attribute fits well, you can specify null and the roll will be pure luck."
             messages=[
                 {
                     "role": "system",
-                    "content": "You decide when dice rolls add excitement to a family-friendly adventure.",
+                    "content": analysis_language_system,
                 },
                 {"role": "user", "content": analysis_prompt},
             ],
@@ -387,7 +412,20 @@ DICE RESULT: 2d6={roll_total} + {modifier} ({attr_used or "luck"}) = {total} →
 - This should push the story forward, not stop it"""
 
     # Step 3: Generate narrative
-    narration_prompt = f"""You are the Game Master for a family-friendly adventure.
+    # Language-specific instructions
+    language_instructions = {
+        "de": "WICHTIG: Antworte auf Deutsch. Nutze lebendige deutsche Sprache und bleibe im Ton des Abenteuers.",
+        "en": "IMPORTANT: Respond in English. Use vivid language and stay in the tone of the adventure.",
+    }.get(req.language, "IMPORTANT: Respond in English.")
+
+    language_system = {
+        "de": "Du bist ein warmherziger, enthusiastischer Spielleiter für ein familienfreundliches Abenteuer. Halte alles positiv, spannend und für alle Altersgruppen geeignet.",
+        "en": "You are a warm, enthusiastic Game Master for a family-friendly adventure. Keep everything positive, exciting, and appropriate for all ages.",
+    }.get(req.language, "You are a warm, enthusiastic Game Master for a family-friendly adventure. Keep everything positive, exciting, and appropriate for all ages.")
+
+    narration_prompt = f"""{language_instructions}
+
+You are the Game Master for a family-friendly adventure.
 
 SETTING: {req.world_setting}
 
@@ -413,7 +451,7 @@ Then suggest 3-4 fun things the players might do next."""
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a warm, enthusiastic Game Master for a family-friendly adventure. Keep everything positive, exciting, and appropriate for all ages.",
+                    "content": language_system,
                 },
                 {"role": "user", "content": narration_prompt},
             ],

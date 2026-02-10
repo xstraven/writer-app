@@ -30,6 +30,7 @@ import {
   startCampaign,
 } from '@/lib/api';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import type { Campaign, Player } from '@/lib/types';
 
 interface AdventureViewProps {
@@ -66,6 +67,9 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
     setTtsAutoRead,
   } = useCampaignStore();
 
+  const tToast = useTranslations('toast');
+  const t = useTranslations('rpg.adventure');
+
   const [isLoading, setIsLoading] = useState(true);
   const [isStarting, setIsStarting] = useState(false);
   const isTtsSupported =
@@ -94,7 +98,7 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
       }
     } catch (error) {
       console.error('Failed to load campaign:', error);
-      toast.error('Failed to load adventure');
+      toast.error(tToast('adventureLoadFailed'));
       router.push('/');
     } finally {
       setIsLoading(false);
@@ -159,7 +163,7 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
       updateTurn(turnInfo);
     } catch (error: any) {
       console.error('Failed to take action:', error);
-      toast.error(error.response?.data?.detail || 'Failed to take action');
+      toast.error(error.response?.data?.detail || tToast('actionFailed'));
     } finally {
       setIsPerformingAction(false);
     }
@@ -174,10 +178,10 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
         next_player_id: nextPlayerId,
       });
       updateTurn(turnInfo);
-      toast.success(`Turn passed to ${turnInfo.current_player_name}`);
+      toast.success(tToast('turnPassed', { playerName: turnInfo.current_player_name }));
     } catch (error: any) {
       console.error('Failed to end turn:', error);
-      toast.error(error.response?.data?.detail || 'Failed to end turn');
+      toast.error(error.response?.data?.detail || tToast('turnEndFailed'));
     }
   };
 
@@ -207,10 +211,10 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
       const turnInfo = await getTurnInfo(campaignId);
       updateTurn(turnInfo);
 
-      toast.success('Adventure started!');
+      toast.success(tToast('adventureStarted'));
     } catch (error: any) {
       console.error('Failed to start campaign:', error);
-      toast.error(error.response?.data?.detail || 'Failed to start adventure');
+      toast.error(error.response?.data?.detail || tToast('adventureStartFailed'));
     } finally {
       setIsStarting(false);
     }
@@ -219,14 +223,14 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
   const copyInviteCode = () => {
     if (!currentCampaign) return;
     navigator.clipboard.writeText(currentCampaign.invite_code);
-    toast.success('Invite code copied!');
+    toast.success(tToast('inviteCodeCopied'));
   };
 
   const copyInviteLink = () => {
     if (!currentCampaign) return;
     const link = `${window.location.origin}/campaigns/join?code=${currentCampaign.invite_code}`;
     navigator.clipboard.writeText(link);
-    toast.success('Invite link copied!');
+    toast.success(tToast('inviteLinkCopied'));
   };
 
   if (isLoading) {
@@ -240,9 +244,9 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
   if (!currentCampaign) {
     return (
       <div className="text-center py-12">
-        <p className="text-muted-foreground">Adventure not found</p>
+        <p className="text-muted-foreground">{t('notFound')}</p>
         <Button variant="link" onClick={() => router.push('/')}>
-          Return to lobby
+          {t('returnToLobby')}
         </Button>
       </div>
     );
@@ -279,23 +283,23 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
                   setTtsEnabled(newEnabled);
                   if (!newEnabled) setTtsAutoRead(false);
                 }}
-                title={ttsEnabled ? 'Disable narration voice' : 'Enable narration voice'}
+                title={ttsEnabled ? t('ttsDisable') : t('ttsEnable')}
               >
                 {ttsEnabled ? (
                   <Volume2 className="h-4 w-4 mr-1" />
                 ) : (
                   <VolumeX className="h-4 w-4 mr-1" />
                 )}
-                TTS
+                {t('ttsLabel')}
               </Button>
               {ttsEnabled && (
                 <Button
                   variant={ttsAutoRead ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setTtsAutoRead(!ttsAutoRead)}
-                  title={ttsAutoRead ? 'Disable auto-read' : 'Auto-read new narrations'}
+                  title={ttsAutoRead ? t('autoReadDisable') : t('autoReadEnable')}
                 >
-                  Auto
+                  {t('autoLabel')}
                 </Button>
               )}
             </div>
@@ -304,14 +308,14 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
             <DialogTrigger asChild>
               <Button variant="outline" size="sm">
                 <Share2 className="h-4 w-4 mr-1" />
-                Invite
+                {t('inviteButton')}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Invite Players</DialogTitle>
+                <DialogTitle>{t('inviteTitle')}</DialogTitle>
                 <DialogDescription>
-                  Share this code or link with friends to join the adventure.
+                  {t('inviteDescription')}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
@@ -325,7 +329,7 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
                 </div>
                 <Button className="w-full" onClick={copyInviteLink}>
                   <Copy className="h-4 w-4 mr-2" />
-                  Copy Invite Link
+                  {t('copyInviteLink')}
                 </Button>
               </div>
             </DialogContent>
@@ -339,12 +343,12 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
-              Waiting for Players
+              {t('waitingForPlayers')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Share the invite code with friends. When everyone is ready, the GM can start the adventure.
+              {t('lobbyInstructions')}
             </p>
 
             <div className="flex items-center gap-4">
@@ -353,18 +357,18 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
               </Badge>
               <Button size="sm" variant="outline" onClick={copyInviteCode}>
                 <Copy className="h-4 w-4 mr-1" />
-                Copy
+                {t('copy')}
               </Button>
             </div>
 
             <div className="border-t pt-4">
               <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-medium">Party ({allPlayers.length})</h4>
+                <h4 className="text-sm font-medium">{t('party', { count: allPlayers.length })}</h4>
               </div>
 
               {allPlayers.length === 1 && (
                 <p className="text-sm text-amber-600 dark:text-amber-400 mb-3">
-                  Add friends for the best experience!
+                  {t('addFriendsHint')}
                 </p>
               )}
 
@@ -376,8 +380,8 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
                         {player.character_sheet?.name || player.name}
                       </span>
                       <div className="flex gap-1">
-                        {player.is_gm && <Badge className="text-xs">GM</Badge>}
-                        {player.id === currentPlayer?.id && <Badge variant="outline" className="text-xs">You</Badge>}
+                        {player.is_gm && <Badge className="text-xs">{t('gmBadge')}</Badge>}
+                        {player.id === currentPlayer?.id && <Badge variant="outline" className="text-xs">{t('youBadge')}</Badge>}
                       </div>
                     </div>
                     {player.character_sheet && (
@@ -388,7 +392,7 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
                     )}
                     {player.character_sheet?.name && player.name !== player.character_sheet.name && (
                       <p className="text-xs text-muted-foreground/60">
-                        Player: {player.name}
+                        {t('playerLabel', { name: player.name })}
                       </p>
                     )}
                   </div>
@@ -407,7 +411,7 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
                         className="flex flex-col items-center justify-center gap-1 p-3 rounded-lg border-2 border-dashed border-muted-foreground/25 hover:border-muted-foreground/50 hover:bg-accent/30 transition-colors min-h-[72px] cursor-pointer"
                       >
                         <UserPlus className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-xs text-muted-foreground">Add a friend</span>
+                        <span className="text-xs text-muted-foreground">{t('addFriend')}</span>
                       </button>
                     }
                   />
@@ -425,12 +429,12 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
                 {isStarting ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Starting Adventure...
+                    {t('startingAdventure')}
                   </>
                 ) : (
                   <>
                     <Play className="h-4 w-4 mr-2" />
-                    Start Adventure
+                    {t('startAdventure')}
                   </>
                 )}
               </Button>
@@ -438,7 +442,7 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
 
             {!currentPlayer?.is_gm && (
               <p className="text-center text-sm text-muted-foreground">
-                Waiting for the GM to start the adventure...
+                {t('waitingForGm')}
               </p>
             )}
           </CardContent>
@@ -452,7 +456,7 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
           <div className="lg:col-span-2 space-y-4">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Adventure Log</CardTitle>
+                <CardTitle className="text-sm">{t('adventureLog')}</CardTitle>
               </CardHeader>
               <CardContent>
                 <NarrativeLog actions={actionHistory} players={allPlayers} />
@@ -489,20 +493,20 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
                 setCurrentPlayer(player);
                 // Update isMyTurn based on selected player
                 const newIsMyTurn = player.id === currentTurnPlayerId;
-                toast.success(`Now playing as ${player.character_sheet?.name || player.name}`);
+                toast.success(tToast('nowPlayingAs', { characterName: player.character_sheet?.name || player.name }));
               }}
             />
 
             {currentCampaign.game_system && (
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Game Rules</CardTitle>
+                  <CardTitle className="text-sm">{t('gameRules')}</CardTitle>
                 </CardHeader>
                 <CardContent className="text-xs text-muted-foreground space-y-2">
-                  <p><strong>System:</strong> {currentCampaign.game_system.name}</p>
-                  <p><strong>Mechanic:</strong> {currentCampaign.game_system.core_mechanic}</p>
+                  <p><strong>{t('system')}</strong> {currentCampaign.game_system.name}</p>
+                  <p><strong>{t('mechanic')}</strong> {currentCampaign.game_system.core_mechanic}</p>
                   {currentCampaign.game_system.skill_check_rules && (
-                    <p><strong>Skill Checks:</strong> {currentCampaign.game_system.skill_check_rules}</p>
+                    <p><strong>{t('skillChecks')}</strong> {currentCampaign.game_system.skill_check_rules}</p>
                   )}
                 </CardContent>
               </Card>

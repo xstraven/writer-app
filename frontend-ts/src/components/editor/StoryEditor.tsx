@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Wand2, Undo2, AlertCircle, ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import { Button } from '@/components/ui/button'
 import { TipTapComposer } from './TipTapComposer'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -61,6 +62,7 @@ function extractSuggestions(answer: string): string[] {
 }
 
 export function StoryEditor() {
+  const tToast = useTranslations('toast')
   const [isAddingChunk, setIsAddingChunk] = useState(false)
   const [userDraft, setUserDraft] = useState('')
   const [ideaQuestion, setIdeaQuestion] = useState('')
@@ -113,7 +115,7 @@ export function StoryEditor() {
     }
 
     if (!continuation.trim()) {
-      toast.error('Model returned empty continuation')
+      toast.error(tToast('emptyContinuation'))
       return
     }
 
@@ -145,10 +147,10 @@ export function StoryEditor() {
       setChunks(after)
 
       queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory, currentBranch] })
-      toast.success('Generated new chunk')
+      toast.success(tToast('newChunkGenerated'))
     } catch (error) {
       console.error('Failed to append generated chunk:', error)
-      toast.error(`Failed to save generated chunk: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error(tToast('saveGeneratedChunkFailed', { error: error instanceof Error ? error.message : 'Unknown error' }))
     }
   }
 
@@ -156,13 +158,13 @@ export function StoryEditor() {
 
   const handleRevert = () => {
     revertFromHistory()
-    toast.success("Reverted to previous state")
+    toast.success(tToast('revertedToPrevious'))
   }
 
   const handleSubmitUserChunk = async (maybeText?: string) => {
     const text = (maybeText ?? userDraft).trim()
     if (!text) {
-      toast.error('Please write something before saving')
+      toast.error(tToast('writeSomethingFirst'))
       return
     }
 
@@ -200,13 +202,13 @@ export function StoryEditor() {
       // Invalidate branch to refresh any downstream consumers and ensure consistency
       queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory, currentBranch] })
 
-      toast.success('Chunk added')
+      toast.success(tToast('chunkAdded'))
     } catch (error) {
       // Revert optimistic add and restore draft
       setChunks(chunks.filter(c => c.id !== optimistic.id))
       setUserDraft(previousDraft)
       console.error('Failed to add user chunk:', error)
-      toast.error(`Failed to add chunk: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error(tToast('addChunkFailed', { error: error instanceof Error ? error.message : 'Unknown error' }))
     } finally {
       setIsAddingChunk(false)
     }
@@ -215,7 +217,7 @@ export function StoryEditor() {
   const handleAskIdea = async () => {
     const prompt = ideaQuestion.trim()
     if (!prompt) {
-      toast.error('Please enter a question')
+      toast.error(tToast('enterQuestion'))
       return
     }
     try {
@@ -234,7 +236,7 @@ export function StoryEditor() {
           },
         ])
       } else {
-        toast.error('The assistant did not return an answer')
+        toast.error(tToast('noAnswerReturned'))
       }
       setIdeaQuestion('')
     } catch (error) {
@@ -255,7 +257,7 @@ export function StoryEditor() {
       const separator = trimmedEnd.endsWith('\n') ? '' : '\n\n'
       setInstruction(`${trimmedEnd}${separator}${textToInsert}`)
     }
-    toast.success('Suggestion added to prompt')
+    toast.success(tToast('suggestionAdded'))
   }
 
   const handleToggleSuggestionVisibility = (entryId: string) => {

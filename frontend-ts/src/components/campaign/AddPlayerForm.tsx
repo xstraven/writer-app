@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { addLocalPlayer } from '@/lib/api';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import type { Player } from '@/lib/types';
 
 interface AddPlayerFormProps {
@@ -25,6 +26,8 @@ interface AddPlayerFormProps {
 }
 
 export function AddPlayerForm({ campaignId, onPlayerAdded, gameStyle, trigger }: AddPlayerFormProps) {
+  const tToast = useTranslations('toast');
+  const t = useTranslations('campaign.addPlayer');
   const [isOpen, setIsOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [formData, setFormData] = useState({
@@ -40,7 +43,7 @@ export function AddPlayerForm({ campaignId, onPlayerAdded, gameStyle, trigger }:
     e.preventDefault();
 
     if (!formData.playerName.trim()) {
-      toast.error('Player name is required');
+      toast.error(tToast('playerNameRequired'));
       return;
     }
 
@@ -54,14 +57,14 @@ export function AddPlayerForm({ campaignId, onPlayerAdded, gameStyle, trigger }:
         character_special: formData.characterSpecial.trim() || undefined,
       });
 
-      toast.success(`${response.player.character_sheet?.name || formData.playerName} joined the party!`);
+      toast.success(tToast('playerJoinedParty', { playerName: response.player.character_sheet?.name || formData.playerName }));
       onPlayerAdded(response.player);
 
       setFormData({ playerName: '', characterName: '', characterClass: '', characterSpecial: '' });
       setIsOpen(false);
     } catch (error: any) {
       console.error('Failed to add player:', error);
-      toast.error(error.response?.data?.detail || 'Failed to add player');
+      toast.error(error.response?.data?.detail || tToast('addPlayerFailed'));
     } finally {
       setIsAdding(false);
     }
@@ -73,23 +76,23 @@ export function AddPlayerForm({ campaignId, onPlayerAdded, gameStyle, trigger }:
         {trigger || (
           <Button variant="outline" size="sm">
             <UserPlus className="h-4 w-4 mr-1" />
-            Add Player
+            {t('trigger')}
           </Button>
         )}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add Another Player</DialogTitle>
+          <DialogTitle>{t('title')}</DialogTitle>
           <DialogDescription>
-            Add a friend to join the adventure. The AI will generate their character.
+            {t('description')}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="playerName">Player Name *</Label>
+            <Label htmlFor="playerName">{t('playerNameLabel')}</Label>
             <Input
               id="playerName"
-              placeholder="Friend's display name"
+              placeholder={t('playerNamePlaceholder')}
               value={formData.playerName}
               onChange={(e) => setFormData({ ...formData, playerName: e.target.value })}
               disabled={isAdding}
@@ -98,10 +101,10 @@ export function AddPlayerForm({ campaignId, onPlayerAdded, gameStyle, trigger }:
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="characterName">Character Name</Label>
+            <Label htmlFor="characterName">{t('characterNameLabel')}</Label>
             <Input
               id="characterName"
-              placeholder="Thorin, Aria, etc."
+              placeholder={t('characterNamePlaceholder')}
               value={formData.characterName}
               onChange={(e) => setFormData({ ...formData, characterName: e.target.value })}
               disabled={isAdding}
@@ -110,29 +113,29 @@ export function AddPlayerForm({ campaignId, onPlayerAdded, gameStyle, trigger }:
 
           <div className="space-y-2">
             <Label htmlFor="characterClass">
-              {isNarrative ? 'Who is their character?' : 'Character Class/Role'}
+              {isNarrative ? t('characterClassNarrativeLabel') : t('characterClassMechanicalLabel')}
             </Label>
             <Input
               id="characterClass"
               placeholder={isNarrative
-                ? "A brave knight, a clever inventor, a wise healer..."
-                : "Warrior, Mage, Rogue, Healer..."
+                ? t('characterClassNarrativePlaceholder')
+                : t('characterClassMechanicalPlaceholder')
               }
               value={formData.characterClass}
               onChange={(e) => setFormData({ ...formData, characterClass: e.target.value })}
               disabled={isAdding}
             />
             <p className="text-xs text-muted-foreground">
-              Describe who they are in a few words
+              {t('characterClassHint')}
             </p>
           </div>
 
           {isNarrative && (
             <div className="space-y-2">
-              <Label htmlFor="characterSpecial">What makes them special?</Label>
+              <Label htmlFor="characterSpecial">{t('characterSpecialLabel')}</Label>
               <Input
                 id="characterSpecial"
-                placeholder="Can talk to animals, has a magic compass..."
+                placeholder={t('characterSpecialPlaceholder')}
                 value={formData.characterSpecial}
                 onChange={(e) => setFormData({ ...formData, characterSpecial: e.target.value })}
                 disabled={isAdding}
@@ -147,16 +150,16 @@ export function AddPlayerForm({ campaignId, onPlayerAdded, gameStyle, trigger }:
               onClick={() => setIsOpen(false)}
               disabled={isAdding}
             >
-              Cancel
+              {t('cancel')}
             </Button>
             <Button type="submit" disabled={isAdding} className="flex-1">
               {isAdding ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Adding Player...
+                  {t('adding')}
                 </>
               ) : (
-                'Add Player'
+                t('addButton')
               )}
             </Button>
           </div>

@@ -65,6 +65,7 @@ class CampaignStore:
             current_turn_player_id=row.get("current_turn_player_id"),
             turn_order=turn_order,
             turn_number=row.get("turn_number") or 0,
+            language=row.get("language") or "en",
             created_at=row["created_at"] if isinstance(row["created_at"], datetime) else datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")),
             updated_at=row["updated_at"] if isinstance(row["updated_at"], datetime) else datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00")),
         )
@@ -76,6 +77,7 @@ class CampaignStore:
         created_by: str,
         description: str = "",
         game_system: Optional[GameSystem] = None,
+        language: str = "en",
     ) -> Campaign:
         """Create a new campaign."""
         now = datetime.now(tz=timezone.utc)
@@ -98,6 +100,7 @@ class CampaignStore:
             "current_turn_player_id": None,
             "turn_order": json.dumps([]),
             "turn_number": 0,
+            "language": language,
             "created_at": now.isoformat(),
             "updated_at": now.isoformat(),
         }
@@ -116,6 +119,7 @@ class CampaignStore:
             current_turn_player_id=None,
             turn_order=[],
             turn_number=0,
+            language=language,
             created_at=now,
             updated_at=now,
         )
