@@ -649,6 +649,7 @@ class Campaign(BaseModel):
     current_turn_player_id: Optional[str] = None
     turn_order: List[str] = Field(default_factory=list)  # player_ids
     turn_number: int = 0
+    language: str = "en"  # Language for UI and AI-generated content (en, de, etc.)
     created_at: datetime
     updated_at: datetime
 
@@ -693,6 +694,7 @@ class CreateCampaignRequest(BaseModel):
     # Narrative options
     tone: Literal["family_friendly", "all_ages", "mature"] = "all_ages"
     style: Literal["narrative", "mechanical", "hybrid"] = "narrative"  # Default to narrative-focused
+    language: str = "en"  # Language for UI and AI-generated content (en, de, etc.)
 
 
 class CreateCampaignResponse(BaseModel):

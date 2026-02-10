@@ -462,6 +462,7 @@ export interface Campaign {
   current_turn_player_id: string | null;
   turn_order: string[];
   turn_number: number;
+  language: string;
   created_at: string;
   updated_at: string;
 }
@@ -509,6 +510,7 @@ export interface CreateCampaignRequest {
   // Narrative options
   tone?: 'family_friendly' | 'all_ages' | 'mature';
   style?: 'narrative' | 'mechanical' | 'hybrid';
+  language?: string;  // Language for UI and AI content (en, de, etc.)
 }
 
 export interface CreateCampaignResponse {

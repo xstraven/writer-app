@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Loader2, UserPlus, Play, Trash2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,9 +10,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useSimpleGameStore } from '@/stores/simpleGameStore';
 import { generateSimpleOpening } from '@/lib/api';
 import { AttributeAllocator } from './AttributeAllocator';
+import { useActiveLocale } from '@/hooks/useActiveLocale';
 import type { SimplePlayer } from '@/lib/types';
 
 export function PlayerSetup() {
+  const t = useTranslations('simpleRpg.players');
+  const currentLocale = useActiveLocale();
+
   const {
     worldSetting,
     attributes,
@@ -52,19 +57,19 @@ export function PlayerSetup() {
 
   const handleAddPlayer = () => {
     if (!playerName.trim()) {
-      setError('Please enter your name');
+      setError(t('errorNoPlayerName'));
       return;
     }
     if (!characterName.trim()) {
-      setError('Please enter a character name');
+      setError(t('errorNoCharacterName'));
       return;
     }
     if (!concept.trim()) {
-      setError('Please describe your character');
+      setError(t('errorNoConcept'));
       return;
     }
     if (!isAllocationComplete()) {
-      setError('Please assign all attribute modifiers');
+      setError(t('errorNoAttributes'));
       return;
     }
 
@@ -88,7 +93,7 @@ export function PlayerSetup() {
 
   const handleStartGame = async () => {
     if (players.length === 0) {
-      setError('Add at least one player to start!');
+      setError(t('errorNoPlayers'));
       return;
     }
 
@@ -96,11 +101,11 @@ export function PlayerSetup() {
     setError(null);
 
     try {
-      const response = await generateSimpleOpening(worldSetting, players);
+      const response = await generateSimpleOpening(worldSetting, players, currentLocale);
       startGame(response.opening_scene, response.suggested_actions);
     } catch (err) {
       console.error('Failed to start game:', err);
-      setError('Failed to start the adventure. Please try again.');
+      setError(t('errorStartFailed'));
       setGenerating(false);
     }
   };
@@ -111,7 +116,7 @@ export function PlayerSetup() {
       {players.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Heroes ({players.length})</CardTitle>
+            <CardTitle className="text-lg">{t('heroesTitle', { count: players.length })}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid gap-3">
@@ -123,7 +128,7 @@ export function PlayerSetup() {
                   <div>
                     <div className="font-medium">{player.characterName}</div>
                     <div className="text-sm text-muted-foreground">
-                      {player.concept} (played by {player.playerName})
+                      {player.concept} ({t('playedBy', { playerName: player.playerName })})
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
                       {Object.entries(player.attributeScores)
@@ -150,28 +155,28 @@ export function PlayerSetup() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <UserPlus className="h-5 w-5" />
-            Add a Hero
+            {t('addHeroTitle')}
           </CardTitle>
           <CardDescription>
-            Create a character for the adventure
+            {t('addHeroDescription')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="player-name">Your Name</Label>
+              <Label htmlFor="player-name">{t('yourName')}</Label>
               <Input
                 id="player-name"
-                placeholder="Alex"
+                placeholder={t('yourNamePlaceholder')}
                 value={playerName}
                 onChange={(e) => setPlayerName(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="character-name">Character Name</Label>
+              <Label htmlFor="character-name">{t('characterName')}</Label>
               <Input
                 id="character-name"
-                placeholder="Whiskers the Brave"
+                placeholder={t('characterNamePlaceholder')}
                 value={characterName}
                 onChange={(e) => setCharacterName(e.target.value)}
               />
@@ -179,20 +184,20 @@ export function PlayerSetup() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="concept">Character Concept</Label>
+            <Label htmlFor="concept">{t('concept')}</Label>
             <Input
               id="concept"
-              placeholder="A curious cat who dreams of adventure"
+              placeholder={t('conceptPlaceholder')}
               value={concept}
               onChange={(e) => setConcept(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              A short description of who your character is
+              {t('conceptHelp')}
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label>Attribute Scores</Label>
+            <Label>{t('attributeScores')}</Label>
             <AttributeAllocator
               attributes={attributes}
               availableModifiers={availableModifiers}
@@ -207,7 +212,7 @@ export function PlayerSetup() {
 
           <Button onClick={handleAddPlayer} className="w-full">
             <UserPlus className="h-4 w-4 mr-2" />
-            Add Hero
+            {t('addHeroButton')}
           </Button>
         </CardContent>
       </Card>
@@ -222,12 +227,12 @@ export function PlayerSetup() {
         {isGenerating ? (
           <>
             <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-            Starting Adventure...
+            {t('starting')}
           </>
         ) : (
           <>
             <Play className="h-5 w-5 mr-2" />
-            Start the Adventure!
+            {t('startButton')}
           </>
         )}
       </Button>

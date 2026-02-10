@@ -72,6 +72,7 @@ DDL_STATEMENTS = [
         current_turn_player_id TEXT,
         turn_order TEXT,
         turn_number INTEGER DEFAULT 0,
+        language TEXT DEFAULT 'en',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )

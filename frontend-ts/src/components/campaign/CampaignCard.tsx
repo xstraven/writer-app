@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Users, Clock, Swords, Crown } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { useTranslations } from 'next-intl';
 import type { CampaignWithPlayers } from '@/lib/types';
 
 interface CampaignCardProps {
@@ -12,6 +13,7 @@ interface CampaignCardProps {
 
 export function CampaignCard({ campaignData }: CampaignCardProps) {
   const router = useRouter();
+  const t = useTranslations('campaign.card');
   const { campaign, players, your_player } = campaignData;
 
   const isYourTurn = your_player?.id === campaign.current_turn_player_id;
@@ -22,6 +24,14 @@ export function CampaignCard({ campaignData }: CampaignCardProps) {
     active: 'bg-green-500/20 text-green-400 border-green-500/30',
     paused: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
     completed: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  };
+
+  const getStatusLabel = () => {
+    if (campaign.status === 'active' && isYourTurn) {
+      return t('yourTurn');
+    }
+    const statusKey = `status${campaign.status.charAt(0).toUpperCase()}${campaign.status.slice(1)}`;
+    return t(statusKey as any);
   };
 
   const handleClick = () => {
@@ -43,7 +53,7 @@ export function CampaignCard({ campaignData }: CampaignCardProps) {
             {campaign.name}
           </CardTitle>
           <Badge className={`${statusColors[campaign.status]} shrink-0`}>
-            {campaign.status === 'active' && isYourTurn ? 'Your Turn!' : campaign.status}
+            {getStatusLabel()}
           </Badge>
         </div>
       </CardHeader>
@@ -57,20 +67,20 @@ export function CampaignCard({ campaignData }: CampaignCardProps) {
         <div className="flex items-center gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-1">
             <Users className="h-4 w-4" />
-            <span>{players.length} player{players.length !== 1 ? 's' : ''}</span>
+            <span>{players.length} {t('players', { count: players.length })}</span>
           </div>
 
           {campaign.status === 'active' && (
             <div className="flex items-center gap-1">
               <Swords className="h-4 w-4" />
-              <span>Turn {campaign.turn_number}</span>
+              <span>{t('turn', { number: campaign.turn_number })}</span>
             </div>
           )}
 
           {isCreator && (
             <div className="flex items-center gap-1 text-amber-500">
               <Crown className="h-4 w-4" />
-              <span>GM</span>
+              <span>{t('gmBadge')}</span>
             </div>
           )}
         </div>
@@ -87,12 +97,12 @@ export function CampaignCard({ campaignData }: CampaignCardProps) {
               }`}
             >
               {player.character_sheet?.name || player.name}
-              {player.is_gm && ' (GM)'}
+              {player.is_gm && t('gmLabel')}
             </Badge>
           ))}
           {players.length > 4 && (
             <Badge variant="outline" className="text-xs">
-              +{players.length - 4} more
+              {t('moreCount', { count: players.length - 4 })}
             </Badge>
           )}
         </div>
@@ -100,7 +110,7 @@ export function CampaignCard({ campaignData }: CampaignCardProps) {
         <div className="text-xs text-muted-foreground flex items-center gap-1">
           <Clock className="h-3 w-3" />
           <span>
-            Updated {new Date(campaign.updated_at).toLocaleDateString()}
+            {t('updated', { date: new Date(campaign.updated_at).toLocaleDateString() })}
           </span>
         </div>
       </CardContent>

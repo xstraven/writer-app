@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import { getApiErrorMessage } from '@/lib/errors'
 import { continueStory, appendSnippet, regenerateSnippet } from '@/lib/api'
 import { useAppStore } from '@/stores/appStore'
@@ -9,6 +10,7 @@ import type { Chunk, ContinueRequest } from '@/lib/types'
 
 export function useStoryGeneration() {
   const queryClient = useQueryClient()
+  const tToast = useTranslations('toast')
   const { 
     chunks, 
     setChunks, 
@@ -73,7 +75,7 @@ export function useStoryGeneration() {
       return continuation
     },
     onError: (error: any) => {
-      toast.error(`Generation failed: ${getApiErrorMessage(error)}`)
+      toast.error(tToast('generationFailed', { error: getApiErrorMessage(error) }))
     },
   })
 
@@ -91,12 +93,12 @@ export function useStoryGeneration() {
       })
     },
     onSuccess: () => {
-      toast.success("Chunk committed to story")
+      toast.success(tToast('chunkCommitted'))
       // Keep readers (like useStorySync) in sync
       queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory, currentBranch] })
     },
     onError: (error) => {
-      toast.error(`Failed to commit chunk: ${error.message}`)
+      toast.error(tToast('chunkCommitFailed', { error: error.message }))
     },
   })
 
@@ -140,10 +142,10 @@ export function useStoryGeneration() {
       setChunks(after)
       // Ensure main/branch path reflects server-selected child, etc.
       queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory, currentBranch] })
-      toast.success('Story chunk regenerated successfully')
+      toast.success(tToast('chunkRegenerated'))
     },
     onError: (error: any) => {
-      toast.error(`Regeneration failed: ${getApiErrorMessage(error)}`)
+      toast.error(tToast('regenerationFailed', { error: getApiErrorMessage(error) }))
     },
   })
 
@@ -173,7 +175,7 @@ export function useStoryGeneration() {
       return response.continuation
     },
     onError: (error: any) => {
-      toast.error(`Idea generation failed: ${getApiErrorMessage(error)}`)
+      toast.error(tToast('ideaGenerationFailed', { error: getApiErrorMessage(error) }))
     },
   })
 

@@ -11,10 +11,12 @@ import {
   getRPGState,
 } from '@/lib/api'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import type { RPGActionResult, CharacterSheet } from '@/lib/types'
 import { Dices, Swords, Heart, Shield, User, Scroll, Package, ChevronDown, ChevronRight } from 'lucide-react'
 
 export function RPGPanel() {
+  const tToast = useTranslations('toast')
   const {
     currentStory,
     rpgModeSettings,
@@ -61,7 +63,7 @@ export function RPGPanel() {
 
   const handleSetup = async () => {
     if (!currentStory || !worldSetting.trim()) {
-      toast.error('Please enter a world setting description')
+      toast.error(tToast('enterWorldSetting'))
       return
     }
 
@@ -88,10 +90,10 @@ export function RPGPanel() {
         session_notes: '',
       })
       setSuggestedActions(response.available_actions)
-      toast.success('RPG session initialized!')
+      toast.success(tToast('rpgInitialized'))
     } catch (error) {
       console.error('Failed to setup RPG session:', error)
-      toast.error('Failed to setup RPG session')
+      toast.error(tToast('rpgSetupFailed'))
     } finally {
       setIsSettingUp(false)
     }
@@ -100,7 +102,7 @@ export function RPGPanel() {
   const handleAction = async (action?: string) => {
     const actionText = action || actionInput.trim()
     if (!currentStory || !actionText) {
-      toast.error('Please enter an action')
+      toast.error(tToast('enterAction'))
       return
     }
 
@@ -127,7 +129,7 @@ export function RPGPanel() {
       }
     } catch (error) {
       console.error('Failed to perform action:', error)
-      toast.error('Failed to perform action')
+      toast.error(tToast('actionPerformFailed'))
     } finally {
       setIsPerformingAction(false)
     }

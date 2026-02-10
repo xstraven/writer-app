@@ -16,8 +16,10 @@ import { useAppStore } from '@/stores/appStore'
 import { getPromptPreview, deleteStory as apiDeleteStory, getStories, getBranches, truncateStory as apiTruncateStory } from '@/lib/api'
 import { useState as useReactState } from 'react'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 
 export function Sidebar() {
+  const tToast = useTranslations('toast')
   const [openGen, setOpenGen] = useState(true)
   const [openCtx, setOpenCtx] = useState(true)
   const [openImgs, setOpenImgs] = useState(true)
@@ -375,11 +377,11 @@ export function Sidebar() {
                   setCurrentBranch('main')
                   await loadBranchesForStory(currentStory)
                   queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory], exact: false })
-                  toast.success('Story truncated')
+                  toast.success(tToast('storyTruncated'))
                   setShowTruncate(false)
                 } catch (error: any) {
                   console.error('Failed to truncate story:', error)
-                  toast.error(`Failed to truncate story: ${error?.message ?? 'Unknown error'}`)
+                  toast.error(tToast('storyTruncateFailed', { error: error?.message ?? 'Unknown error' }))
                 } finally {
                   setTruncating(false)
                 }
@@ -431,10 +433,10 @@ export function Sidebar() {
                   setCurrentStory('')
                 }
                 setShowDelete(false)
-                toast.success('Story deleted')
+                toast.success(tToast('storyDeleted'))
               } catch (error) {
                 console.error('Failed to delete story:', error)
-                toast.error(`Failed to delete story: ${error instanceof Error ? error.message : 'Unknown error'}`)
+                toast.error(tToast('storyDeleteFailed', { error: error instanceof Error ? error.message : 'Unknown error' }))
               } finally {
                 setDeleting(false)
               }
@@ -486,10 +488,10 @@ export function Sidebar() {
                 setShowDuplicate(false)
                 setDupName('')
                 setDupMode('all')
-                toast.success('Story duplicated')
+                toast.success(tToast('storyDuplicated'))
               } catch (error) {
                 console.error('Failed to duplicate story:', error)
-                toast.error(`Failed to duplicate: ${error instanceof Error ? error.message : 'Unknown error'}`)
+                toast.error(tToast('storyDuplicateFailed', { error: error instanceof Error ? error.message : 'Unknown error' }))
               } finally {
                 setDuplicating(false)
               }

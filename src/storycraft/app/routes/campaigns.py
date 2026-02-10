@@ -218,9 +218,17 @@ async def create_campaign(
         "mature": "for mature audiences, with realistic consequences and dramatic tension",
     }.get(req.tone, "suitable for all ages")
 
+    # Language-specific instructions for game system generation
+    language_instructions = {
+        "de": "WICHTIG: Antworte auf Deutsch.",
+        "en": "IMPORTANT: Respond in English.",
+    }.get(req.language, "IMPORTANT: Respond in English.")
+
     if req.style == "narrative":
         # PbtA-style narrative-focused system
-        system_prompt = f"""You are designing a collaborative storytelling game inspired by Dungeon World and Powered by the Apocalypse games.
+        system_prompt = f"""{language_instructions}
+
+You are designing a collaborative storytelling game inspired by Dungeon World and Powered by the Apocalypse games.
 Create a simple, narrative-focused game system for the given world. This is for {tone_desc} play.
 
 The system should:
@@ -263,7 +271,9 @@ The tone should be {tone_desc}. Keep everything simple enough for new players an
         )
     else:
         # Traditional mechanical system (D&D-style)
-        system_prompt = f"""You are an expert tabletop RPG game designer. Create a simple, elegant game system
+        system_prompt = f"""{language_instructions}
+
+You are an expert tabletop RPG game designer. Create a simple, elegant game system
 that fits the given world setting. The tone should be {tone_desc}.
 
 The system should be easy to understand, similar to simplified D&D. Include:
@@ -317,6 +327,7 @@ Keep rules concise - this is for quick play."""
         created_by=temp_player_id,
         description="",
         game_system=game_system,
+        language=req.language,
     )
 
     # Generate character based on game style

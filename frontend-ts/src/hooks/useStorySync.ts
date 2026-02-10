@@ -6,6 +6,7 @@ import { getBranchPath, getLorebook, loadAppState, getStorySettings } from '@/li
 import { loadGalleryFromLocalStorage } from './usePersistAppState'
 import { useAppStore } from '@/stores/appStore'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import type { Chunk, Snippet } from '@/lib/types'
 
 // Convert backend snippet to frontend chunk
@@ -17,6 +18,7 @@ const snippetToChunk = (snippet: Snippet): Chunk => ({
 })
 
 export function useStorySync() {
+  const tToast = useTranslations('toast')
   const {
     currentStory,
     currentBranch,
@@ -111,7 +113,7 @@ export function useStorySync() {
         `but backend returned ${backendChunks.length}`
       )
       toast.error(
-        'Story sync issue detected. Refreshing may help. Check branch view if chunks are missing.',
+        tToast('storySyncIssue'),
         { duration: 10000 }
       )
     }

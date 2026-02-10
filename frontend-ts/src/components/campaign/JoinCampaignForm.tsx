@@ -10,11 +10,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { joinCampaign } from '@/lib/api';
 import { useCampaignStore } from '@/stores/campaignStore';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 
 export function JoinCampaignForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { playerName, setPlayerName, addCampaign } = useCampaignStore();
+  const tToast = useTranslations('toast');
+  const t = useTranslations('campaign.join');
 
   const [isJoining, setIsJoining] = useState(false);
   const [formData, setFormData] = useState({
@@ -28,7 +31,7 @@ export function JoinCampaignForm() {
     e.preventDefault();
 
     if (!formData.inviteCode.trim() || !formData.playerName.trim()) {
-      toast.error('Please enter an invite code and your name');
+      toast.error(tToast('enterCodeAndName'));
       return;
     }
 
@@ -52,11 +55,11 @@ export function JoinCampaignForm() {
         your_player: response.player,
       });
 
-      toast.success(`Joined "${response.campaign.name}"!`);
+      toast.success(tToast('joinedAdventure', { adventureName: response.campaign.name }));
       router.push(`/campaigns/${response.campaign.id}`);
     } catch (error: any) {
       console.error('Failed to join campaign:', error);
-      toast.error(error.response?.data?.detail || 'Failed to join adventure');
+      toast.error(error.response?.data?.detail || tToast('joinFailed'));
     } finally {
       setIsJoining(false);
     }
@@ -67,19 +70,19 @@ export function JoinCampaignForm() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <UserPlus className="h-5 w-5 text-blue-500" />
-          Join Adventure
+          {t('title')}
         </CardTitle>
         <CardDescription>
-          Enter the invite code shared by the adventure creator.
+          {t('description')}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="inviteCode">Invite Code *</Label>
+            <Label htmlFor="inviteCode">{t('inviteCodeLabel')} *</Label>
             <Input
               id="inviteCode"
-              placeholder="ABC123"
+              placeholder={t('inviteCodePlaceholder')}
               value={formData.inviteCode}
               onChange={(e) => setFormData({ ...formData, inviteCode: e.target.value.toUpperCase() })}
               disabled={isJoining}
@@ -89,10 +92,10 @@ export function JoinCampaignForm() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="playerName">Your Name *</Label>
+            <Label htmlFor="playerName">{t('yourNameLabel')} *</Label>
             <Input
               id="playerName"
-              placeholder="Your display name"
+              placeholder={t('yourNamePlaceholder')}
               value={formData.playerName}
               onChange={(e) => setFormData({ ...formData, playerName: e.target.value })}
               disabled={isJoining}
@@ -100,10 +103,10 @@ export function JoinCampaignForm() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="characterName">Character Name</Label>
+            <Label htmlFor="characterName">{t('characterNameLabel')}</Label>
             <Input
               id="characterName"
-              placeholder="Thorin, Aria, etc."
+              placeholder={t('characterNamePlaceholder')}
               value={formData.characterName}
               onChange={(e) => setFormData({ ...formData, characterName: e.target.value })}
               disabled={isJoining}
@@ -111,10 +114,10 @@ export function JoinCampaignForm() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="characterClass">Character Class/Role</Label>
+            <Label htmlFor="characterClass">{t('characterClassLabel')}</Label>
             <Input
               id="characterClass"
-              placeholder="Warrior, Mage, Rogue..."
+              placeholder={t('characterClassPlaceholder')}
               value={formData.characterClass}
               onChange={(e) => setFormData({ ...formData, characterClass: e.target.value })}
               disabled={isJoining}
@@ -128,16 +131,16 @@ export function JoinCampaignForm() {
               onClick={() => router.push('/')}
               disabled={isJoining}
             >
-              Cancel
+              {t('cancelButton')}
             </Button>
             <Button type="submit" disabled={isJoining} className="flex-1">
               {isJoining ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Joining...
+                  {t('joiningButton')}
                 </>
               ) : (
-                'Join Adventure'
+                t('joinButton')
               )}
             </Button>
           </div>

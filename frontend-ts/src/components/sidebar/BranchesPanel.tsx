@@ -10,9 +10,11 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { useAppStore } from '@/stores/appStore'
 import { getBranches, createBranch, deleteBranch, getTreeMain, chooseActiveChild, getBranchPath } from '@/lib/api'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import type { BranchInfo, TreeRow, Snippet } from '@/lib/types'
 
 export function BranchesPanel() {
+  const tToast = useTranslations('toast')
   const queryClient = useQueryClient()
   const { 
     currentStory, 
@@ -42,7 +44,7 @@ export function BranchesPanel() {
       setBranches(result)
     } catch (error) {
       console.error('Failed to load branches:', error)
-      toast.error('Failed to load branches')
+      toast.error(tToast('branchesLoadFailed'))
     }
   }
 
@@ -52,7 +54,7 @@ export function BranchesPanel() {
       setTreeRows(result.rows || [])
     } catch (error) {
       console.error('Failed to load tree data:', error)
-      toast.error('Failed to load tree data')
+      toast.error(tToast('treeDataLoadFailed'))
     }
   }
 
@@ -85,12 +87,12 @@ export function BranchesPanel() {
 
   const handleCreateBranch = async () => {
     if (!newBranchName.trim()) {
-      toast.error("Please enter a branch name")
+      toast.error(tToast('enterBranchName'))
       return
     }
 
     if (chunks.length === 0) {
-      toast.error("No story content to create branch from")
+      toast.error(tToast('noContentForBranch'))
       return
     }
 
@@ -101,10 +103,10 @@ export function BranchesPanel() {
       await createBranch(currentStory, newBranchName.trim(), headId)
       setNewBranchName('')
       await loadBranches()
-      toast.success("Branch created successfully")
+      toast.success(tToast('branchCreated'))
     } catch (error) {
       console.error('Failed to create branch:', error)
-      toast.error(`Failed to create branch: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error(tToast('branchCreateFailed', { error: error instanceof Error ? error.message : 'Unknown error' }))
     } finally {
       setIsLoading(false)
     }
@@ -119,10 +121,10 @@ export function BranchesPanel() {
     try {
       await deleteBranch(branchName, currentStory)
       await loadBranches()
-      toast.success("Branch deleted successfully")
+      toast.success(tToast('branchDeleted'))
     } catch (error) {
       console.error('Failed to delete branch:', error)
-      toast.error(`Failed to delete branch: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error(tToast('branchDeleteFailed', { error: error instanceof Error ? error.message : 'Unknown error' }))
     } finally {
       setIsLoading(false)
     }
@@ -136,10 +138,10 @@ export function BranchesPanel() {
       await loadBranchGraph()
       // Invalidate path so editor updates to reflect the new active branch
       queryClient.invalidateQueries({ queryKey: ['story-branch', currentStory, currentBranch] })
-      toast.success("Active branch choice updated")
+      toast.success(tToast('branchChoiceUpdated'))
     } catch (error) {
       console.error('Failed to choose active child:', error)
-      toast.error(`Failed to update branch choice: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error(tToast('branchChoiceUpdateFailed', { error: error instanceof Error ? error.message : 'Unknown error' }))
     } finally {
       setIsLoading(false)
     }

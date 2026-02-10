@@ -9,9 +9,11 @@ import { Input } from '@/components/ui/input'
 import { useAppStore } from '@/stores/appStore'
 import { extractMemory } from '@/lib/api'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import type { MemoryItem } from '@/lib/types'
 
 export function MemoryPanel() {
+  const tToast = useTranslations('toast')
   const { memory, setMemory, chunks, generationSettings } = useAppStore()
   const [isExtracting, setIsExtracting] = useState(false)
   // Add/edit state
@@ -23,7 +25,7 @@ export function MemoryPanel() {
 
   const handleExtractMemory = async () => {
     if (chunks.length === 0) {
-      toast.error("No story content to extract memory from")
+      toast.error(tToast('noContentForMemory'))
       return
     }
 
@@ -32,10 +34,10 @@ export function MemoryPanel() {
       const draftText = chunks.map(c => c.text).join('\n\n')
       const result = await extractMemory(draftText, generationSettings.model)
       setMemory(result)
-      toast.success("Memory extracted from story")
+      toast.success(tToast('memoryExtracted'))
     } catch (error) {
       console.error('Memory extraction failed:', error)
-      toast.error(`Failed to extract memory: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error(tToast('memoryExtractFailed', { error: error instanceof Error ? error.message : 'Unknown error' }))
     } finally {
       setIsExtracting(false)
     }

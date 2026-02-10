@@ -152,6 +152,13 @@ async def take_action(
 
         if is_narrative_style:
             # PbtA-style: check if the action is risky/uncertain
+            # Language-specific check system message
+            check_language = campaign.language or "en"
+            check_system_msg = {
+                "de": "Du hilfst zu entscheiden, wann Würfelwürfe die Geschichte in einem kooperativen Erzählspiel bereichern.",
+                "en": "You help decide when dice rolls add to the story in a collaborative narrative game.",
+            }.get(check_language, "You help decide when dice rolls add to the story in a collaborative narrative game.")
+
             check_prompt = f"""In this collaborative story, a player is attempting an action.
 
 Action: {req.action}
@@ -178,7 +185,7 @@ Remember: we want the story to flow. Only roll when it makes the moment more exc
                 check_analysis = await structured.create(
                     response_model=NarrativeCheckAnalysis,
                     messages=[
-                        {"role": "system", "content": "You help decide when dice rolls add to the story in a collaborative narrative game."},
+                        {"role": "system", "content": check_system_msg},
                         {"role": "user", "content": check_prompt},
                     ],
                     model=req.model,
@@ -292,6 +299,13 @@ If no check is needed (simple actions like talking, moving in safe areas), set n
         "mature": "This is a mature adventure with realistic stakes and consequences.",
     }.get(tone, "This is an all-ages adventure.")
 
+    # Language-specific instructions
+    language = campaign.language or "en"
+    language_instructions = {
+        "de": "WICHTIG: Antworte auf Deutsch. Nutze lebendige deutsche Sprache.",
+        "en": "IMPORTANT: Respond in English. Use vivid language.",
+    }.get(language, "IMPORTANT: Respond in English.")
+
     if is_narrative_style:
         # Narrative-focused GM prompt with PbtA principles
         gm_principles = game_system.gm_principles if game_system and game_system.gm_principles else [
@@ -324,7 +338,9 @@ The player rolled a MISS. Things get more complicated, but in an interesting way
 - The world reacts in a way that raises the stakes
 - This should push the story forward, not stop it"""
 
-        narrative_prompt = f"""You are the Game Master for a collaborative storytelling game. A player has taken an action. Narrate what happens next.
+        narrative_prompt = f"""{language_instructions}
+
+You are the Game Master for a collaborative storytelling game. A player has taken an action. Narrate what happens next.
 
 YOUR PRINCIPLES AS GM:
 {chr(10).join(f'- {p}' for p in gm_principles)}
@@ -363,7 +379,9 @@ Keep it engaging, collaborative, and moving forward. Don't lecture or explain - 
                 f"- {r.check_type}: {r.description}" for r in action_results
             )
 
-        narrative_prompt = f"""You are the Game Master for a multiplayer tabletop RPG. A player has taken an action. Narrate the result.
+        narrative_prompt = f"""{language_instructions}
+
+You are the Game Master for a multiplayer tabletop RPG. A player has taken an action. Narrate the result.
 
 World Setting: {campaign.world_setting}
 

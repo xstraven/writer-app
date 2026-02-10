@@ -623,10 +623,12 @@ export interface ResolveActionResponse {
 
 export const generateSimpleAttributes = async (
   worldSetting: string,
+  language: string = 'en',
   model?: string
 ): Promise<GenerateAttributesResponse> => {
   const response = await apiClient.post('/api/simple-rpg/generate-attributes', {
     world_setting: worldSetting,
+    language,
     model,
   }, { timeout: GENERATION_TIMEOUT_MS });
   return response.data;
@@ -635,6 +637,7 @@ export const generateSimpleAttributes = async (
 export const generateSimpleOpening = async (
   worldSetting: string,
   players: SimplePlayer[],
+  language: string = 'en',
   model?: string
 ): Promise<GenerateOpeningResponse> => {
   // Convert frontend player format to API format
@@ -649,6 +652,7 @@ export const generateSimpleOpening = async (
   const response = await apiClient.post('/api/simple-rpg/generate-opening', {
     world_setting: worldSetting,
     players: apiPlayers,
+    language,
     model,
   }, { timeout: GENERATION_TIMEOUT_MS });
   return response.data;

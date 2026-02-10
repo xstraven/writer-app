@@ -22,6 +22,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { useAppStore } from '@/stores/appStore'
 import { createLoreEntry, updateLoreEntry, deleteLoreEntry, generateLorebook, getLorebook, saveStorySettings, proposeLoreEntries, generateFromProposals } from '@/lib/api'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import { getApiErrorMessage } from '@/lib/errors'
 import { uid } from '@/lib/utils'
 import type { LoreEntry, LoreEntryCreate, LoreEntryUpdate, ProposedLoreEntry } from '@/lib/types'
@@ -31,8 +32,9 @@ interface EditingEntry extends Partial<LoreEntry> {
 }
 
 export function LorebookPanel() {
+  const tToast = useTranslations('toast')
   const { lorebook, setLorebook, currentStory } = useAppStore()
-  
+
   const [searchTerm, setSearchTerm] = useState('')
   const [editingEntry, setEditingEntry] = useState<EditingEntry | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -80,7 +82,7 @@ export function LorebookPanel() {
     if (!editingEntry) return
 
     if (!editingEntry.name?.trim() || !editingEntry.summary?.trim()) {
-      toast.error("Name and summary are required")
+      toast.error(tToast('nameSummaryRequired'))
       return
     }
 
@@ -97,11 +99,11 @@ export function LorebookPanel() {
           keys: editingEntry.keys || [],
           always_on: editingEntry.always_on || false,
         }
-        
+
         const createdEntry = await createLoreEntry(newEntryData)
         const updatedLore = [...lorebook, createdEntry]
         setLorebook(updatedLore)
-        toast.success("Lore entry created")
+        toast.success(tToast('loreEntryCreated'))
       } else {
         // Update existing entry
         const updateData: LoreEntryUpdate = {
@@ -112,19 +114,19 @@ export function LorebookPanel() {
           keys: editingEntry.keys,
           always_on: editingEntry.always_on,
         }
-        
+
         const updatedEntry = await updateLoreEntry(editingEntry.id!, updateData)
-        const updatedLore = lorebook.map(entry => 
+        const updatedLore = lorebook.map(entry =>
           entry.id === editingEntry.id ? updatedEntry : entry
         )
         setLorebook(updatedLore)
-        toast.success("Lore entry updated")
+        toast.success(tToast('loreEntryUpdated'))
       }
-      
+
       setEditingEntry(null)
     } catch (error) {
       console.error('Failed to save lore entry:', error)
-      toast.error(`Failed to save entry: ${getApiErrorMessage(error)}`)
+      toast.error(tToast('loreEntrySaveFailed', { error: getApiErrorMessage(error) }))
     } finally {
       setIsLoading(false)
     }
@@ -140,10 +142,10 @@ export function LorebookPanel() {
       await deleteLoreEntry(entryId)
       const updatedLore = lorebook.filter(entry => entry.id !== entryId)
       setLorebook(updatedLore)
-      toast.success("Lore entry deleted")
+      toast.success(tToast('loreEntryDeleted'))
     } catch (error) {
       console.error('Failed to delete lore entry:', error)
-      toast.error(`Failed to delete entry: ${getApiErrorMessage(error)}`)
+      toast.error(tToast('loreEntryDeleteFailed', { error: getApiErrorMessage(error) }))
     } finally {
       setIsLoading(false)
     }
@@ -162,7 +164,7 @@ export function LorebookPanel() {
       setSelectedEntityNames(new Set(result.proposals.map(e => e.name)))  // Pre-select all
       setShowGenerateModal(true)
     } catch (error: any) {
-      toast.error(`Failed to propose entities: ${getApiErrorMessage(error)}`)
+      toast.error(tToast('proposeEntitiesFailed', { error: getApiErrorMessage(error) }))
     } finally {
       setIsGenerating(false)
     }
@@ -172,7 +174,7 @@ export function LorebookPanel() {
     if (!currentStory) return
     const selectedNames = Array.from(selectedEntityNames)
     if (selectedNames.length === 0) {
-      toast.error('Please select at least one entity')
+      toast.error(tToast('selectOneEntity'))
       return
     }
     setIsGenerating(true)
@@ -184,12 +186,12 @@ export function LorebookPanel() {
       })
       const updated = await getLorebook(currentStory)
       setLorebook(updated)
-      toast.success(`Created ${result.created} lorebook ${result.created === 1 ? 'entry' : 'entries'}`)
+      toast.success(tToast('lorebookEntriesCreated', { count: result.created }))
       setShowGenerateModal(false)
       setProposedEntities([])
       setSelectedEntityNames(new Set())
     } catch (error: any) {
-      toast.error(`Failed to generate: ${getApiErrorMessage(error)}`)
+      toast.error(tToast('lorebookGenerateFailed2', { error: getApiErrorMessage(error) }))
     } finally {
       setIsGenerating(false)
     }
