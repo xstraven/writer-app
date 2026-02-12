@@ -11,6 +11,15 @@
     "edit": "Edit",
     "close": "Close"
   },
+  "shared": {
+    "narrative": {
+      "awaiting": "The adventure awaits...",
+      "gameMaster": "Game Master",
+      "player": "Player",
+      "system": "System",
+      "turn": "Turn {number}"
+    }
+  },
   "navigation": {
     "storycraft": "Storycraft",
     "yourAdventures": "Your Adventures",

@@ -11,6 +11,15 @@
     "edit": "Bearbeiten",
     "close": "Schließen"
   },
+  "shared": {
+    "narrative": {
+      "awaiting": "Das Abenteuer erwartet dich...",
+      "gameMaster": "Spielleiter",
+      "player": "Spieler",
+      "system": "System",
+      "turn": "Runde {number}"
+    }
+  },
   "navigation": {
     "storycraft": "Storycraft",
     "yourAdventures": "Deine Abenteuer",
