@@ -2,6 +2,7 @@ Storycraft — Group RPG Adventure Builder
 ========================================
 
 ![Backend Tests](https://github.com/xstraven/writer-app/actions/workflows/backend-tests.yml/badge.svg)
+![Frontend Tests](https://github.com/xstraven/writer-app/actions/workflows/frontend-tests.yml/badge.svg)
 
 Storycraft is a multiplayer tabletop RPG platform with an AI game master. Create collaborative storytelling adventures with friends or family, with the AI dynamically narrating and responding to player actions.
 
