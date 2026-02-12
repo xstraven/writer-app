@@ -18,6 +18,7 @@
       "player": "Spieler",
       "system": "System",
       "turn": "Runde {number}"
+    },
     "characterForm": {
       "playerName": "Dein Name",
       "playerNamePlaceholder": "Dein Anzeigename",

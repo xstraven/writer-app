@@ -145,7 +145,7 @@ export function SimpleGameView() {
                 <div>
                   <div className="text-sm text-muted-foreground">{t('turn', { number: turnNumber })}</div>
                   <div className="font-bold">
-                    {t('turnOf', { characterName: currentPlayer?.characterName })}
+                    {t('turnOf', { characterName: currentPlayer?.characterName || 'Unknown' })}
                   </div>
                 </div>
               </div>
@@ -188,7 +188,7 @@ export function SimpleGameView() {
           <CardContent className="p-4 space-y-3">
             <div className="relative">
               <Textarea
-                placeholder={t('actionPlaceholder', { characterName: currentPlayer?.characterName })}
+                placeholder={t('actionPlaceholder', { characterName: currentPlayer?.characterName || 'Unknown' })}
                 value={actionText}
                 onChange={(e) => setActionText(e.target.value)}
                 onKeyDown={handleKeyDown}

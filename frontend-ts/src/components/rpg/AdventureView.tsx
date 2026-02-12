@@ -178,7 +178,7 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
         next_player_id: nextPlayerId,
       });
       updateTurn(turnInfo);
-      toast.success(tToast('turnPassed', { playerName: turnInfo.current_player_name }));
+      toast.success(tToast('turnPassed', { playerName: turnInfo.current_player_name || 'Unknown' }));
     } catch (error: any) {
       console.error('Failed to end turn:', error);
       toast.error(error.response?.data?.detail || tToast('turnEndFailed'));

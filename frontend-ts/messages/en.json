@@ -18,6 +18,7 @@
       "player": "Player",
       "system": "System",
       "turn": "Turn {number}"
+    },
     "characterForm": {
       "playerName": "Your Name",
       "playerNamePlaceholder": "Your display name",
