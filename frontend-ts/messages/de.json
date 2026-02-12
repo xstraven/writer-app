@@ -12,6 +12,12 @@
     "close": "Schließen"
   },
   "shared": {
+    "narrative": {
+      "awaiting": "Das Abenteuer erwartet dich...",
+      "gameMaster": "Spielleiter",
+      "player": "Spieler",
+      "system": "System",
+      "turn": "Runde {number}"
     "characterForm": {
       "playerName": "Dein Name",
       "playerNamePlaceholder": "Dein Anzeigename",

@@ -12,6 +12,12 @@
     "close": "Close"
   },
   "shared": {
+    "narrative": {
+      "awaiting": "The adventure awaits...",
+      "gameMaster": "Game Master",
+      "player": "Player",
+      "system": "System",
+      "turn": "Turn {number}"
     "characterForm": {
       "playerName": "Your Name",
       "playerNamePlaceholder": "Your display name",
