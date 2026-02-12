@@ -339,21 +339,22 @@ async def perform_rpg_action(
 
         check_prompt = f"""Analyze this player action and determine what dice check(s) are needed:
 
-Action: {action}
+            Action: {action}
 
-Character: {character.name} ({character.character_class})
-Attributes: {', '.join(f'{a.name}: {a.value}' for a in character.attributes)}
+            Character: {character.name} ({character.character_class})
+            Attributes: {', '.join(f'{a.name}: {a.value}' for a in character.attributes)}
 
-Game System: {game_system.name}
-Core Mechanic: {game_system.core_mechanic}
-Difficulty Levels: {game_system.difficulty_levels}
+            Game System: {game_system.name}
+            Core Mechanic: {game_system.core_mechanic}
+            Difficulty Levels: {game_system.difficulty_levels}
 
-If the action requires a check, specify:
-- check_type: The type of check (e.g., "Strength check", "Stealth check")
-- target_number: The difficulty target to beat
-- description: Brief description of what's being attempted
+            If the action requires a check, specify:
+            - check_type: The type of check (e.g., "Strength check", "Stealth check")
+            - target_number: The difficulty target to beat
+            - description: Brief description of what's being attempted
 
-If no check is needed (simple actions like talking, moving in safe areas), return an empty result."""
+            If no check is needed (simple actions like talking, moving in safe areas), return an empty result.
+            """
 
         class CheckAnalysis(BaseModel):
             needs_check: bool = False
@@ -412,22 +413,22 @@ If no check is needed (simple actions like talking, moving in safe areas), retur
 
     narrative_prompt = f"""You are the Game Master. The player has taken an action. Narrate the result.
 
-World Setting: {rpg_settings.world_setting}
+        World Setting: {rpg_settings.world_setting}
 
-Player Character: {character.name}, Level {character.level} {character.character_class}
-Health: {character.health}/{character.max_health}
-Current Quest: {rpg_settings.current_quest}
+        Player Character: {character.name}, Level {character.level} {character.character_class}
+        Health: {character.health}/{character.max_health}
+        Current Quest: {rpg_settings.current_quest}
 
-Recent Story Context:
-{context_text}
+        Recent Story Context:
+        {context_text}
 
-Player's Action: {action}
-{roll_info}
+        Player's Action: {action}
+        {roll_info}
 
-Write 1-3 paragraphs describing what happens. Be vivid and engaging.
-If there were dice results, incorporate the success or failure naturally into the narrative.
-End by suggesting 2-4 possible next actions the player could take.
-Address the player in second person."""
+        Write 1-3 paragraphs describing what happens. Be vivid and engaging.
+        If there were dice results, incorporate the success or failure naturally into the narrative.
+        End by suggesting 2-4 possible next actions the player could take.
+        Address the player in second person."""
 
     narrative_messages = (
         PromptBuilder()

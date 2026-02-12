@@ -117,6 +117,7 @@ export function PlayerSetup() {
     } catch (err) {
       console.error('Failed to start game:', err);
       setError(t('errorStartFailed'));
+    } finally {
       setGenerating(false);
     }
   };

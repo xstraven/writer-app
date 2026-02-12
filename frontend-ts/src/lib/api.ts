@@ -664,6 +664,8 @@ export const resolveSimpleAction = async (
   player: SimplePlayer,
   action: string,
   allPlayers: SimplePlayer[],
+  nextPlayer: SimplePlayer | null = null,
+  language: string = 'en',
   model?: string
 ): Promise<ResolveActionResponse> => {
   // Convert to API format
@@ -691,12 +693,22 @@ export const resolveSimpleAction = async (
     attribute_scores: p.attributeScores,
   }));
 
+  const apiNextPlayer = nextPlayer ? {
+    id: nextPlayer.id,
+    player_name: nextPlayer.playerName,
+    character_name: nextPlayer.characterName,
+    concept: nextPlayer.concept,
+    attribute_scores: nextPlayer.attributeScores,
+  } : null;
+
   const response = await apiClient.post('/api/simple-rpg/resolve-action', {
     world_setting: worldSetting,
     action_history: apiHistory,
     player: apiPlayer,
     action,
     all_players: apiAllPlayers,
+    next_player: apiNextPlayer,
+    language,
     model,
   }, { timeout: GENERATION_TIMEOUT_MS });
   return response.data;
