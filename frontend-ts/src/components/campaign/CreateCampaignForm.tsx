@@ -15,6 +15,7 @@ import { createCampaign, generateWorldConcept, addLocalPlayersBatch } from '@/li
 import { useCampaignStore } from '@/stores/campaignStore';
 import { WorldBuilder } from './WorldBuilder';
 import { TemplateSelector } from './TemplateSelector';
+import { CharacterFormFields, type CharacterFormData } from '@/components/shared/CharacterFormFields';
 import { toast } from 'sonner';
 import type { ProposedLoreEntry } from '@/lib/types';
 import type { Locale } from '@/hooks/useActiveLocale';
@@ -70,6 +71,18 @@ export function CreateCampaignForm() {
     tone: 'all_ages' as GameTone,
     style: 'narrative' as GameStyle,
   });
+
+  // Extract character form data for CharacterFormFields component
+  const characterFormData: CharacterFormData = {
+    playerName: formData.playerName,
+    characterName: formData.characterName,
+    characterConcept: formData.characterConcept,
+    characterSpecial: formData.characterSpecial,
+  };
+
+  const handleCharacterFieldChange = (field: keyof CharacterFormData, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
 
   const handleTemplateSelect = (templateKey: string, template: {
     name: string;
@@ -431,93 +444,15 @@ export function CreateCampaignForm() {
           <div className="border-t pt-6">
             <h3 className="text-sm font-medium mb-4">{t('yourCharacter')}</h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="playerName">{t('yourName')} *</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="playerName"
-                    placeholder={t('yourNamePlaceholder')}
-                    value={formData.playerName}
-                    onChange={(e) => setFormData({ ...formData, playerName: e.target.value })}
-                    disabled={isCreating}
-                    className="flex-1"
-                  />
-                  <VoiceInput
-                    onTranscript={(text) => setFormData({ ...formData, playerName: text })}
-                    disabled={isCreating}
-                    continuous={false}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="characterName">{t('characterName')}</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="characterName"
-                    placeholder={t('characterNamePlaceholder')}
-                    value={formData.characterName}
-                    onChange={(e) => setFormData({ ...formData, characterName: e.target.value })}
-                    disabled={isCreating}
-                    className="flex-1"
-                  />
-                  <VoiceInput
-                    onTranscript={(text) => setFormData({ ...formData, characterName: text })}
-                    disabled={isCreating}
-                    continuous={false}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="characterConcept">
-                  {formData.style === 'narrative' ? t('characterConcept') : t('characterClass')}
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="characterConcept"
-                    placeholder={formData.style === 'narrative'
-                      ? t('characterConceptPlaceholder')
-                      : t('characterClassPlaceholder')
-                    }
-                    value={formData.characterConcept}
-                    onChange={(e) => setFormData({ ...formData, characterConcept: e.target.value })}
-                    disabled={isCreating}
-                    className="flex-1"
-                  />
-                  <VoiceInput
-                    onTranscript={(text) => setFormData({ ...formData, characterConcept: text })}
-                    disabled={isCreating}
-                    continuous={false}
-                  />
-                </div>
-              </div>
-
-              {formData.style === 'narrative' && (
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="characterSpecial">{t('characterSpecial')}</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="characterSpecial"
-                      placeholder={t('characterSpecialPlaceholder')}
-                      value={formData.characterSpecial}
-                      onChange={(e) => setFormData({ ...formData, characterSpecial: e.target.value })}
-                      disabled={isCreating}
-                      className="flex-1"
-                    />
-                    <VoiceInput
-                      onTranscript={(text) => setFormData({ ...formData, characterSpecial: text })}
-                      disabled={isCreating}
-                      continuous={false}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {t('characterSpecialHint')}
-                  </p>
-                </div>
-              )}
-            </div>
+            <CharacterFormFields
+              formData={characterFormData}
+              onChange={handleCharacterFieldChange}
+              disabled={isCreating}
+              gameStyle={formData.style === 'hybrid' ? 'narrative' : formData.style}
+              translationNamespace="shared.characterForm"
+              showVoiceInput={true}
+              showSpecialTrait={true}
+            />
           </div>
 
           {/* Party Members */}
