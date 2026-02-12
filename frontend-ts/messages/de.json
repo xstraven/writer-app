@@ -265,6 +265,8 @@
     "players": {
       "heroesTitle": "Helden ({count})",
       "playedBy": "gespielt von {playerName}",
+      "removePlayer": "Spieler entfernen",
+      "activeBadge": "Aktiv",
       "addHeroTitle": "Einen Helden hinzufügen",
       "addHeroDescription": "Erstelle einen Charakter für das Abenteuer",
       "yourName": "Dein Name",
@@ -295,6 +297,7 @@
       "ideasLabel": "Ideen:",
       "heroesTitle": "Helden",
       "activeBadge": "Aktiv",
+      "playedBy": "gespielt von {playerName}",
       "gameMaster": "Spielleiter",
       "errorMessage": "Die Geschichte geht weiter... (Es gab ein Problem mit der KI. Bitte versuche es erneut!)"
     }

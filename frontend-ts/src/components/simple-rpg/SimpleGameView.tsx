@@ -12,10 +12,12 @@ import { SimpleDiceResults } from './SimpleDiceResults';
 import { SimplePlayerCard } from './SimplePlayerCard';
 import { NarrativeDisplay, type NarrativeAction } from '@/components/shared/NarrativeDisplay';
 import { useTranslations } from 'next-intl';
+import { useActiveLocale } from '@/hooks/useActiveLocale';
 import type { SimpleGameAction, SimpleDiceResult } from '@/lib/types';
 
 export function SimpleGameView() {
   const t = useTranslations('simpleRpg.game');
+  const currentLocale = useActiveLocale();
 
   const {
     worldSetting,
@@ -66,13 +68,19 @@ export function SimpleGameView() {
     };
     addAction(playerAction);
 
+    // Calculate next player for targeted action suggestions
+    const nextPlayerIndex = (currentPlayerIndex + 1) % players.length;
+    const nextPlayer = players[nextPlayerIndex];
+
     try {
       const response = await resolveSimpleAction(
         worldSetting,
         [...actionHistory, playerAction],
         currentPlayer,
         action,
-        players
+        players,
+        nextPlayer,
+        currentLocale
       );
 
       // Convert API dice result to frontend format

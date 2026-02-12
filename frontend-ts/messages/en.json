@@ -265,6 +265,8 @@
     "players": {
       "heroesTitle": "Heroes ({count})",
       "playedBy": "played by {playerName}",
+      "removePlayer": "Remove player",
+      "activeBadge": "Active",
       "addHeroTitle": "Add a Hero",
       "addHeroDescription": "Create a character for the adventure",
       "yourName": "Your Name",
@@ -295,6 +297,7 @@
       "ideasLabel": "Ideas:",
       "heroesTitle": "Heroes",
       "activeBadge": "Active",
+      "playedBy": "played by {playerName}",
       "gameMaster": "Game Master",
       "errorMessage": "The story continues... (There was an issue with the AI. Please try again!)"
     }

@@ -75,6 +75,7 @@ class ResolveActionRequest(BaseModel):
     player: SimplePlayerInput
     action: str
     all_players: List[SimplePlayerInput]
+    next_player: Optional[SimplePlayerInput] = None  # Who will act next (for targeted suggestions)
     model: Optional[str] = None
     language: str = "en"  # Language for AI responses (en, de, etc.)
 
@@ -423,6 +424,11 @@ DICE RESULT: 2d6={roll_total} + {modifier} ({attr_used or "luck"}) = {total} →
         "en": "You are a warm, enthusiastic Game Master for a family-friendly adventure. Keep everything positive, exciting, and appropriate for all ages.",
     }.get(req.language, "You are a warm, enthusiastic Game Master for a family-friendly adventure. Keep everything positive, exciting, and appropriate for all ages.")
 
+    # Build next player context for targeted suggestions
+    next_player_guidance = ""
+    if req.next_player:
+        next_player_guidance = f"\n\nNEXT TO ACT: {req.next_player.character_name} ({req.next_player.concept})\nGenerate action suggestions specifically for {req.next_player.character_name}. The suggestions should fit their concept and make sense for what they might do in this situation."
+
     narration_prompt = f"""{language_instructions}
 
 You are the Game Master for a family-friendly adventure.
@@ -443,8 +449,9 @@ Write 1-2 short paragraphs narrating what happens:
 - Make it vivid and engaging
 - Keep it family-friendly (no violence, scary content, or mature themes)
 - End with something that invites the next action
+{next_player_guidance}
 
-Then suggest 3-4 fun things the players might do next."""
+Then suggest 3-4 fun things {"the next player" if req.next_player else "the players"} might do next."""
 
     try:
         gen = await client.chat(
