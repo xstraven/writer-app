@@ -4,13 +4,13 @@ import { useState } from 'react';
 import { Loader2, UserPlus, Play, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useSimpleGameStore } from '@/stores/simpleGameStore';
 import { generateSimpleOpening } from '@/lib/api';
 import { AttributeAllocator } from './AttributeAllocator';
 import { useActiveLocale } from '@/hooks/useActiveLocale';
+import { CharacterFormFields, type CharacterFormData } from '@/components/shared/CharacterFormFields';
 import type { SimplePlayer } from '@/lib/types';
 
 export function PlayerSetup() {
@@ -29,11 +29,18 @@ export function PlayerSetup() {
     isGenerating,
   } = useSimpleGameStore();
 
-  const [playerName, setPlayerName] = useState('');
-  const [characterName, setCharacterName] = useState('');
-  const [concept, setConcept] = useState('');
+  const [formData, setFormData] = useState<CharacterFormData>({
+    playerName: '',
+    characterName: '',
+    characterConcept: '',
+    characterSpecial: '',
+  });
   const [attributeScores, setAttributeScores] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
+
+  const handleFieldChange = (field: keyof CharacterFormData, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
 
   // Determine available modifiers based on number of attributes
   const getAvailableModifiers = (): number[] => {
@@ -56,15 +63,15 @@ export function PlayerSetup() {
   };
 
   const handleAddPlayer = () => {
-    if (!playerName.trim()) {
+    if (!formData.playerName.trim()) {
       setError(t('errorNoPlayerName'));
       return;
     }
-    if (!characterName.trim()) {
+    if (!formData.characterName.trim()) {
       setError(t('errorNoCharacterName'));
       return;
     }
-    if (!concept.trim()) {
+    if (!formData.characterConcept.trim()) {
       setError(t('errorNoConcept'));
       return;
     }
@@ -75,18 +82,21 @@ export function PlayerSetup() {
 
     const newPlayer: SimplePlayer = {
       id: crypto.randomUUID(),
-      playerName: playerName.trim(),
-      characterName: characterName.trim(),
-      concept: concept.trim(),
+      playerName: formData.playerName.trim(),
+      characterName: formData.characterName.trim(),
+      concept: formData.characterConcept.trim(),
       attributeScores: { ...attributeScores },
     };
 
     addPlayer(newPlayer);
 
     // Reset form
-    setPlayerName('');
-    setCharacterName('');
-    setConcept('');
+    setFormData({
+      playerName: '',
+      characterName: '',
+      characterConcept: '',
+      characterSpecial: '',
+    });
     setAttributeScores({});
     setError(null);
   };
@@ -162,39 +172,20 @@ export function PlayerSetup() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="player-name">{t('yourName')}</Label>
-              <Input
-                id="player-name"
-                placeholder={t('yourNamePlaceholder')}
-                value={playerName}
-                onChange={(e) => setPlayerName(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="character-name">{t('characterName')}</Label>
-              <Input
-                id="character-name"
-                placeholder={t('characterNamePlaceholder')}
-                value={characterName}
-                onChange={(e) => setCharacterName(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="concept">{t('concept')}</Label>
-            <Input
-              id="concept"
-              placeholder={t('conceptPlaceholder')}
-              value={concept}
-              onChange={(e) => setConcept(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              {t('conceptHelp')}
-            </p>
-          </div>
+          <CharacterFormFields
+            formData={formData}
+            onChange={handleFieldChange}
+            disabled={false}
+            gameStyle="simple"
+            translationNamespace="shared.characterForm"
+            showVoiceInput={false}
+            showSpecialTrait={false}
+            placeholders={{
+              playerName: t('yourNamePlaceholder'),
+              characterName: t('characterNamePlaceholder'),
+              characterConcept: t('conceptPlaceholder'),
+            }}
+          />
 
           <div className="space-y-2">
             <Label>{t('attributeScores')}</Label>
