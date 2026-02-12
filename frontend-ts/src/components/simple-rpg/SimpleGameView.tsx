@@ -1,16 +1,16 @@
 'use client';
 
-import { useState, useEffect, useRef, KeyboardEvent } from 'react';
+import { useState, KeyboardEvent, useMemo } from 'react';
 import { Loader2, Send, Users, BookOpen, Dices } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSimpleGameStore } from '@/stores/simpleGameStore';
 import { resolveSimpleAction } from '@/lib/api';
 import { SimpleDiceResults } from './SimpleDiceResults';
 import { SimplePlayerCard } from './SimplePlayerCard';
+import { NarrativeDisplay, type NarrativeAction } from '@/components/shared/NarrativeDisplay';
 import { useTranslations } from 'next-intl';
 import type { SimpleGameAction, SimpleDiceResult } from '@/lib/types';
 
@@ -35,15 +35,19 @@ export function SimpleGameView() {
   } = useSimpleGameStore();
 
   const [actionText, setActionText] = useState('');
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const endRef = useRef<HTMLDivElement>(null);
 
   const currentPlayer = getCurrentPlayer();
 
-  // Auto-scroll to bottom on new actions
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [actionHistory.length]);
+  // Convert SimpleGameAction to NarrativeAction for shared component
+  const narrativeActions = useMemo((): NarrativeAction[] => {
+    return actionHistory.map((action) => ({
+      id: action.id,
+      type: action.type as 'player_action' | 'gm_narration',
+      playerName: action.playerName,
+      content: action.content,
+      timestamp: action.timestamp,
+    }));
+  }, [actionHistory]);
 
   const handleTakeAction = async (action: string) => {
     if (!action.trim() || !currentPlayer || isGenerating) return;
@@ -164,20 +168,18 @@ export function SimpleGameView() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <ScrollArea className="h-[400px]" ref={scrollRef}>
-              <div className="p-4 space-y-4">
-                {actionHistory.map((action) => (
-                  <ActionEntry key={action.id} action={action} />
-                ))}
-                {isGenerating && (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {t('storyUnfolds')}
-                  </div>
-                )}
-                <div ref={endRef} />
+            <NarrativeDisplay
+              actions={narrativeActions}
+              translationNamespace="shared.narrative"
+              showTurnNumbers={false}
+              height="h-[400px]"
+            />
+            {isGenerating && (
+              <div className="flex items-center gap-2 text-muted-foreground p-4 border-t">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {t('storyUnfolds')}
               </div>
-            </ScrollArea>
+            )}
           </CardContent>
         </Card>
 
@@ -251,34 +253,6 @@ export function SimpleGameView() {
           </CardContent>
         </Card>
       </div>
-    </div>
-  );
-}
-
-function ActionEntry({ action }: { action: SimpleGameAction }) {
-  const t = useTranslations('simpleRpg.game');
-
-  if (action.type === 'player_action') {
-    return (
-      <div className="p-3 rounded-lg border-l-4 border-l-blue-500 bg-blue-500/5">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-          <span className="font-medium text-blue-600">{action.playerName}</span>
-        </div>
-        <div className="text-sm">
-          <span className="text-blue-500">&gt; </span>
-          {action.content}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="p-3 rounded-lg border-l-4 border-l-amber-500 bg-amber-500/5">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-        <BookOpen className="h-3 w-3" />
-        <span className="font-medium text-amber-600">{t('gameMaster')}</span>
-      </div>
-      <div className="text-sm whitespace-pre-wrap">{action.content}</div>
     </div>
   );
 }

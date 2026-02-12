@@ -11,6 +11,28 @@
     "edit": "Bearbeiten",
     "close": "Schließen"
   },
+  "shared": {
+    "narrative": {
+      "awaiting": "Das Abenteuer erwartet dich...",
+      "gameMaster": "Spielleiter",
+      "player": "Spieler",
+      "system": "System",
+      "turn": "Runde {number}"
+    "characterForm": {
+      "playerName": "Dein Name",
+      "playerNamePlaceholder": "Dein Anzeigename",
+      "characterName": "Charaktername",
+      "characterNamePlaceholder": "Thorin, Aria, Luna...",
+      "characterConcept": "Charakterkonzept",
+      "characterConceptPlaceholder": "Mutiger Ritter, gerissener Schurke, weiser Zauberer...",
+      "characterClass": "Charakterklasse",
+      "characterClassPlaceholder": "Kämpfer, Schurke, Magier...",
+      "characterConceptHint": "Eine kurze Beschreibung, wer dein Charakter ist",
+      "characterSpecial": "Was macht sie besonders",
+      "characterSpecialPlaceholder": "Hat ein magisches Schwert, spricht mit Tieren, gibt niemals auf...",
+      "characterSpecialHint": "Eine einzigartige Eigenschaft, Fähigkeit oder Persönlichkeitsmerkmal"
+    }
+  },
   "navigation": {
     "storycraft": "Storycraft",
     "yourAdventures": "Deine Abenteuer",

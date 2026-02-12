@@ -11,6 +11,28 @@
     "edit": "Edit",
     "close": "Close"
   },
+  "shared": {
+    "narrative": {
+      "awaiting": "The adventure awaits...",
+      "gameMaster": "Game Master",
+      "player": "Player",
+      "system": "System",
+      "turn": "Turn {number}"
+    "characterForm": {
+      "playerName": "Your Name",
+      "playerNamePlaceholder": "Your display name",
+      "characterName": "Character Name",
+      "characterNamePlaceholder": "Thorin, Aria, Luna...",
+      "characterConcept": "Character Concept",
+      "characterConceptPlaceholder": "Brave knight, cunning rogue, wise wizard...",
+      "characterClass": "Character Class",
+      "characterClassPlaceholder": "Fighter, Rogue, Wizard...",
+      "characterConceptHint": "A short description of who your character is",
+      "characterSpecial": "What Makes Them Special",
+      "characterSpecialPlaceholder": "Has a magic sword, talks to animals, never gives up...",
+      "characterSpecialHint": "A unique trait, ability, or personality quirk"
+    }
+  },
   "navigation": {
     "storycraft": "Storycraft",
     "yourAdventures": "Your Adventures",

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+# Set test database path BEFORE any imports to avoid file lock conflicts with dev server
+import os
+os.environ.setdefault("STORYCRAFT_DUCKDB_PATH", "./data/storycraft_test.duckdb")
+
 from collections.abc import Generator
 from typing import Any, Dict
 
