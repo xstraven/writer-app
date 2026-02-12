@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, UserPlus, Play, Trash2 } from 'lucide-react';
+import { Loader2, UserPlus, Play } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useSimpleGameStore } from '@/stores/simpleGameStore';
 import { generateSimpleOpening } from '@/lib/api';
 import { AttributeAllocator } from './AttributeAllocator';
+import { SimplePlayerCard } from './SimplePlayerCard';
 import { useActiveLocale } from '@/hooks/useActiveLocale';
 import type { SimplePlayer } from '@/lib/types';
 
@@ -121,29 +122,13 @@ export function PlayerSetup() {
           <CardContent>
             <div className="grid gap-3">
               {players.map((player) => (
-                <div
+                <SimplePlayerCard
                   key={player.id}
-                  className="flex items-center justify-between p-3 rounded-lg border bg-card"
-                >
-                  <div>
-                    <div className="font-medium">{player.characterName}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {player.concept} ({t('playedBy', { playerName: player.playerName })})
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      {Object.entries(player.attributeScores)
-                        .map(([name, score]) => `${name}: ${score >= 0 ? '+' : ''}${score}`)
-                        .join(', ')}
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removePlayer(player.id)}
-                  >
-                    <Trash2 className="h-4 w-4 text-muted-foreground" />
-                  </Button>
-                </div>
+                  player={player}
+                  showRemove={true}
+                  onRemove={() => removePlayer(player.id)}
+                  translationNamespace="simpleRpg.players"
+                />
               ))}
             </div>
           </CardContent>

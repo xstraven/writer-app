@@ -10,6 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSimpleGameStore } from '@/stores/simpleGameStore';
 import { resolveSimpleAction } from '@/lib/api';
 import { SimpleDiceResults } from './SimpleDiceResults';
+import { SimplePlayerCard } from './SimplePlayerCard';
 import { useTranslations } from 'next-intl';
 import type { SimpleGameAction, SimpleDiceResult } from '@/lib/types';
 
@@ -239,34 +240,13 @@ export function SimpleGameView() {
           </CardHeader>
           <CardContent className="space-y-3">
             {players.map((player, idx) => (
-              <div
+              <SimplePlayerCard
                 key={player.id}
-                className={`p-3 rounded-lg border transition-all ${
-                  idx === currentPlayerIndex
-                    ? 'border-amber-500 bg-amber-500/5 ring-1 ring-amber-500'
-                    : 'border-border'
-                }`}
-              >
-                <div className="font-medium">
-                  {player.characterName}
-                  {idx === currentPlayerIndex && (
-                    <Badge variant="default" className="ml-2 text-xs">
-                      {t('activeBadge')}
-                    </Badge>
-                  )}
-                </div>
-                <div className="text-sm text-muted-foreground">{player.concept}</div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {player.playerName}
-                </div>
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {Object.entries(player.attributeScores).map(([name, score]) => (
-                    <Badge key={name} variant="secondary" className="text-xs">
-                      {name}: {score >= 0 ? '+' : ''}{score}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
+                player={player}
+                isActive={idx === currentPlayerIndex}
+                showRemove={false}
+                translationNamespace="simpleRpg.game"
+              />
             ))}
           </CardContent>
         </Card>
