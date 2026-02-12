@@ -15,6 +15,7 @@ import { createCampaign, generateWorldConcept, addLocalPlayersBatch } from '@/li
 import { useCampaignStore } from '@/stores/campaignStore';
 import { WorldBuilder } from './WorldBuilder';
 import { TemplateSelector } from './TemplateSelector';
+import { CharacterFormFields, type CharacterFormData } from '@/components/shared/CharacterFormFields';
 import { toast } from 'sonner';
 import type { ProposedLoreEntry } from '@/lib/types';
 import type { Locale } from '@/hooks/useActiveLocale';
@@ -139,6 +140,12 @@ export function CreateCampaignForm() {
     setFormData((prev) => ({ ...prev, worldSetting: enrichedDescription }));
     setShowWorldBuilder(false);
     toast.success(tToast('worldUpdated'));
+  };
+
+  const handleFriendFieldChange = (idx: number, field: keyof CharacterFormData, value: string) => {
+    const updated = [...friends];
+    updated[idx] = { ...updated[idx], [field]: value };
+    setFriends(updated);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -558,68 +565,16 @@ export function CreateCampaignForm() {
                   >
                     <X className="h-4 w-4" />
                   </button>
-                  <div className="text-xs font-medium text-muted-foreground">{t('friendNumber', { number: idx + 1 })}</div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs">{t('friendPlayerName')} *</Label>
-                      <Input
-                        placeholder={t('friendPlayerNamePlaceholder')}
-                        value={friend.playerName}
-                        onChange={(e) => {
-                          const updated = [...friends];
-                          updated[idx] = { ...updated[idx], playerName: e.target.value };
-                          setFriends(updated);
-                        }}
-                        disabled={isCreating}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">{t('friendCharacterName')}</Label>
-                      <Input
-                        placeholder={t('characterNamePlaceholder')}
-                        value={friend.characterName}
-                        onChange={(e) => {
-                          const updated = [...friends];
-                          updated[idx] = { ...updated[idx], characterName: e.target.value };
-                          setFriends(updated);
-                        }}
-                        disabled={isCreating}
-                      />
-                    </div>
-                    <div className="space-y-1 md:col-span-2">
-                      <Label className="text-xs">
-                        {formData.style === 'narrative' ? t('friendCharacterConcept') : t('friendCharacterClass')}
-                      </Label>
-                      <Input
-                        placeholder={formData.style === 'narrative'
-                          ? t('friendCharacterConceptPlaceholder')
-                          : t('friendCharacterClassPlaceholder')
-                        }
-                        value={friend.characterConcept}
-                        onChange={(e) => {
-                          const updated = [...friends];
-                          updated[idx] = { ...updated[idx], characterConcept: e.target.value };
-                          setFriends(updated);
-                        }}
-                        disabled={isCreating}
-                      />
-                    </div>
-                    {formData.style === 'narrative' && (
-                      <div className="space-y-1 md:col-span-2">
-                        <Label className="text-xs">{t('friendCharacterSpecial')}</Label>
-                        <Input
-                          placeholder={t('friendCharacterSpecialPlaceholder')}
-                          value={friend.characterSpecial}
-                          onChange={(e) => {
-                            const updated = [...friends];
-                            updated[idx] = { ...updated[idx], characterSpecial: e.target.value };
-                            setFriends(updated);
-                          }}
-                          disabled={isCreating}
-                        />
-                      </div>
-                    )}
-                  </div>
+                  <div className="text-xs font-medium text-muted-foreground mb-2">{t('friendNumber', { number: idx + 1 })}</div>
+                  <CharacterFormFields
+                    formData={friend}
+                    onChange={(field, value) => handleFriendFieldChange(idx, field, value)}
+                    disabled={isCreating}
+                    gameStyle={formData.style === 'hybrid' ? 'narrative' : formData.style}
+                    translationNamespace="shared.characterForm"
+                    showVoiceInput={false}
+                    showSpecialTrait={true}
+                  />
                 </div>
               ))}
             </div>
