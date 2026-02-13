@@ -20,7 +20,6 @@ Usage:
 
 from __future__ import annotations
 
-import random
 from typing import Optional
 
 from .instructor_client import get_structured_llm_client

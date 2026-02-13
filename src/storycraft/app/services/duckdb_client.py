@@ -6,7 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, List, Optional
 
 import duckdb
 
@@ -121,7 +121,7 @@ _TABLES_WITH_CREATED_AT = {"snippets", "branches", "campaigns", "campaign_action
 class _DuckDBQuery:
     def __init__(
         self,
-        client: DuckDBSupabaseClient,
+        client: DuckDBClient,
         table_name: str,
         *,
         action: str,
@@ -344,7 +344,7 @@ class _DuckDBQuery:
 
 
 class _DuckDBTable:
-    def __init__(self, client: DuckDBSupabaseClient, name: str) -> None:
+    def __init__(self, client: DuckDBClient, name: str) -> None:
         self._client = client
         self._name = name
 
@@ -368,7 +368,7 @@ class _DuckDBTable:
         )
 
 
-class DuckDBSupabaseClient:
+class DuckDBClient:
     def __init__(self, db_path: str = "./data/storycraft.duckdb") -> None:
         self.db_path = Path(db_path)
         # Thread-local storage for connections (one persistent connection per thread)
@@ -451,7 +451,7 @@ class DuckDBSupabaseClient:
 class TransactionContext:
     """Context manager for database transactions."""
 
-    def __init__(self, client: DuckDBSupabaseClient) -> None:
+    def __init__(self, client: DuckDBClient) -> None:
         self._client = client
 
     def __enter__(self) -> "TransactionContext":
@@ -466,4 +466,4 @@ class TransactionContext:
         return False
 
 
-__all__ = ["DuckDBSupabaseClient", "TransactionContext"]
+__all__ = ["DuckDBClient", "TransactionContext"]

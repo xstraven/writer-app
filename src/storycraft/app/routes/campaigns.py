@@ -5,7 +5,6 @@ import random
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel
 
 from ..campaign_action_store import CampaignActionStore
 from ..campaign_store import CampaignStore
