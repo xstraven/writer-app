@@ -5,10 +5,9 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from supabase import Client
-
 from .models import CharacterSheet, Player
-from .services.supabase_client import get_supabase_client
+from .services.persistence_client import get_persistence_client
+from .services.persistence_types import DatabaseClient
 
 
 def _generate_id() -> str:
@@ -24,8 +23,8 @@ def _generate_session_token() -> str:
 class PlayerStore:
     """Store for player CRUD operations."""
 
-    def __init__(self, *, client: Client | None = None, table: str = "players") -> None:
-        self._client = client or get_supabase_client()
+    def __init__(self, *, client: DatabaseClient | None = None, table: str = "players") -> None:
+        self._client = client or get_persistence_client()
         self._table_name = table
 
     def _table(self):

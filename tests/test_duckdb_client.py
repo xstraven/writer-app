@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import pytest
-
-from storycraft.app.services.duckdb_client import DuckDBSupabaseClient
+from storycraft.app.services.duckdb_client import DuckDBClient
 
 
 def test_duckdb_basic_insert_and_select(tmp_path):
     """Test basic insert and select operations with DuckDB client."""
     db_path = tmp_path / "test.duckdb"
-    client = DuckDBSupabaseClient(db_path=str(db_path))
+    client = DuckDBClient(db_path=str(db_path))
 
     # Test insert
     result = client.table("snippets").insert(
@@ -35,7 +33,7 @@ def test_duckdb_basic_insert_and_select(tmp_path):
 def test_duckdb_update(tmp_path):
     """Test update operation."""
     db_path = tmp_path / "test.duckdb"
-    client = DuckDBSupabaseClient(db_path=str(db_path))
+    client = DuckDBClient(db_path=str(db_path))
 
     # Insert a row
     client.table("snippets").insert(
@@ -61,7 +59,7 @@ def test_duckdb_update(tmp_path):
 def test_duckdb_delete(tmp_path):
     """Test delete operation."""
     db_path = tmp_path / "test.duckdb"
-    client = DuckDBSupabaseClient(db_path=str(db_path))
+    client = DuckDBClient(db_path=str(db_path))
 
     # Insert a row
     client.table("snippets").insert(
@@ -88,7 +86,7 @@ def test_duckdb_delete(tmp_path):
 def test_duckdb_upsert_insert(tmp_path):
     """Test upsert operation that inserts a new row."""
     db_path = tmp_path / "test.duckdb"
-    client = DuckDBSupabaseClient(db_path=str(db_path))
+    client = DuckDBClient(db_path=str(db_path))
 
     # Upsert (should insert)
     result = client.table("story_settings").upsert(
@@ -108,7 +106,7 @@ def test_duckdb_upsert_insert(tmp_path):
 def test_duckdb_upsert_update(tmp_path):
     """Test upsert operation that updates an existing row."""
     db_path = tmp_path / "test.duckdb"
-    client = DuckDBSupabaseClient(db_path=str(db_path))
+    client = DuckDBClient(db_path=str(db_path))
 
     # Initial insert
     client.table("story_settings").upsert(
@@ -131,7 +129,7 @@ def test_duckdb_upsert_update(tmp_path):
 def test_duckdb_multiple_filters(tmp_path):
     """Test query with multiple filters."""
     db_path = tmp_path / "test.duckdb"
-    client = DuckDBSupabaseClient(db_path=str(db_path))
+    client = DuckDBClient(db_path=str(db_path))
 
     # Insert multiple rows
     client.table("snippets").insert([
@@ -170,7 +168,7 @@ def test_duckdb_multiple_filters(tmp_path):
 def test_duckdb_order_and_limit(tmp_path):
     """Test ordering and limiting results."""
     db_path = tmp_path / "test.duckdb"
-    client = DuckDBSupabaseClient(db_path=str(db_path))
+    client = DuckDBClient(db_path=str(db_path))
 
     # Insert multiple rows
     client.table("snippets").insert([
@@ -189,7 +187,7 @@ def test_duckdb_order_and_limit(tmp_path):
 def test_duckdb_list_insertion(tmp_path):
     """Test inserting multiple rows at once."""
     db_path = tmp_path / "test.duckdb"
-    client = DuckDBSupabaseClient(db_path=str(db_path))
+    client = DuckDBClient(db_path=str(db_path))
 
     # Insert multiple rows
     result = client.table("snippets").insert([
@@ -208,7 +206,7 @@ def test_duckdb_list_insertion(tmp_path):
 def test_duckdb_branches_composite_key(tmp_path):
     """Test operations on branches table with composite primary key."""
     db_path = tmp_path / "test.duckdb"
-    client = DuckDBSupabaseClient(db_path=str(db_path))
+    client = DuckDBClient(db_path=str(db_path))
 
     # Insert a branch
     result = client.table("branches").insert({
@@ -236,7 +234,7 @@ def test_duckdb_branches_composite_key(tmp_path):
 def test_duckdb_created_at_auto_populated(tmp_path):
     """Test that created_at is automatically populated."""
     db_path = tmp_path / "test.duckdb"
-    client = DuckDBSupabaseClient(db_path=str(db_path))
+    client = DuckDBClient(db_path=str(db_path))
 
     # Insert without created_at
     result = client.table("snippets").insert({
@@ -257,7 +255,7 @@ def test_duckdb_persistence_across_connections(tmp_path):
     db_path = tmp_path / "test.duckdb"
 
     # Create first client and insert data
-    client1 = DuckDBSupabaseClient(db_path=str(db_path))
+    client1 = DuckDBClient(db_path=str(db_path))
     client1.table("snippets").insert({
         "id": "test-1",
         "story": "Story A",
@@ -268,7 +266,7 @@ def test_duckdb_persistence_across_connections(tmp_path):
     }).execute()
 
     # Create second client and verify data exists
-    client2 = DuckDBSupabaseClient(db_path=str(db_path))
+    client2 = DuckDBClient(db_path=str(db_path))
     result = client2.table("snippets").select("*").eq("id", "test-1").execute()
     assert len(result.data) == 1
     assert result.data[0]["content"] == "Persistent data"
@@ -277,7 +275,7 @@ def test_duckdb_persistence_across_connections(tmp_path):
 def test_duckdb_lorebook_table(tmp_path):
     """Test operations on lorebook table."""
     db_path = tmp_path / "test.duckdb"
-    client = DuckDBSupabaseClient(db_path=str(db_path))
+    client = DuckDBClient(db_path=str(db_path))
 
     # Insert lore entry
     result = client.table("lorebook").insert({
@@ -303,7 +301,7 @@ def test_duckdb_lorebook_table(tmp_path):
 def test_duckdb_app_state_table(tmp_path):
     """Test operations on app_state table."""
     db_path = tmp_path / "test.duckdb"
-    client = DuckDBSupabaseClient(db_path=str(db_path))
+    client = DuckDBClient(db_path=str(db_path))
 
     # Set state
     client.table("app_state").upsert(

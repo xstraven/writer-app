@@ -1,27 +1,28 @@
 from __future__ import annotations
 
-import threading
 import os
+import threading
 from collections import defaultdict
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, Optional, cast
 
-from supabase import Client, create_client
-
+from .duckdb_client import DuckDBClient
+from .neon_client import NeonClient
+from .persistence_types import DatabaseClient
 from ..config import get_settings
 
 
 @dataclass
 class _InMemoryResult:
-    data: List[Dict[str, Any]]
+    data: list[dict[str, Any]]
 
 
 class _InMemoryQuery:
     def __init__(
         self,
-        store: List[Dict[str, Any]],
+        store: list[dict[str, Any]],
         *,
         action: str,
         payload: Any = None,
@@ -30,41 +31,41 @@ class _InMemoryQuery:
         self._store = store
         self._action = action
         self._payload = payload
-        self._filters: List[tuple[str, Any]] = []
+        self._filters: list[tuple[str, Any]] = []
         self._order: Optional[tuple[str, bool]] = None
         self._limit: Optional[int] = None
         self._on_conflict = on_conflict
 
-    def select(self, *_: Any) -> _InMemoryQuery:
+    def select(self, *_: Any) -> "_InMemoryQuery":
         self._action = "select"
         return self
 
-    def eq(self, column: str, value: Any) -> _InMemoryQuery:
+    def eq(self, column: str, value: Any) -> "_InMemoryQuery":
         self._filters.append((column, value))
         return self
 
-    def order(self, column: str, *, desc: bool = False) -> _InMemoryQuery:
+    def order(self, column: str, *, desc: bool = False) -> "_InMemoryQuery":
         self._order = (column, desc)
         return self
 
-    def limit(self, value: int) -> _InMemoryQuery:
+    def limit(self, value: int) -> "_InMemoryQuery":
         self._limit = value
         return self
 
-    def insert(self, payload: Any) -> _InMemoryQuery:
+    def insert(self, payload: Any) -> "_InMemoryQuery":
         return _InMemoryQuery(self._store, action="insert", payload=payload)
 
-    def update(self, payload: Dict[str, Any]) -> _InMemoryQuery:
+    def update(self, payload: dict[str, Any]) -> "_InMemoryQuery":
         query = _InMemoryQuery(self._store, action="update", payload=payload)
         query._filters = list(self._filters)
         return query
 
-    def delete(self) -> _InMemoryQuery:
+    def delete(self) -> "_InMemoryQuery":
         query = _InMemoryQuery(self._store, action="delete")
         query._filters = list(self._filters)
         return query
 
-    def upsert(self, payload: Any, *, on_conflict: Optional[str] = None) -> _InMemoryQuery:
+    def upsert(self, payload: Any, *, on_conflict: Optional[str] = None) -> "_InMemoryQuery":
         return _InMemoryQuery(
             self._store,
             action="upsert",
@@ -72,11 +73,11 @@ class _InMemoryQuery:
             on_conflict=on_conflict,
         )
 
-    def _apply_filters(self, rows: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _apply_filters(self, rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
         return [row for row in rows if all(row.get(col) == value for col, value in self._filters)]
 
     @staticmethod
-    def _ensure_created_at(row: Dict[str, Any]) -> None:
+    def _ensure_created_at(row: dict[str, Any]) -> None:
         if "created_at" not in row:
             row["created_at"] = datetime.now(tz=timezone.utc).isoformat()
 
@@ -92,7 +93,7 @@ class _InMemoryQuery:
 
         if self._action == "insert":
             rows = self._payload if isinstance(self._payload, list) else [self._payload]
-            out = []
+            out: list[dict[str, Any]] = []
             for row in rows:
                 record = deepcopy(row)
                 self._ensure_created_at(record)
@@ -113,7 +114,7 @@ class _InMemoryQuery:
 
         if self._action == "upsert":
             rows = self._payload if isinstance(self._payload, list) else [self._payload]
-            out: List[Dict[str, Any]] = []
+            out: list[dict[str, Any]] = []
             keys = []
             if self._on_conflict:
                 keys = [key.strip() for key in self._on_conflict.split(",") if key.strip()]
@@ -138,7 +139,7 @@ class _InMemoryQuery:
 
 
 class _InMemoryTable:
-    def __init__(self, store: List[Dict[str, Any]]) -> None:
+    def __init__(self, store: list[dict[str, Any]]) -> None:
         self._store = store
 
     def select(self, *_: Any) -> _InMemoryQuery:
@@ -147,7 +148,7 @@ class _InMemoryTable:
     def insert(self, payload: Any) -> _InMemoryQuery:
         return _InMemoryQuery(self._store, action="insert", payload=payload)
 
-    def update(self, payload: Dict[str, Any]) -> _InMemoryQuery:
+    def update(self, payload: dict[str, Any]) -> _InMemoryQuery:
         return _InMemoryQuery(self._store, action="update", payload=payload)
 
     def delete(self) -> _InMemoryQuery:
@@ -160,7 +161,7 @@ class _InMemoryTable:
 class _InMemoryTransactionContext:
     """No-op transaction context for in-memory client."""
 
-    def __init__(self, client: "InMemorySupabaseClient") -> None:
+    def __init__(self, client: "InMemoryClient") -> None:
         self._client = client
 
     def __enter__(self) -> "_InMemoryTransactionContext":
@@ -175,29 +176,26 @@ class _InMemoryTransactionContext:
         return False
 
 
-class InMemorySupabaseClient:
+class InMemoryClient:
     def __init__(self) -> None:
-        self._tables: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        self._tables: Dict[str, list[dict[str, Any]]] = defaultdict(list)
         self._in_transaction = False
-        self._snapshot: Optional[Dict[str, List[Dict[str, Any]]]] = None
+        self._snapshot: Optional[Dict[str, list[dict[str, Any]]]] = None
 
     def table(self, name: str) -> _InMemoryTable:
         return _InMemoryTable(self._tables[name])
 
     def begin_transaction(self) -> None:
-        """Begin a transaction by snapshotting current state."""
         if self._in_transaction:
-            return  # Already in transaction
+            return
         self._in_transaction = True
         self._snapshot = {k: [deepcopy(v) for v in lst] for k, lst in self._tables.items()}
 
     def commit(self) -> None:
-        """Commit the transaction (discard snapshot)."""
         self._in_transaction = False
         self._snapshot = None
 
     def rollback(self) -> None:
-        """Rollback to the snapshot state."""
         if self._snapshot is not None:
             self._tables.clear()
             for k, v in self._snapshot.items():
@@ -206,50 +204,46 @@ class InMemorySupabaseClient:
         self._snapshot = None
 
     def transaction(self) -> _InMemoryTransactionContext:
-        """Context manager for transactions."""
         return _InMemoryTransactionContext(self)
 
 
 _client_lock = threading.Lock()
-_client: Optional[Client] = None
+_client: Optional[DatabaseClient] = None
 
 
-def get_supabase_client(url: Optional[str] = None, key: Optional[str] = None) -> Client:  # type: ignore[override]
+def get_persistence_client(database_url: Optional[str] = None) -> DatabaseClient:
     global _client
     with _client_lock:
         if _client is not None:
             return _client
 
-        # Priority 1: Tests use in-memory
+        # Priority 1: tests use in-memory client
         if os.getenv("PYTEST_CURRENT_TEST"):
-            _client = InMemorySupabaseClient()  # type: ignore[assignment]
-            return _client  # type: ignore[return-value]
-
-        settings = get_settings()
-        supabase_url = url or settings.supabase_url
-        supabase_key = key or settings.supabase_service_key
-
-        # Priority 2: Supabase credentials provided
-        if supabase_url and supabase_key:
-            _client = create_client(supabase_url, supabase_key)
+            _client = InMemoryClient()
             return _client
 
-        # Priority 3: No credentials → use DuckDB local mode
-        from .duckdb_client import DuckDBSupabaseClient
+        settings = get_settings()
+        neon_database_url = database_url or settings.neon_database_url
 
-        _client = DuckDBSupabaseClient(db_path=settings.duckdb_path)  # type: ignore[assignment]
-        return _client  # type: ignore[return-value]
+        # Priority 2: Neon configured
+        if neon_database_url:
+            _client = cast(DatabaseClient, NeonClient(neon_database_url))
+            return _client
+
+        # Priority 3: no cloud DB configured -> local DuckDB mode
+        _client = cast(DatabaseClient, DuckDBClient(db_path=settings.duckdb_path))
+        return _client
 
 
-def reset_supabase_client() -> None:
+def reset_persistence_client() -> None:
     global _client
     with _client_lock:
-        if _client is not None and hasattr(_client, "postgrest_client"):
+        if _client is not None and hasattr(_client, "close"):
             try:
-                _client.postgrest_client.close()  # type: ignore[attr-defined]
+                _client.close()  # type: ignore[misc]
             except Exception:
                 pass
         _client = None
 
 
-__all__ = ["get_supabase_client", "reset_supabase_client", "InMemorySupabaseClient"]
+__all__ = ["get_persistence_client", "reset_persistence_client", "InMemoryClient"]

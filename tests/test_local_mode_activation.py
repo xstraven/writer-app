@@ -4,20 +4,20 @@ import os
 
 import pytest
 
-from storycraft.app.services.duckdb_client import DuckDBSupabaseClient
-from storycraft.app.services.supabase_client import (
-    InMemorySupabaseClient,
-    get_supabase_client,
-    reset_supabase_client,
+from storycraft.app.services.duckdb_client import DuckDBClient
+from storycraft.app.services.persistence_client import (
+    InMemoryClient,
+    get_persistence_client,
+    reset_persistence_client,
 )
 
 
 @pytest.fixture(autouse=True)
 def reset_client():
     """Reset the singleton client before and after each test."""
-    reset_supabase_client()
+    reset_persistence_client()
     yield
-    reset_supabase_client()
+    reset_persistence_client()
 
 
 def test_test_mode_uses_in_memory_client(monkeypatch):
@@ -26,27 +26,25 @@ def test_test_mode_uses_in_memory_client(monkeypatch):
     # We'll verify it's set and uses in-memory
     assert os.getenv("PYTEST_CURRENT_TEST") is not None
 
-    # Remove Supabase credentials to ensure we're not using them
-    monkeypatch.delenv("STORYCRAFT_SUPABASE_URL", raising=False)
-    monkeypatch.delenv("STORYCRAFT_SUPABASE_SERVICE_KEY", raising=False)
+    # Remove Neon URL to ensure we're not using it
+    monkeypatch.delenv("STORYCRAFT_NEON_DATABASE_URL", raising=False)
 
-    reset_supabase_client()
-    client = get_supabase_client()
+    reset_persistence_client()
+    client = get_persistence_client()
 
     # Verify it's in-memory client
-    assert isinstance(client, InMemorySupabaseClient)
+    assert isinstance(client, InMemoryClient)
 
 
 def test_local_mode_uses_duckdb_without_credentials(monkeypatch, tmp_path):
-    """Test that DuckDB client is used when Supabase credentials are missing."""
+    """Test that DuckDB client is used when Neon URL is missing."""
     from storycraft.app.config import get_settings
 
     # Remove test mode env var
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
 
-    # Remove Supabase credentials
-    monkeypatch.delenv("STORYCRAFT_SUPABASE_URL", raising=False)
-    monkeypatch.delenv("STORYCRAFT_SUPABASE_SERVICE_KEY", raising=False)
+    # Remove Neon URL
+    monkeypatch.delenv("STORYCRAFT_NEON_DATABASE_URL", raising=False)
 
     # Set DuckDB path
     monkeypatch.setenv("STORYCRAFT_DUCKDB_PATH", str(tmp_path / "test.duckdb"))
@@ -54,11 +52,11 @@ def test_local_mode_uses_duckdb_without_credentials(monkeypatch, tmp_path):
     # Clear settings cache
     get_settings.cache_clear()
 
-    reset_supabase_client()
-    client = get_supabase_client()
+    reset_persistence_client()
+    client = get_persistence_client()
 
     # Verify it's DuckDB client
-    assert isinstance(client, DuckDBSupabaseClient)
+    assert isinstance(client, DuckDBClient)
     assert client.db_path == tmp_path / "test.duckdb"
 
 
@@ -69,9 +67,8 @@ def test_duckdb_client_basic_operations(monkeypatch, tmp_path):
     # Remove test mode env var
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
 
-    # Remove Supabase credentials
-    monkeypatch.delenv("STORYCRAFT_SUPABASE_URL", raising=False)
-    monkeypatch.delenv("STORYCRAFT_SUPABASE_SERVICE_KEY", raising=False)
+    # Remove Neon URL
+    monkeypatch.delenv("STORYCRAFT_NEON_DATABASE_URL", raising=False)
 
     # Set DuckDB path
     monkeypatch.setenv("STORYCRAFT_DUCKDB_PATH", str(tmp_path / "test.duckdb"))
@@ -79,8 +76,8 @@ def test_duckdb_client_basic_operations(monkeypatch, tmp_path):
     # Clear settings cache
     get_settings.cache_clear()
 
-    reset_supabase_client()
-    client = get_supabase_client()
+    reset_persistence_client()
+    client = get_persistence_client()
 
     # Verify basic operations work
     result = client.table("snippets").insert({
@@ -102,16 +99,17 @@ def test_duckdb_client_basic_operations(monkeypatch, tmp_path):
 
 
 def test_store_integration_with_duckdb(monkeypatch, tmp_path):
-    """Test that store classes work with DuckDB backend."""
+    """Test that RPG store classes work with DuckDB backend."""
     from storycraft.app.config import get_settings
-    from storycraft.app.snippet_store import SnippetStore
+    from storycraft.app.campaign_action_store import CampaignActionStore
+    from storycraft.app.campaign_store import CampaignStore
+    from storycraft.app.player_store import PlayerStore
 
     # Remove test mode env var
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
 
-    # Remove Supabase credentials
-    monkeypatch.delenv("STORYCRAFT_SUPABASE_URL", raising=False)
-    monkeypatch.delenv("STORYCRAFT_SUPABASE_SERVICE_KEY", raising=False)
+    # Remove Neon URL
+    monkeypatch.delenv("STORYCRAFT_NEON_DATABASE_URL", raising=False)
 
     # Set DuckDB path
     monkeypatch.setenv("STORYCRAFT_DUCKDB_PATH", str(tmp_path / "test.duckdb"))
@@ -119,43 +117,52 @@ def test_store_integration_with_duckdb(monkeypatch, tmp_path):
     # Clear settings cache
     get_settings.cache_clear()
 
-    reset_supabase_client()
-    client = get_supabase_client()
+    reset_persistence_client()
+    client = get_persistence_client()
 
-    # Create store with DuckDB client
-    store = SnippetStore(client=client)
+    campaign_store = CampaignStore(client=client)
+    player_store = PlayerStore(client=client)
+    action_store = CampaignActionStore(client=client)
 
-    # Test basic store operations
-    story = "Test Story"
-    root = store.create_snippet(story=story, content="Root", kind="user", parent_id=None)
-    assert root.parent_id is None
-    assert root.content == "Root"
+    campaign = campaign_store.create(
+        name="Local Test Campaign",
+        world_setting="A windswept archipelago",
+        created_by="creator-1",
+        language="en",
+    )
+    assert campaign.id
+    assert campaign.status == "lobby"
 
-    # Create child
-    child = store.create_snippet(story=story, content="Child", kind="ai", parent_id=root.id)
-    assert child.parent_id == root.id
+    player = player_store.create(
+        campaign_id=campaign.id,
+        name="Alice",
+        session_token="session-1",
+    )
+    assert player.campaign_id == campaign.id
 
-    # Verify parent's child_id was updated
-    updated_root = store.get(root.id)
-    assert updated_root is not None
-    assert updated_root.child_id == child.id
+    action = action_store.create(
+        campaign_id=campaign.id,
+        action_type="player_action",
+        content="I scout the lighthouse.",
+        player_id=player.id,
+        turn_number=1,
+    )
+    assert action.campaign_id == campaign.id
 
-    # List children
-    children = store.list_children(story, root.id)
-    assert len(children) == 1
-    assert children[0].id == child.id
+    history = action_store.get_by_campaign(campaign.id)
+    assert len(history) == 1
+    assert history[0].id == action.id
 
 
 def test_singleton_behavior_across_calls(monkeypatch, tmp_path):
-    """Test that get_supabase_client returns the same instance."""
+    """Test that get_persistence_client returns the same instance."""
     from storycraft.app.config import get_settings
 
     # Remove test mode env var
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
 
-    # Remove Supabase credentials
-    monkeypatch.delenv("STORYCRAFT_SUPABASE_URL", raising=False)
-    monkeypatch.delenv("STORYCRAFT_SUPABASE_SERVICE_KEY", raising=False)
+    # Remove Neon URL
+    monkeypatch.delenv("STORYCRAFT_NEON_DATABASE_URL", raising=False)
 
     # Set DuckDB path
     monkeypatch.setenv("STORYCRAFT_DUCKDB_PATH", str(tmp_path / "test.duckdb"))
@@ -163,10 +170,10 @@ def test_singleton_behavior_across_calls(monkeypatch, tmp_path):
     # Clear settings cache
     get_settings.cache_clear()
 
-    reset_supabase_client()
+    reset_persistence_client()
 
-    client1 = get_supabase_client()
-    client2 = get_supabase_client()
+    client1 = get_persistence_client()
+    client2 = get_persistence_client()
 
     # Should be the same instance
     assert client1 is client2

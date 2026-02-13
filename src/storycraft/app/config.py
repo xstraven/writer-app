@@ -27,11 +27,10 @@ class Settings(BaseSettings):
     # Optional regex pattern for matching additional origins (e.g., dynamic Vercel deployments)
     cors_origin_regex: Optional[str] = None
 
-    # Storage
-    supabase_url: Optional[str] = None
-    supabase_service_key: Optional[str] = None
+    # Cloud database
+    neon_database_url: Optional[str] = None
 
-    # Local DuckDB database path (used when Supabase credentials not configured)
+    # Local DuckDB database path (used when Neon URL is not configured)
     duckdb_path: str = "./data/storycraft.duckdb"
 
 

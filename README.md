@@ -14,7 +14,7 @@ Storycraft is a multiplayer tabletop RPG platform with an AI game master. Create
 - **Voice Input**: Describe your world and actions using voice
 
 **Stack:**
-- **Backend**: FastAPI with auto-switching persistence (local DuckDB or cloud Supabase)
+- **Backend**: FastAPI with auto-switching persistence (local DuckDB or cloud Neon)
 - **Frontend**: Next.js + React + Tailwind
 - **LLM**: OpenRouter chat completions (stubs enabled when no API key is present)
 - **Package managers**: `uv` for Python, `npm` for the frontend
@@ -26,7 +26,7 @@ Quick Start
 
 Storycraft supports two database modes:
 - **Local Mode (DuckDB)**: Perfect for local development and testing - no setup required!
-- **Cloud Mode (Supabase)**: Use for production or when you want cloud-hosted storage
+- **Cloud Mode (Neon)**: Use for production or when you want cloud-hosted storage
 
 #### Option 1: Local Mode (Recommended for getting started)
 
@@ -44,21 +44,20 @@ That's it! The app will automatically create a local DuckDB database at `./data/
 
 **Optional**: Set `STORYCRAFT_OPENROUTER_API_KEY` in `.env` for real LLM responses (omit for stubbed responses during development).
 
-#### Option 2: Cloud Mode with Supabase
+#### Option 2: Cloud Mode with Neon
 
 1. Install uv (see https://docs.astral.sh/uv/) and sync dependencies:
    ```bash
    uv sync
    ```
 2. Create a `.env` in the repo root and set:
-   - `STORYCRAFT_SUPABASE_URL`
-   - `STORYCRAFT_SUPABASE_SERVICE_KEY` (service role key for backend access)
+   - `STORYCRAFT_NEON_DATABASE_URL`
    - `STORYCRAFT_OPENROUTER_API_KEY` (optional during local dev; omit for stubbed responses)
-3. (One-time) provision the Supabase schema:
+3. (One-time) provision the Neon schema:
    ```bash
-   STORYCRAFT_SUPABASE_DB_URL="postgresql://…" uv run python scripts/setup_supabase.py
+   STORYCRAFT_NEON_DATABASE_URL="postgresql://…" uv run python scripts/setup_neon.py
    ```
-   Use the project's Postgres connection string from the Supabase dashboard.
+   Use the project's Postgres connection string from the Neon dashboard.
 4. Run the API:
    ```bash
    uv run uvicorn storycraft.app.main:app --reload --port 8000
@@ -113,7 +112,7 @@ This project is designed for local development. To deploy:
 
 - **Backend**: The FastAPI app in `src/storycraft/app/` can be deployed to any server that runs Python (e.g., Heroku, Railway, Modal, Render).
 - **Frontend**: The Next.js frontend in `frontend-ts/` can be deployed to Vercel, Netlify, or any static hosting service.
-- **Database**: Supabase can be replaced with any PostgreSQL-compatible database.
+- **Database**: Neon can be replaced with any PostgreSQL-compatible database.
 
 Environment Variables
 ---------------------
@@ -122,13 +121,11 @@ All variables use the `STORYCRAFT_` prefix.
 
 ### Database Configuration
 The app automatically selects the database backend:
-- **Local Mode**: Used when Supabase credentials are not configured
-- **Cloud Mode**: Used when Supabase credentials are provided
+- **Local Mode**: Used when `STORYCRAFT_NEON_DATABASE_URL` is not configured
+- **Cloud Mode**: Used when `STORYCRAFT_NEON_DATABASE_URL` is provided
 
 - `STORYCRAFT_DUCKDB_PATH` — Path to local DuckDB file (default: `./data/storycraft.duckdb`)
-- `STORYCRAFT_SUPABASE_URL` — Supabase project URL
-- `STORYCRAFT_SUPABASE_SERVICE_KEY` — Supabase service role key used by the backend
-- `STORYCRAFT_SUPABASE_DB_URL` — Postgres connection string (only required when running the setup script)
+- `STORYCRAFT_NEON_DATABASE_URL` — Neon PostgreSQL connection string
 
 ### Other Configuration
 - `STORYCRAFT_OPENROUTER_API_KEY` — OpenRouter key; omit to use stubbed responses
@@ -174,4 +171,4 @@ Project Layout
 - `frontend-ts/` — Next.js app (components, hooks, Zustand stores)
 - `tests/` — Pytest coverage for APIs
 - `data/` — Local database and sample data
-- `scripts/` — Utility scripts such as `setup_supabase.py`
+- `scripts/` — Utility scripts such as `setup_neon.py`
