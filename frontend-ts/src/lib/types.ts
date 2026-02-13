@@ -217,6 +217,7 @@ export interface GameSystem {
   name: string;
   core_mechanic: string;
   attribute_names: string[];
+  attribute_details?: SimpleAttribute[];  // Full attribute info with descriptions
   difficulty_levels: Record<string, number>;
   combat_rules: string;
   skill_check_rules: string;
@@ -505,6 +506,8 @@ export interface CreateCampaignRequest {
   character_name?: string;
   character_class?: string;  // Or character concept for narrative games
   character_special?: string;  // What makes this character special/unique
+  attribute_scores?: Record<string, number>;  // Player-allocated attribute values
+  attribute_details?: SimpleAttribute[];  // Pre-generated attributes (skips server generation)
   model?: string | null;
   temperature?: number;
   // Narrative options
@@ -524,6 +527,7 @@ export interface JoinCampaignRequest {
   player_name: string;
   character_name?: string;
   character_class?: string;
+  attribute_scores?: Record<string, number>;  // Player-allocated attribute values
 }
 
 export interface JoinCampaignResponse {
@@ -536,6 +540,7 @@ export interface AddLocalPlayerRequest {
   character_name?: string;
   character_class?: string;
   character_special?: string;
+  attribute_scores?: Record<string, number>;  // Player-allocated attribute values
 }
 
 export interface AddLocalPlayerResponse {
@@ -589,6 +594,14 @@ export interface StartCampaignResponse {
 export interface EndTurnRequest {
   player_id: string;
   next_player_id?: string;
+}
+
+export interface CampaignPreviewResponse {
+  name: string;
+  world_setting: string;
+  game_system?: GameSystem;
+  style: string;
+  status: string;
 }
 
 // --- Simple RPG Types (frontend-only game state) ---

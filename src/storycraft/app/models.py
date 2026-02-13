@@ -185,6 +185,17 @@ class ExperimentalFeatures(BaseModel):
 
 # --- RPG Mode Models ---
 
+
+class SimpleAttribute(BaseModel):
+    """A lightweight attribute definition (name + description, no value).
+
+    Used during attribute generation and for storing attribute metadata
+    in GameSystem.attribute_details.
+    """
+    name: str
+    description: str
+
+
 class CharacterAttribute(BaseModel):
     """A single character attribute (e.g., Strength, Intelligence)"""
     name: str
@@ -233,6 +244,7 @@ class GameSystem(BaseModel):
     name: str = "Simple RPG System"
     core_mechanic: str = ""  # e.g., "Roll 2d6: 10+ success, 7-9 complication, 6- trouble"
     attribute_names: List[str] = Field(default_factory=list)
+    attribute_details: List[SimpleAttribute] = Field(default_factory=list)  # Full attribute info with descriptions
     difficulty_levels: dict = Field(default_factory=dict)  # e.g., {"easy": 10, "medium": 15, "hard": 20}
     combat_rules: str = ""
     skill_check_rules: str = ""
@@ -689,6 +701,8 @@ class CreateCampaignRequest(BaseModel):
     character_name: Optional[str] = None
     character_class: Optional[str] = None  # Or character concept for narrative games
     character_special: Optional[str] = None  # What makes this character special/unique
+    attribute_scores: Optional[dict[str, int]] = None  # Player-allocated attribute values
+    attribute_details: Optional[List[SimpleAttribute]] = None  # Pre-generated attributes (skips server generation)
     model: Optional[str] = None
     temperature: float = 0.8
     # Narrative options
@@ -710,6 +724,7 @@ class JoinCampaignRequest(BaseModel):
     player_name: str
     character_name: Optional[str] = None
     character_class: Optional[str] = None
+    attribute_scores: Optional[dict[str, int]] = None  # Player-allocated attribute values
 
 
 class JoinCampaignResponse(BaseModel):
@@ -724,6 +739,7 @@ class AddLocalPlayerRequest(BaseModel):
     character_name: Optional[str] = None
     character_class: Optional[str] = None
     character_special: Optional[str] = None
+    attribute_scores: Optional[dict[str, int]] = None  # Player-allocated attribute values
 
 
 class AddLocalPlayerResponse(BaseModel):

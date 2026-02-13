@@ -35,6 +35,7 @@ from ..models import (
     BatchAddPlayersRequest,
     BatchAddPlayersResponse,
 )
+from ..attribute_generator import generate_attributes as _generate_attributes
 from ..openrouter import OpenRouterClient
 from ..player_store import PlayerStore
 from ..prompt_builder import PromptBuilder
@@ -81,22 +82,26 @@ async def _generate_character_sheet(
     char_concept: str,
     char_special: Optional[str],
     campaign: Campaign,
+    attribute_scores: Optional[dict[str, int]] = None,
 ) -> CharacterSheet:
-    """Generate a character sheet for a player, using LLM with fallback defaults."""
+    """Generate a character sheet for a player, using LLM with fallback defaults.
+
+    If attribute_scores is provided, uses player-allocated values instead of
+    AI-generated attributes.
+    """
     structured = get_structured_llm_client()
     game_system = campaign.game_system
-    is_narrative_style = game_system and game_system.style == "narrative"
+    is_narrative_style = game_system and game_system.style in ("narrative", "hybrid")
 
     if not game_system:
-        return CharacterSheet(
+        sheet = CharacterSheet(
             name=char_name,
             character_class=char_concept,
             level=1,
             health=20,
             max_health=20,
         )
-
-    if is_narrative_style:
+    elif is_narrative_style:
         special_line = f"\nWhat Makes Them Special: {char_special}" if char_special else ""
         char_prompt = f"""Create a character for a collaborative storytelling game.
 
@@ -128,7 +133,7 @@ Make them interesting and someone you'd want to go on an adventure with."""
         )
 
         try:
-            return await structured.create(
+            sheet = await structured.create(
                 response_model=CharacterSheet,
                 messages=[
                     {"role": "system", "content": "Create a character for a collaborative storytelling game. Focus on personality and story, not game mechanics."},
@@ -139,7 +144,7 @@ Make them interesting and someone you'd want to go on an adventure with."""
                 fallback=lambda: default_char,
             )
         except Exception:
-            return default_char
+            sheet = default_char
     else:
         char_prompt = f"""Create a character sheet for a {char_concept} named {char_name} in this world:
 
@@ -151,7 +156,7 @@ Attributes: {', '.join(game_system.attribute_names)}
 Generate appropriate attributes (values 8-18), 3-4 starting skills, starting inventory, and a brief backstory."""
 
         try:
-            return await structured.create(
+            sheet = await structured.create(
                 response_model=CharacterSheet,
                 messages=[
                     {"role": "system", "content": "Create a player character for a tabletop RPG."},
@@ -162,7 +167,21 @@ Generate appropriate attributes (values 8-18), 3-4 starting skills, starting inv
                 fallback=lambda: _create_default_character(char_name, char_concept, game_system),
             )
         except Exception:
-            return _create_default_character(char_name, char_concept, game_system)
+            sheet = _create_default_character(char_name, char_concept, game_system)
+
+    # Inject player-allocated attribute scores if provided
+    if attribute_scores:
+        sheet.attributes = [
+            CharacterAttribute(
+                name=attr_name,
+                value=score,
+                max_value=20 if game_system and game_system.style == "mechanical" else 3,
+                description="",
+            )
+            for attr_name, score in attribute_scores.items()
+        ]
+
+    return sheet
 
 
 @router.get("", response_model=List[CampaignWithPlayers])
@@ -315,6 +334,22 @@ Keep rules concise - this is for quick play."""
     except Exception:
         game_system = default_system
 
+    # Use pre-generated attributes from frontend, or generate new ones
+    if req.attribute_details:
+        game_system.attribute_details = req.attribute_details
+        game_system.attribute_names = [a.name for a in req.attribute_details]
+    else:
+        try:
+            generated_attrs = await _generate_attributes(
+                world_setting=req.world_setting.strip(),
+                language=req.language,
+                model=req.model,
+            )
+            game_system.attribute_details = generated_attrs
+            game_system.attribute_names = [a.name for a in generated_attrs]
+        except Exception:
+            pass  # attribute_details stays empty, frontend will handle gracefully
+
     # Create player first to get ID for campaign.created_by
     # We'll create a temporary player, then update after campaign creation
     import uuid
@@ -330,79 +365,14 @@ Keep rules concise - this is for quick play."""
         language=req.language,
     )
 
-    # Generate character based on game style
-    character_sheet = None
+    # Generate character sheet (delegates to shared function)
     char_name = (req.character_name or req.player_name).strip()
     char_concept = (req.character_class or "Adventurer").strip()
-    char_special = (req.character_special or "").strip()
+    char_special = (req.character_special or "").strip() or None
 
-    if game_system.style == "narrative":
-        # Simple narrative character - focus on who they are, not stats
-        char_prompt = f"""Create a character for a collaborative storytelling game.
-
-Character Name: {char_name}
-Character Concept: {char_concept}
-{f"What makes them special: {char_special}" if char_special else ""}
-
-World: {req.world_setting}
-
-Create a simple, memorable character with:
-- A clear concept (one sentence describing who they are)
-- What makes them special or unique (their gift, talent, or defining trait)
-- A brief backstory (2-3 sentences) that connects them to the world
-- NO numbered stats or attributes - this is a narrative game
-
-Make them interesting and relatable. They should feel like someone you'd want to go on an adventure with."""
-
-        char_messages = [
-            {"role": "system", "content": "You are helping create a character for a family-friendly collaborative storytelling game. Focus on personality and story, not game mechanics."},
-            {"role": "user", "content": char_prompt},
-        ]
-
-        default_char = CharacterSheet(
-            name=char_name,
-            character_class=char_concept,
-            concept=f"A {char_concept.lower()} ready for adventure",
-            special_trait=char_special or "Has a knack for getting into and out of trouble",
-            backstory=f"{char_name} is a {char_concept.lower()} who has always dreamed of adventure.",
-            level=1,
-            health=10,
-            max_health=10,
-            attributes=[],  # No stats for narrative games
-            skills=[],
-            inventory=[],
-        )
-    else:
-        # Traditional mechanical character with stats
-        char_prompt = f"""Create a character sheet for a {char_concept} named {char_name} in this world:
-
-World: {req.world_setting}
-
-Game System: {game_system.name}
-Attributes: {', '.join(game_system.attribute_names)}
-Core Mechanic: {game_system.core_mechanic}
-
-Generate appropriate attributes (values 8-18, average 10-12), 3-4 starting skills,
-starting inventory, and a brief backstory that fits the world."""
-
-        char_messages = [
-            {"role": "system", "content": "You are creating a player character for a tabletop RPG. Make them interesting but not overpowered."},
-            {"role": "user", "content": char_prompt},
-        ]
-
-        default_char = _create_default_character(char_name, char_concept, game_system)
-
-    try:
-        character_sheet = await structured.create(
-            response_model=CharacterSheet,
-            messages=char_messages,
-            model=req.model,
-            temperature=req.temperature,
-            max_retries=2,
-            fallback=lambda: default_char,
-        )
-    except Exception:
-        character_sheet = default_char
+    character_sheet = await _generate_character_sheet(
+        char_name, char_concept, char_special, campaign, req.attribute_scores,
+    )
 
     # Create the player
     player = player_store.create(
@@ -424,6 +394,37 @@ starting inventory, and a brief backstory that fits the world."""
         campaign=campaign,
         player=player,
         game_system=game_system,
+    )
+
+
+class CampaignPreviewResponse(BaseModel):
+    """Public preview of a campaign for the join flow."""
+    name: str
+    world_setting: str
+    game_system: Optional[GameSystem] = None
+    style: str
+    status: str
+
+
+@router.get("/preview/{invite_code}", response_model=CampaignPreviewResponse)
+async def preview_campaign(
+    invite_code: str,
+    campaign_store: CampaignStore = Depends(get_campaign_store),
+) -> CampaignPreviewResponse:
+    """Preview a campaign by invite code (public, no auth required).
+
+    Returns campaign metadata including attribute_details for the join flow.
+    """
+    campaign = campaign_store.get_by_invite_code(invite_code.strip())
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Invalid invite code")
+
+    return CampaignPreviewResponse(
+        name=campaign.name,
+        world_setting=campaign.world_setting,
+        game_system=campaign.game_system,
+        style=campaign.game_system.style if campaign.game_system else "narrative",
+        status=campaign.status,
     )
 
 
@@ -507,43 +508,12 @@ async def join_campaign(
             return JoinCampaignResponse(campaign=campaign, player=existing)
 
     # Generate character
-    structured = get_structured_llm_client()
     char_name = (req.character_name or req.player_name).strip()
     char_class = (req.character_class or "Adventurer").strip()
 
-    character_sheet = None
-    if campaign.game_system:
-        char_prompt = f"""Create a character sheet for a {char_class} named {char_name} in this world:
-
-World: {campaign.world_setting}
-
-Game System: {campaign.game_system.name}
-Attributes: {', '.join(campaign.game_system.attribute_names)}
-
-Generate appropriate attributes (values 8-18), 3-4 starting skills, starting inventory, and a brief backstory."""
-
-        try:
-            character_sheet = await structured.create(
-                response_model=CharacterSheet,
-                messages=[
-                    {"role": "system", "content": "Create a player character for a tabletop RPG."},
-                    {"role": "user", "content": char_prompt},
-                ],
-                temperature=0.8,
-                max_retries=2,
-                fallback=lambda: _create_default_character(char_name, char_class, campaign.game_system),
-            )
-        except Exception:
-            character_sheet = _create_default_character(char_name, char_class, campaign.game_system)
-    else:
-        # No game system yet, create minimal character
-        character_sheet = CharacterSheet(
-            name=char_name,
-            character_class=char_class,
-            level=1,
-            health=20,
-            max_health=20,
-        )
+    character_sheet = await _generate_character_sheet(
+        char_name, char_class, None, campaign, req.attribute_scores,
+    )
 
     # Get current player count for turn position
     existing_players = player_store.get_by_campaign(campaign.id)
@@ -765,7 +735,7 @@ async def add_local_player(
     char_concept = (req.character_class or "Adventurer").strip()
 
     character_sheet = await _generate_character_sheet(
-        char_name, char_concept, req.character_special, campaign,
+        char_name, char_concept, req.character_special, campaign, req.attribute_scores,
     )
 
     existing_players = player_store.get_by_campaign(campaign.id)
@@ -815,7 +785,7 @@ async def add_local_players_batch(
         char_name = (p.character_name or p.player_name).strip()
         char_concept = (p.character_class or "Adventurer").strip()
         generation_tasks.append(
-            _generate_character_sheet(char_name, char_concept, p.character_special, campaign)
+            _generate_character_sheet(char_name, char_concept, p.character_special, campaign, p.attribute_scores)
         )
 
     character_sheets = await asyncio.gather(*generation_tasks)

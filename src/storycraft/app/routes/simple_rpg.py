@@ -8,7 +8,9 @@ from typing import List, Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from ..attribute_generator import generate_attributes as _generate_attributes
 from ..instructor_client import get_structured_llm_client
+from ..models import SimpleAttribute
 from ..openrouter import OpenRouterClient
 
 
@@ -16,11 +18,6 @@ router = APIRouter(prefix="/api/simple-rpg", tags=["simple-rpg"])
 
 
 # --- Request/Response Models ---
-
-
-class SimpleAttribute(BaseModel):
-    name: str
-    description: str
 
 
 class GenerateAttributesRequest(BaseModel):
@@ -113,87 +110,12 @@ def get_pbta_outcome(total: int) -> tuple[str, str]:
 @router.post("/generate-attributes", response_model=GenerateAttributesResponse)
 async def generate_attributes(req: GenerateAttributesRequest) -> GenerateAttributesResponse:
     """Generate 3-5 attributes relevant to the adventure setting."""
-    structured = get_structured_llm_client()
-
-    class AttributeList(BaseModel):
-        attributes: List[SimpleAttribute]
-
-    # Language-specific instructions
-    language_instructions = {
-        "de": "WICHTIG: Generiere alle Attributnamen und Beschreibungen auf Deutsch.",
-        "en": "Generate all attribute names and descriptions in English.",
-    }.get(req.language, "Generate all attribute names and descriptions in English.")
-
-    prompt = f"""You are designing a simple tabletop RPG for a specific adventure setting.
-
-{language_instructions}
-
-ADVENTURE SETTING: {req.world_setting}
-
-Generate 3-5 attributes (stats) that would be most relevant and fun for characters in this setting.
-
-Guidelines:
-- Keep it simple - these are for a family-friendly, narrative-focused game
-- Choose attributes that fit the theme (e.g., a pirate adventure might have "Sailing", "Swordplay", "Charm")
-- Each attribute should enable different types of actions
-- Descriptions should be 1 sentence explaining when this attribute is used
-- Avoid generic attributes like "Strength" unless they fit the specific setting
-
-Examples of good themed attributes:
-- For a wizard school: "Spellcasting", "Book Smarts", "Mischief", "Bravery"
-- For pirates: "Seafaring", "Swordplay", "Charm", "Cunning"
-- For superheroes: "Power", "Agility", "Smarts", "Heart"
-
-Generate attributes that will make this adventure fun and thematic!"""
-
-    try:
-        result = await structured.create(
-            response_model=AttributeList,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You create simple, fun RPG attributes for family-friendly adventures.",
-                },
-                {"role": "user", "content": prompt},
-            ],
-            model=req.model,
-            temperature=0.8,
-            max_retries=1,
-            fallback=lambda: AttributeList(
-                attributes=[
-                    SimpleAttribute(
-                        name="Courage",
-                        description="Used when facing danger or standing up to challenges.",
-                    ),
-                    SimpleAttribute(
-                        name="Cleverness",
-                        description="Used for solving puzzles, making plans, and outsmarting others.",
-                    ),
-                    SimpleAttribute(
-                        name="Heart",
-                        description="Used for helping others, making friends, and staying positive.",
-                    ),
-                ]
-            ),
-        )
-        return GenerateAttributesResponse(attributes=result.attributes)
-    except Exception:
-        return GenerateAttributesResponse(
-            attributes=[
-                SimpleAttribute(
-                    name="Courage",
-                    description="Used when facing danger or standing up to challenges.",
-                ),
-                SimpleAttribute(
-                    name="Cleverness",
-                    description="Used for solving puzzles, making plans, and outsmarting others.",
-                ),
-                SimpleAttribute(
-                    name="Heart",
-                    description="Used for helping others, making friends, and staying positive.",
-                ),
-            ]
-        )
+    attributes = await _generate_attributes(
+        world_setting=req.world_setting,
+        language=req.language,
+        model=req.model,
+    )
+    return GenerateAttributesResponse(attributes=attributes)
 
 
 @router.post("/generate-opening", response_model=GenerateOpeningResponse)

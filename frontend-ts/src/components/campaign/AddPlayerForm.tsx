@@ -12,31 +12,32 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { CharacterFormFields, type CharacterFormData } from '@/components/shared/CharacterFormFields';
+import { AttributeAllocator, getValuePool } from '@/components/shared/AttributeAllocator';
 import { addLocalPlayer } from '@/lib/api';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
-import type { Player } from '@/lib/types';
+import type { Player, SimpleAttribute } from '@/lib/types';
 
 interface AddPlayerFormProps {
   campaignId: string;
   onPlayerAdded: (player: Player) => void;
   gameStyle?: 'narrative' | 'mechanical' | 'hybrid';
+  attributes?: SimpleAttribute[];
   trigger?: React.ReactNode;
 }
 
-export function AddPlayerForm({ campaignId, onPlayerAdded, gameStyle, trigger }: AddPlayerFormProps) {
+export function AddPlayerForm({ campaignId, onPlayerAdded, gameStyle, attributes, trigger }: AddPlayerFormProps) {
   const tToast = useTranslations('toast');
   const t = useTranslations('campaign.addPlayer');
   const [isOpen, setIsOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
+  const [attributeScores, setAttributeScores] = useState<Record<string, number>>({});
   const [formData, setFormData] = useState<CharacterFormData>({
     playerName: '',
     characterName: '',
     characterConcept: '',
     characterSpecial: '',
   });
-
-  const isNarrative = gameStyle === 'narrative';
 
   const handleFieldChange = (field: keyof CharacterFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -58,12 +59,14 @@ export function AddPlayerForm({ campaignId, onPlayerAdded, gameStyle, trigger }:
         character_name: formData.characterName.trim() || undefined,
         character_class: formData.characterConcept.trim() || undefined,
         character_special: formData.characterSpecial.trim() || undefined,
+        attribute_scores: Object.keys(attributeScores).length > 0 ? attributeScores : undefined,
       });
 
       toast.success(tToast('playerJoinedParty', { playerName: response.player.character_sheet?.name || formData.playerName }));
       onPlayerAdded(response.player);
 
       setFormData({ playerName: '', characterName: '', characterConcept: '', characterSpecial: '' });
+      setAttributeScores({});
       setIsOpen(false);
     } catch (error: any) {
       console.error('Failed to add player:', error);
@@ -100,6 +103,18 @@ export function AddPlayerForm({ campaignId, onPlayerAdded, gameStyle, trigger }:
             showVoiceInput={false}
             showSpecialTrait={true}
           />
+
+          {attributes && attributes.length > 0 && (
+            <div className="space-y-2">
+              <AttributeAllocator
+                attributes={attributes}
+                availableValues={getValuePool(attributes.length, gameStyle === 'hybrid' ? 'narrative' : (gameStyle ?? 'narrative'))}
+                currentScores={attributeScores}
+                onChange={setAttributeScores}
+                displayMode={gameStyle === 'mechanical' ? 'value' : 'modifier'}
+              />
+            </div>
+          )}
 
           <div className="flex gap-3 pt-2">
             <Button

@@ -49,6 +49,7 @@ import type {
   AddLocalPlayerRequest,
   AddLocalPlayerResponse,
   BatchAddPlayersResponse,
+  CampaignPreviewResponse,
 } from './types';
 
 export const API_BASE = process.env.NEXT_PUBLIC_STORYCRAFT_API_BASE || 'http://localhost:8000';
@@ -492,6 +493,11 @@ export const createCampaign = async (payload: CreateCampaignRequest): Promise<Cr
     ...withSessionToken(),
     timeout: GENERATION_TIMEOUT_MS,
   });
+  return response.data;
+};
+
+export const previewCampaign = async (inviteCode: string): Promise<CampaignPreviewResponse> => {
+  const response = await apiClient.get(`/api/campaigns/preview/${encodeURIComponent(inviteCode)}`);
   return response.data;
 };
 

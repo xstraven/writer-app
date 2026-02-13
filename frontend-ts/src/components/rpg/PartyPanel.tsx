@@ -11,6 +11,7 @@ interface PartyPanelProps {
   yourPlayerId?: string;
   onSelectPlayer?: (player: Player) => void;
   localMultiplayer?: boolean;
+  gameStyle?: 'narrative' | 'mechanical' | 'hybrid';
 }
 
 export function PartyPanel({
@@ -19,6 +20,7 @@ export function PartyPanel({
   yourPlayerId,
   onSelectPlayer,
   localMultiplayer = false,
+  gameStyle,
 }: PartyPanelProps) {
   // Sort: you first, then current turn, then by turn position
   const sortedPlayers = [...players].sort((a, b) => {
@@ -52,6 +54,7 @@ export function PartyPanel({
             isYou={player.id === yourPlayerId}
             onClick={localMultiplayer && onSelectPlayer ? () => onSelectPlayer(player) : undefined}
             clickable={localMultiplayer && players.length > 1}
+            gameStyle={gameStyle}
           />
         ))}
       </CardContent>
