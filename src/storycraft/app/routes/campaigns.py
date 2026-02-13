@@ -16,6 +16,7 @@ from ..dependencies import (
 from ..instructor_client import get_structured_llm_client
 from ..models import (
     Campaign,
+    CampaignPreviewResponse,
     CampaignWithPlayers,
     CharacterAttribute,
     CharacterSheet,
@@ -394,15 +395,6 @@ Keep rules concise - this is for quick play."""
         player=player,
         game_system=game_system,
     )
-
-
-class CampaignPreviewResponse(BaseModel):
-    """Public preview of a campaign for the join flow."""
-    name: str
-    world_setting: str
-    game_system: Optional[GameSystem] = None
-    style: str
-    status: str
 
 
 @router.get("/preview/{invite_code}", response_model=CampaignPreviewResponse)

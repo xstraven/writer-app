@@ -6,6 +6,15 @@ from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_va
 from typing import Literal
 
 
+class CampaignPreviewResponse(BaseModel):
+    """Public preview of a campaign for the join flow."""
+    name: str
+    world_setting: str
+    game_system: Optional[GameSystem] = None
+    style: str
+    status: str
+
+
 class GalleryItem(BaseModel):
     """Gallery image - either URL or uploaded file"""
     type: Literal["url", "upload"] = "url"
