@@ -12,7 +12,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { CharacterFormFields, type CharacterFormData } from '@/components/shared/CharacterFormFields';
-import { AttributeAllocator, getValuePool } from '@/components/shared/AttributeAllocator';
+import { AttributeAllocator, getValuePool, getDisplayMode, getEffectiveStyle } from '@/components/shared/AttributeAllocator';
 import { addLocalPlayer } from '@/lib/api';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
@@ -98,7 +98,7 @@ export function AddPlayerForm({ campaignId, onPlayerAdded, gameStyle, attributes
             formData={formData}
             onChange={handleFieldChange}
             disabled={isAdding}
-            gameStyle={gameStyle === 'hybrid' ? 'narrative' : gameStyle}
+            gameStyle={gameStyle ? getEffectiveStyle(gameStyle) : undefined}
             translationNamespace="shared.characterForm"
             showVoiceInput={false}
             showSpecialTrait={true}
@@ -108,10 +108,10 @@ export function AddPlayerForm({ campaignId, onPlayerAdded, gameStyle, attributes
             <div className="space-y-2">
               <AttributeAllocator
                 attributes={attributes}
-                availableValues={getValuePool(attributes.length, gameStyle === 'hybrid' ? 'narrative' : (gameStyle ?? 'narrative'))}
+                availableValues={getValuePool(attributes.length, getEffectiveStyle(gameStyle ?? 'narrative'))}
                 currentScores={attributeScores}
                 onChange={setAttributeScores}
-                displayMode={gameStyle === 'mechanical' ? 'value' : 'modifier'}
+                displayMode={getDisplayMode(gameStyle ?? 'narrative')}
               />
             </div>
           )}

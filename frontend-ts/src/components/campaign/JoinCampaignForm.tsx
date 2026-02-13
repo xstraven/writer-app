@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { AttributeAllocator, getValuePool } from '@/components/shared/AttributeAllocator';
+import { AttributeAllocator, getValuePool, getDisplayMode, getEffectiveStyle } from '@/components/shared/AttributeAllocator';
 import { joinCampaign, previewCampaign } from '@/lib/api';
 import { useCampaignStore } from '@/stores/campaignStore';
 import { toast } from 'sonner';
@@ -33,7 +33,7 @@ export function JoinCampaignForm() {
   });
 
   const hasAttributes = preview?.game_system?.attribute_details && preview.game_system.attribute_details.length > 0;
-  const isMechanical = preview?.style === 'mechanical';
+  const previewStyle = (preview?.style ?? 'narrative') as 'narrative' | 'mechanical' | 'hybrid';
 
   const handlePreview = async () => {
     if (!formData.inviteCode.trim()) {
@@ -184,10 +184,10 @@ export function JoinCampaignForm() {
             <div className="space-y-2 border-t pt-4">
               <AttributeAllocator
                 attributes={preview.game_system!.attribute_details!}
-                availableValues={getValuePool(preview.game_system!.attribute_details!.length, isMechanical ? 'mechanical' : 'narrative')}
+                availableValues={getValuePool(preview.game_system!.attribute_details!.length, getEffectiveStyle(previewStyle))}
                 currentScores={attributeScores}
                 onChange={setAttributeScores}
-                displayMode={isMechanical ? 'value' : 'modifier'}
+                displayMode={getDisplayMode(previewStyle)}
               />
             </div>
           )}

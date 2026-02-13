@@ -1,6 +1,7 @@
 'use client';
 
 import { Users, MousePointer2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CharacterCard } from './CharacterCard';
 import type { Player } from '@/lib/types';
@@ -22,6 +23,7 @@ export function PartyPanel({
   localMultiplayer = false,
   gameStyle,
 }: PartyPanelProps) {
+  const t = useTranslations('rpg.adventure');
   // Sort: you first, then current turn, then by turn position
   const sortedPlayers = [...players].sort((a, b) => {
     if (a.id === yourPlayerId) return -1;
@@ -36,12 +38,12 @@ export function PartyPanel({
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center gap-2">
           <Users className="h-4 w-4" />
-          Party ({players.length})
+          {t('party', { count: players.length })}
         </CardTitle>
         {localMultiplayer && players.length > 1 && (
           <p className="text-xs text-muted-foreground flex items-center gap-1">
             <MousePointer2 className="h-3 w-3" />
-            Click a character to play as them
+            {t('selectCharacterHint')}
           </p>
         )}
       </CardHeader>

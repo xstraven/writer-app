@@ -1,6 +1,7 @@
 'use client';
 
 import { Heart, Crown, Swords, Sparkles } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -16,6 +17,7 @@ interface CharacterCardProps {
 }
 
 export function CharacterCard({ player, isCurrentTurn, isYou, onClick, clickable, gameStyle }: CharacterCardProps) {
+  const t = useTranslations('rpg.adventure');
   const character = player.character_sheet;
 
   // Determine display style: narrative/hybrid shows concept + modifier badges,
@@ -67,11 +69,11 @@ export function CharacterCard({ player, isCurrentTurn, isYou, onClick, clickable
           {isCurrentTurn && (
             <Badge variant="outline" className="text-xs border-green-500 text-green-500">
               <Swords className="h-3 w-3 mr-1" />
-              Turn
+              {t('turnBadge')}
             </Badge>
           )}
           {isYou && !isCurrentTurn && (
-            <Badge variant="outline" className="text-xs">You</Badge>
+            <Badge variant="outline" className="text-xs">{t('youBadgeShort')}</Badge>
           )}
         </div>
 
@@ -145,7 +147,7 @@ export function CharacterCard({ player, isCurrentTurn, isYou, onClick, clickable
 
         {!character && (
           <div className="text-xs text-muted-foreground italic">
-            No character yet
+            {t('noCharacterYet')}
           </div>
         )}
       </CardContent>

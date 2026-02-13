@@ -19,6 +19,13 @@
       "system": "System",
       "turn": "Runde {number}"
     },
+    "attributeAllocator": {
+      "assignModifiers": "Weise diese Modifikatoren deinen Attributen zu:",
+      "assignScores": "Weise diese Werte deinen Attributen zu:",
+      "allModifiersAssigned": "Alle Modifikatoren zugewiesen!",
+      "allScoresAssigned": "Alle Werte zugewiesen!",
+      "change": "Ändern"
+    },
     "characterForm": {
       "playerName": "Dein Name",
       "playerNamePlaceholder": "Dein Anzeigename",
@@ -134,22 +141,6 @@
           "characterConcept": "Ein eifriger Erstklässler, der überraschend einen Aufnahmebrief erhalten hat",
           "characterSpecial": "Kann mit den magischen Kreaturen der Schule sprechen und ihre Warnungen verstehen"
         }
-      },
-      "genres": {
-        "fantasy": "Fantasy",
-        "scifi": "Science-Fiction",
-        "modern": "Modern",
-        "horror": "Horror",
-        "historical": "Historisch",
-        "mashup": "Mix"
-      },
-      "genrePrompts": {
-        "fantasy": "Ein magisches Reich voller Königreiche, Drachen und uralter Prophezeiungen. Helden schwingen Schwerter und Zauber auf ihrer Suche durch verzauberte Lande.",
-        "scifi": "Eine riesige Galaxie voller Raumschiffe, außerirdischer Zivilisationen und fortschrittlicher Technologie. Entdecker kartieren unbekannte Systeme, während interstellare Politik brodelt.",
-        "modern": "Die moderne Welt, aber mit einem Twist – verborgene übernatürliche Kräfte lauern unter der Oberfläche des Alltags. Jene, die die Wahrheit kennen, müssen zwischen beiden Welten navigieren.",
-        "horror": "Eine Welt, in der Dunkelheit am Rand der Realität lauert. Etwas Uraltes und Schreckliches ist erwacht, und gewöhnliche Menschen müssen sich außergewöhnlichem Grauen stellen.",
-        "historical": "Eine dramatisierte historische Epoche, in der echte Ereignisse mit Abenteuern verschmelzen. Intrigen, Entdeckungen und der Zusammenprall von Kulturen prägen die Ära.",
-        "mashup": "Eine wilde Kollision von Genres – vielleicht reiten Cowboys auf Dinosauriern im Weltraum, oder viktorianische Detektive lösen Verbrechen in einer Cyberpunk-Stadt. Alles ist möglich!"
       },
       "toneLabel": "Wer spielt?",
       "tones": {
@@ -339,7 +330,11 @@
       "gameRules": "Spielregeln",
       "system": "System:",
       "mechanic": "Mechanik:",
-      "skillChecks": "Fertigkeitswürfe:"
+      "skillChecks": "Fertigkeitswürfe:",
+      "turnBadge": "Zug",
+      "youBadgeShort": "Du",
+      "noCharacterYet": "Noch kein Charakter",
+      "selectCharacterHint": "Klicke einen Charakter, um ihn zu spielen"
     }
   },
   "toast": {
@@ -364,6 +359,8 @@
     "joinedAdventure": "\"{adventureName}\" beigetreten!",
     "joinFailed": "Beitritt zum Abenteuer fehlgeschlagen",
     "playerNameRequired": "Spielername ist erforderlich",
+    "characterNameRequired": "Charaktername ist erforderlich",
+    "attributesRequired": "Bitte alle Attributwerte zuweisen",
     "playerJoinedParty": "{playerName} ist der Gruppe beigetreten!",
     "addPlayerFailed": "Spieler konnte nicht hinzugefügt werden",
     "storiesLoadFailed": "Geschichten konnten nicht geladen werden",

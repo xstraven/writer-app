@@ -16,7 +16,7 @@ import { useCampaignStore } from '@/stores/campaignStore';
 import { WorldBuilder } from './WorldBuilder';
 import { TemplateSelector } from './TemplateSelector';
 import { CharacterFormFields, type CharacterFormData } from '@/components/shared/CharacterFormFields';
-import { AttributeAllocator, getValuePool } from '@/components/shared/AttributeAllocator';
+import { AttributeAllocator, getValuePool, getDisplayMode, getEffectiveStyle } from '@/components/shared/AttributeAllocator';
 import { toast } from 'sonner';
 import type { ProposedLoreEntry, SimpleAttribute } from '@/lib/types';
 import { useActiveLocale } from '@/hooks/useActiveLocale';
@@ -86,7 +86,7 @@ export function CreateCampaignForm() {
 
   const availableValues = getValuePool(
     generatedAttributes.length,
-    adventureData.style === 'hybrid' ? 'narrative' : adventureData.style,
+    getEffectiveStyle(adventureData.style),
   );
 
   // --- Handlers ---
@@ -168,13 +168,13 @@ export function CreateCampaignForm() {
       return;
     }
     if (!playerForm.characterName.trim()) {
-      setPlayerError(tToast('playerNameRequired'));
+      setPlayerError(tToast('characterNameRequired'));
       return;
     }
 
     const scores = Object.values(attributeScores);
     if (scores.length !== generatedAttributes.length) {
-      setPlayerError(tToast('playerNameRequired'));
+      setPlayerError(tToast('attributesRequired'));
       return;
     }
 
@@ -563,7 +563,7 @@ export function CreateCampaignForm() {
                   formData={playerForm}
                   onChange={(field, value) => setPlayerForm((prev) => ({ ...prev, [field]: value }))}
                   disabled={false}
-                  gameStyle={adventureData.style === 'hybrid' ? 'narrative' : adventureData.style}
+                  gameStyle={getEffectiveStyle(adventureData.style)}
                   translationNamespace="shared.characterForm"
                   showVoiceInput={false}
                   showSpecialTrait={true}
@@ -576,7 +576,7 @@ export function CreateCampaignForm() {
                     availableValues={availableValues}
                     currentScores={attributeScores}
                     onChange={setAttributeScores}
-                    displayMode={adventureData.style === 'mechanical' ? 'value' : 'modifier'}
+                    displayMode={getDisplayMode(adventureData.style)}
                   />
                 </div>
 

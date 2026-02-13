@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import type { SimpleAttribute } from '@/lib/types';
 
@@ -26,6 +27,16 @@ export function getValuePool(
   return [2, 1, 1, 0, -1].slice(0, attributeCount);
 }
 
+/** Map game style to the effective style for attribute display ('modifier' vs 'value'). */
+export function getDisplayMode(style: 'narrative' | 'mechanical' | 'hybrid'): DisplayMode {
+  return style === 'mechanical' ? 'value' : 'modifier';
+}
+
+/** Map game style to the effective CharacterFormFields style (hybrid → narrative). */
+export function getEffectiveStyle(style: 'narrative' | 'mechanical' | 'hybrid'): 'narrative' | 'mechanical' {
+  return style === 'mechanical' ? 'mechanical' : 'narrative';
+}
+
 interface AttributeAllocatorProps {
   attributes: SimpleAttribute[];
   availableValues: number[];
@@ -47,6 +58,7 @@ export function AttributeAllocator({
   onChange,
   displayMode = 'modifier',
 }: AttributeAllocatorProps) {
+  const t = useTranslations('shared.attributeAllocator');
   const isModifierMode = displayMode === 'modifier';
 
   // Get unassigned values
@@ -112,8 +124,8 @@ export function AttributeAllocator({
       <div className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-lg">
         <p className="mb-2">
           {isModifierMode
-            ? 'Assign these modifiers to your attributes:'
-            : 'Assign these scores to your attributes:'}
+            ? t('assignModifiers')
+            : t('assignScores')}
         </p>
         <div className="flex gap-2 flex-wrap">
           {availableValues.map((val, idx) => (
@@ -164,7 +176,7 @@ export function AttributeAllocator({
                       onClick={() => handleClear(attr.name)}
                       className="text-muted-foreground"
                     >
-                      Change
+                      {t('change')}
                     </Button>
                   </>
                 ) : (
@@ -191,7 +203,7 @@ export function AttributeAllocator({
       {/* Status */}
       {unassignedValues.length === 0 && (
         <p className="text-sm text-green-600 text-center">
-          {isModifierMode ? 'All modifiers assigned!' : 'All scores assigned!'}
+          {isModifierMode ? t('allModifiersAssigned') : t('allScoresAssigned')}
         </p>
       )}
     </div>
