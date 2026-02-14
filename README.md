@@ -150,6 +150,8 @@ All variables use the `STORYCRAFT_` prefix.
 - `STORYCRAFT_OPENROUTER_API_KEY` — OpenRouter key; omit to use stubbed responses
 - `STORYCRAFT_OPENROUTER_BASE_URL` — override base URL (default `https://openrouter.ai/api/v1`)
 - `STORYCRAFT_OPENROUTER_DEFAULT_MODEL` — default chat model (default `deepseek/deepseek-chat-v3-0324`)
+- `STORYCRAFT_CORS_ORIGINS` — allowed browser origins (comma-separated or JSON array)
+- `STORYCRAFT_CORS_ORIGIN_REGEX` — optional regex for additional dynamic origins
 
 ### Frontend Configuration (Optional)
 - `NEXT_PUBLIC_STORYCRAFT_API_BASE` — Backend API URL (default: `http://localhost:8000`)
