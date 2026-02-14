@@ -30,7 +30,21 @@ jobs:
             exit 1
           fi
 
-          echo "STORYCRAFT_NEON_DATABASE_URL=$DB_URL" >> "$GITHUB_ENV"
+          # Normalize accidental multi-line/labelled secret values.
+          DB_URL_CLEAN="$(printf '%s\n' "$DB_URL" | tr -d '\r' | sed '/^[[:space:]]*$/d' | head -n1)"
+          DB_URL_CLEAN="${DB_URL_CLEAN#URI: }"
+          DB_URL_CLEAN="$(printf '%s' "$DB_URL_CLEAN" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+
+          case "$DB_URL_CLEAN" in
+            postgresql://*|postgresql+psycopg://*|postgres://*) ;;
+            *)
+              echo "Invalid STORYCRAFT_NEON_DATABASE_URL secret format."
+              echo "Expected a single raw Postgres URL, e.g. postgresql://user:pass@host/db"
+              exit 1
+              ;;
+          esac
+
+          echo "STORYCRAFT_NEON_DATABASE_URL=$DB_URL_CLEAN" >> "$GITHUB_ENV"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -66,7 +80,20 @@ jobs:
             exit 1
           fi
 
-          echo "STORYCRAFT_NEON_DATABASE_URL=$DB_URL" >> "$GITHUB_ENV"
+          DB_URL_CLEAN="$(printf '%s\n' "$DB_URL" | tr -d '\r' | sed '/^[[:space:]]*$/d' | head -n1)"
+          DB_URL_CLEAN="${DB_URL_CLEAN#URI: }"
+          DB_URL_CLEAN="$(printf '%s' "$DB_URL_CLEAN" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+
+          case "$DB_URL_CLEAN" in
+            postgresql://*|postgresql+psycopg://*|postgres://*) ;;
+            *)
+              echo "Invalid STORYCRAFT_NEON_DATABASE_URL secret format."
+              echo "Expected a single raw Postgres URL, e.g. postgresql://user:pass@host/db"
+              exit 1
+              ;;
+          esac
+
+          echo "STORYCRAFT_NEON_DATABASE_URL=$DB_URL_CLEAN" >> "$GITHUB_ENV"
 
       - name: Set up Python
         uses: actions/setup-python@v5
