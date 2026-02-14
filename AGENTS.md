@@ -68,4 +68,6 @@ This file defines the expected development and deployment workflow for code agen
 
 - `storycraft-backend-env`
 
-Each Modal secret must include `STORYCRAFT_NEON_DATABASE_URL` for its target Neon branch.
+The Modal secret must include:
+- `STORYCRAFT_NEON_DATABASE_URL` (production database URL)
+- `STORYCRAFT_CORS_ORIGINS` (allow deployed frontend origins, e.g. Vercel domain)

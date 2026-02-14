@@ -99,7 +99,7 @@ This project is designed for local development. To deploy:
    ```bash
    uv sync
    ```
-2. If using Neon locally, apply current migrations:
+2. Apply current migrations (local Postgres or Neon):
    ```bash
    STORYCRAFT_NEON_DATABASE_URL="postgresql://…" uv run alembic upgrade head
    ```
@@ -157,6 +157,7 @@ All variables use the `STORYCRAFT_` prefix.
 - `NEXT_PUBLIC_STORYCRAFT_API_BASE` — Backend API URL (default: `http://localhost:8000`)
   - Only needed if deploying or using a non-standard backend URL
   - Set in `frontend-ts/.env.local` if needed
+  - For Vercel deployments, set this in Vercel project environment variables
 
 Key Endpoints
 -------------
@@ -169,12 +170,6 @@ Key Endpoints
 - `POST /api/campaigns/{id}/action` — take an action (resolves dice, generates narrative)
 - `POST /api/campaigns/{id}/end-turn` — pass turn to next player
 - `POST /api/campaigns/{id}/players` — add a local player (hot-seat multiplayer)
-
-### Legacy Story Endpoints
-- `GET /api/stories` — list stories
-- `GET /api/snippets/path?story=...` — fetch the active branch text
-- `POST /api/continue` — request an LLM continuation
-- `GET/POST/PUT/DELETE /api/lorebook` — manage lore entries
 
 Testing & Tooling
 -----------------
