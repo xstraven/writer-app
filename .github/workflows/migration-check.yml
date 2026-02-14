@@ -39,7 +39,7 @@ jobs:
           --health-retries=5
 
     env:
-      STORYCRAFT_NEON_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/storycraft_ci
+      STORYCRAFT_NEON_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/storycraft_ci
 
     steps:
       - name: Checkout code

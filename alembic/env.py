@@ -24,6 +24,15 @@ if config.config_file_name is not None:
 target_metadata = metadata
 
 
+def _normalize_sqlalchemy_url(db_url: str) -> str:
+    # Allow common Postgres URL variants while always using psycopg (v3).
+    if db_url.startswith("postgres://"):
+        db_url = "postgresql://" + db_url[len("postgres://") :]
+    if db_url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + db_url[len("postgresql://") :]
+    return db_url
+
+
 def _resolve_database_url() -> str:
     x_args = context.get_x_argument(as_dictionary=True)
     db_url = x_args.get("db_url") if x_args else None
@@ -35,7 +44,7 @@ def _resolve_database_url() -> str:
         raise RuntimeError(
             "Database URL is required. Set STORYCRAFT_NEON_DATABASE_URL or pass -x db_url=..."
         )
-    return db_url
+    return _normalize_sqlalchemy_url(db_url)
 
 
 def run_migrations_offline() -> None:
