@@ -221,8 +221,6 @@ class CampaignStore:
 
     def delete_all(self) -> None:
         """Delete all campaigns (for testing)."""
-        # DuckDB doesn't support DELETE without WHERE, so we need a workaround
-        # Just delete with a condition that matches everything
         try:
             self._table().delete().execute()
         except Exception:

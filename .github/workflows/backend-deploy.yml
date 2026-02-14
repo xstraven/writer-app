@@ -1,0 +1,89 @@
+name: Backend Deploy
+
+on:
+  push:
+    branches:
+      - "main"
+    paths:
+      - "src/**"
+      - "alembic/**"
+      - "scripts/setup_neon.py"
+      - "modal_app.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/backend-deploy.yml"
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Resolve database URL
+        env:
+          DB_URL: ${{ secrets.STORYCRAFT_NEON_DATABASE_URL }}
+        run: |
+          if [ -z "$DB_URL" ]; then
+            echo "Missing STORYCRAFT_NEON_DATABASE_URL secret."
+            exit 1
+          fi
+
+          echo "STORYCRAFT_NEON_DATABASE_URL=$DB_URL" >> "$GITHUB_ENV"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run database migrations
+        run: uv run alembic upgrade head
+
+  deploy-modal:
+    needs: migrate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Resolve database URL
+        env:
+          DB_URL: ${{ secrets.STORYCRAFT_NEON_DATABASE_URL }}
+        run: |
+          if [ -z "$DB_URL" ]; then
+            echo "Missing STORYCRAFT_NEON_DATABASE_URL secret."
+            exit 1
+          fi
+
+          echo "STORYCRAFT_NEON_DATABASE_URL=$DB_URL" >> "$GITHUB_ENV"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Deploy backend to Modal
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: uv run modal deploy modal_app.py

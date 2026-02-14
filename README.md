@@ -14,7 +14,7 @@ Storycraft is a multiplayer tabletop RPG platform with an AI game master. Create
 - **Voice Input**: Describe your world and actions using voice
 
 **Stack:**
-- **Backend**: FastAPI with auto-switching persistence (local DuckDB or cloud Neon)
+- **Backend**: FastAPI with PostgreSQL persistence (local or cloud Neon)
 - **Frontend**: Next.js + React + Tailwind
 - **LLM**: OpenRouter chat completions (stubs enabled when no API key is present)
 - **Package managers**: `uv` for Python, `npm` for the frontend
@@ -24,40 +24,19 @@ Quick Start
 
 ### Backend
 
-Storycraft supports two database modes:
-- **Local Mode (DuckDB)**: Perfect for local development and testing - no setup required!
-- **Cloud Mode (Neon)**: Use for production or when you want cloud-hosted storage
-
-#### Option 1: Local Mode (Recommended for getting started)
-
-1. Install uv (see https://docs.astral.sh/uv/) and sync dependencies:
-   ```bash
-   uv sync
-   ```
-2. Run the API:
-   ```bash
-   uv run uvicorn storycraft.app.main:app --reload --port 8000
-   ```
-   Visit `http://127.0.0.1:8000/health` to confirm.
-
-That's it! The app will automatically create a local DuckDB database at `./data/storycraft.duckdb`.
-
-**Optional**: Set `STORYCRAFT_OPENROUTER_API_KEY` in `.env` for real LLM responses (omit for stubbed responses during development).
-
-#### Option 2: Cloud Mode with Neon
+Local development now assumes PostgreSQL (local Postgres or Neon branch).
 
 1. Install uv (see https://docs.astral.sh/uv/) and sync dependencies:
    ```bash
    uv sync
    ```
 2. Create a `.env` in the repo root and set:
-   - `STORYCRAFT_NEON_DATABASE_URL`
+   - `STORYCRAFT_NEON_DATABASE_URL` (use your local Postgres URL or a Neon connection string)
    - `STORYCRAFT_OPENROUTER_API_KEY` (optional during local dev; omit for stubbed responses)
-3. (One-time) provision the Neon schema:
+3. Apply migrations:
    ```bash
-   STORYCRAFT_NEON_DATABASE_URL="postgresql://…" uv run python scripts/setup_neon.py
+   STORYCRAFT_NEON_DATABASE_URL="postgresql://…" uv run alembic upgrade head
    ```
-   Use the project's Postgres connection string from the Neon dashboard.
 4. Run the API:
    ```bash
    uv run uvicorn storycraft.app.main:app --reload --port 8000
@@ -114,18 +93,58 @@ This project is designed for local development. To deploy:
 - **Frontend**: The Next.js frontend in `frontend-ts/` can be deployed to Vercel, Netlify, or any static hosting service.
 - **Database**: Neon can be replaced with any PostgreSQL-compatible database.
 
+### Daily Dev Workflow
+
+1. Sync Python dependencies:
+   ```bash
+   uv sync
+   ```
+2. If using Neon locally, apply current migrations:
+   ```bash
+   STORYCRAFT_NEON_DATABASE_URL="postgresql://…" uv run alembic upgrade head
+   ```
+3. Run backend:
+   ```bash
+   uv run uvicorn storycraft.app.main:app --reload --port 8000
+   ```
+4. Run backend tests before pushing:
+   ```bash
+   uv run pytest -q
+   ```
+5. When schema changes are needed:
+   - add/update SQLAlchemy metadata in `src/storycraft/app/db/models.py`
+   - create a migration in `alembic/versions/`
+   - validate with:
+     ```bash
+     uv run alembic upgrade head
+     uv run alembic downgrade -1
+     uv run alembic upgrade head
+     ```
+
+### Modal + Neon deployment flow
+
+- `Backend Deploy` workflow runs on push to `main`.
+- It migrates the production database first, then deploys Modal.
+- Required GitHub secrets:
+  - `STORYCRAFT_NEON_DATABASE_URL`
+  - `MODAL_TOKEN_ID`
+  - `MODAL_TOKEN_SECRET`
+- Modal uses the single secret:
+  - `storycraft-backend-env`
+
+### Migration commands
+
+- Upgrade DB: `uv run alembic upgrade head`
+- Downgrade one revision: `uv run alembic downgrade -1`
+- Convenience wrapper (uses same migrations): `uv run python scripts/setup_neon.py`
+
 Environment Variables
 ---------------------
 
 All variables use the `STORYCRAFT_` prefix.
 
 ### Database Configuration
-The app automatically selects the database backend:
-- **Local Mode**: Used when `STORYCRAFT_NEON_DATABASE_URL` is not configured
-- **Cloud Mode**: Used when `STORYCRAFT_NEON_DATABASE_URL` is provided
-
-- `STORYCRAFT_DUCKDB_PATH` — Path to local DuckDB file (default: `./data/storycraft.duckdb`)
-- `STORYCRAFT_NEON_DATABASE_URL` — Neon PostgreSQL connection string
+- `STORYCRAFT_NEON_DATABASE_URL` — PostgreSQL connection string for local dev and production deploys
 
 ### Other Configuration
 - `STORYCRAFT_OPENROUTER_API_KEY` — OpenRouter key; omit to use stubbed responses

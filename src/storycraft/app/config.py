@@ -27,11 +27,8 @@ class Settings(BaseSettings):
     # Optional regex pattern for matching additional origins (e.g., dynamic Vercel deployments)
     cors_origin_regex: Optional[str] = None
 
-    # Cloud database
+    # Postgres database (required outside tests)
     neon_database_url: Optional[str] = None
-
-    # Local DuckDB database path (used when Neon URL is not configured)
-    duckdb_path: str = "./data/storycraft.duckdb"
 
 
 @lru_cache

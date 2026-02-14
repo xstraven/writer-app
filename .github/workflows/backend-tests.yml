@@ -6,6 +6,8 @@ on:
     paths:
       - 'src/**'
       - 'tests/**'
+      - 'alembic/**'
+      - 'scripts/setup_neon.py'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/backend-tests.yml'
@@ -14,6 +16,8 @@ on:
     paths:
       - 'src/**'
       - 'tests/**'
+      - 'alembic/**'
+      - 'scripts/setup_neon.py'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/backend-tests.yml'

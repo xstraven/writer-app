@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import threading
 from collections import defaultdict
 from copy import deepcopy
@@ -8,7 +9,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, Optional, cast
 
-from .duckdb_client import DuckDBClient
 from .neon_client import NeonClient
 from .persistence_types import DatabaseClient
 from ..config import get_settings
@@ -218,20 +218,20 @@ def get_persistence_client(database_url: Optional[str] = None) -> DatabaseClient
             return _client
 
         # Priority 1: tests use in-memory client
-        if os.getenv("PYTEST_CURRENT_TEST"):
+        if os.getenv("PYTEST_CURRENT_TEST") or "pytest" in sys.modules:
             _client = InMemoryClient()
             return _client
 
         settings = get_settings()
         neon_database_url = database_url or settings.neon_database_url
 
-        # Priority 2: Neon configured
-        if neon_database_url:
-            _client = cast(DatabaseClient, NeonClient(neon_database_url))
-            return _client
+        if not neon_database_url:
+            raise RuntimeError(
+                "STORYCRAFT_NEON_DATABASE_URL is required outside tests. "
+                "Configure a local Postgres/Neon database and rerun."
+            )
 
-        # Priority 3: no cloud DB configured -> local DuckDB mode
-        _client = cast(DatabaseClient, DuckDBClient(db_path=settings.duckdb_path))
+        _client = cast(DatabaseClient, NeonClient(neon_database_url))
         return _client
 
 
