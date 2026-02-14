@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useSimpleGameStore } from '@/stores/simpleGameStore';
 import { generateSimpleOpening } from '@/lib/api';
-import { AttributeAllocator } from './AttributeAllocator';
+import { AttributeAllocator, getValuePool } from '@/components/shared/AttributeAllocator';
 import { SimplePlayerCard } from './SimplePlayerCard';
 import { useActiveLocale } from '@/hooks/useActiveLocale';
 import { CharacterFormFields, type CharacterFormData } from '@/components/shared/CharacterFormFields';
@@ -43,15 +43,7 @@ export function PlayerSetup() {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  // Determine available modifiers based on number of attributes
-  const getAvailableModifiers = (): number[] => {
-    const count = attributes.length;
-    if (count <= 3) return [2, 1, 0];
-    if (count === 4) return [2, 1, 0, -1];
-    return [2, 1, 1, 0, -1]; // 5 attributes
-  };
-
-  const availableModifiers = getAvailableModifiers();
+  const availableModifiers = getValuePool(attributes.length, 'narrative');
 
   const isAllocationComplete = () => {
     const scores = Object.values(attributeScores);
@@ -177,7 +169,7 @@ export function PlayerSetup() {
             <Label>{t('attributeScores')}</Label>
             <AttributeAllocator
               attributes={attributes}
-              availableModifiers={availableModifiers}
+              availableValues={availableModifiers}
               currentScores={attributeScores}
               onChange={setAttributeScores}
             />

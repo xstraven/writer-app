@@ -401,7 +401,8 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
                 {allPlayers.length < 5 && (
                   <AddPlayerForm
                     campaignId={campaignId}
-                    gameStyle={currentCampaign.game_system?.name?.toLowerCase().includes('narrative') ? 'narrative' : undefined}
+                    gameStyle={currentCampaign.game_system?.style}
+                    attributes={currentCampaign.game_system?.attribute_details}
                     onPlayerAdded={(player) => {
                       setAllPlayers([...allPlayers, player]);
                     }}
@@ -489,6 +490,7 @@ export function AdventureView({ campaignId }: AdventureViewProps) {
               currentTurnPlayerId={currentTurnPlayerId}
               yourPlayerId={currentPlayer?.id}
               localMultiplayer={isLocalMultiplayer}
+              gameStyle={currentCampaign?.game_system?.style}
               onSelectPlayer={(player) => {
                 setCurrentPlayer(player);
                 // Update isMyTurn based on selected player

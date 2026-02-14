@@ -1,6 +1,7 @@
 'use client';
 
 import { Heart, Crown, Swords, Sparkles } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -12,16 +13,26 @@ interface CharacterCardProps {
   isYou?: boolean;
   onClick?: () => void;
   clickable?: boolean;
+  gameStyle?: 'narrative' | 'mechanical' | 'hybrid';
 }
 
-export function CharacterCard({ player, isCurrentTurn, isYou, onClick, clickable }: CharacterCardProps) {
+export function CharacterCard({ player, isCurrentTurn, isYou, onClick, clickable, gameStyle }: CharacterCardProps) {
+  const t = useTranslations('rpg.adventure');
   const character = player.character_sheet;
 
-  // Check if this is a narrative-style character (has concept or special_trait, no attributes)
-  const isNarrativeCharacter = character && (
-    (character.concept || character.special_trait) &&
-    (!character.attributes || character.attributes.length === 0)
-  );
+  // Determine display style: narrative/hybrid shows concept + modifier badges,
+  // mechanical shows level + HP + raw attribute values
+  const isNarrativeCharacter = character && (() => {
+    // Use explicit game style if provided
+    if (gameStyle) return gameStyle !== 'mechanical';
+    // Heuristic: if character has concept/special_trait and either no attributes
+    // or all attribute values are in modifier range [-3, +3], it's narrative
+    if (character.concept || character.special_trait) {
+      if (!character.attributes || character.attributes.length === 0) return true;
+      return character.attributes.every(a => a.value >= -3 && a.value <= 3);
+    }
+    return false;
+  })();
 
   const healthPercent = character
     ? Math.round((character.health / character.max_health) * 100)
@@ -58,17 +69,17 @@ export function CharacterCard({ player, isCurrentTurn, isYou, onClick, clickable
           {isCurrentTurn && (
             <Badge variant="outline" className="text-xs border-green-500 text-green-500">
               <Swords className="h-3 w-3 mr-1" />
-              Turn
+              {t('turnBadge')}
             </Badge>
           )}
           {isYou && !isCurrentTurn && (
-            <Badge variant="outline" className="text-xs">You</Badge>
+            <Badge variant="outline" className="text-xs">{t('youBadgeShort')}</Badge>
           )}
         </div>
 
         {character && isNarrativeCharacter && (
           <>
-            {/* Narrative character display - concept and special trait */}
+            {/* Narrative character display - concept, special trait, and modifier badges */}
             <div className="text-xs text-muted-foreground">
               {character.concept || character.character_class}
             </div>
@@ -79,6 +90,20 @@ export function CharacterCard({ player, isCurrentTurn, isYou, onClick, clickable
                 <span className="text-muted-foreground italic">
                   {character.special_trait}
                 </span>
+              </div>
+            )}
+
+            {character.attributes && character.attributes.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {character.attributes.map((attr) => (
+                  <Badge
+                    key={attr.name}
+                    variant="secondary"
+                    className="text-xs font-mono px-1.5 py-0"
+                  >
+                    {attr.name.slice(0, 3)}: {attr.value >= 0 ? '+' : ''}{attr.value}
+                  </Badge>
+                ))}
               </div>
             )}
           </>
@@ -122,7 +147,7 @@ export function CharacterCard({ player, isCurrentTurn, isYou, onClick, clickable
 
         {!character && (
           <div className="text-xs text-muted-foreground italic">
-            No character yet
+            {t('noCharacterYet')}
           </div>
         )}
       </CardContent>

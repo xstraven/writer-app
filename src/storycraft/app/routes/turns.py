@@ -145,7 +145,7 @@ async def take_action(
     outcome_type = None
 
     # Check game style - narrative games use PbtA-style 2d6, mechanical use d20
-    is_narrative_style = game_system and game_system.style == "narrative"
+    is_narrative_style = game_system and game_system.style in ("narrative", "hybrid")
 
     if req.use_dice and game_system:
         structured = get_structured_llm_client()
@@ -159,9 +159,16 @@ async def take_action(
                 "en": "You help decide when dice rolls add to the story in a collaborative narrative game.",
             }.get(check_language, "You help decide when dice rolls add to the story in a collaborative narrative game.")
 
+            # Get available attributes for the check
+            attr_names = []
+            if character and character.attributes:
+                attr_names = [a.name for a in character.attributes]
+
+            attr_info = f"\nCharacter Attributes: {', '.join(attr_names)}" if attr_names else ""
+
             check_prompt = f"""In this collaborative story, a player is attempting an action.
 
-Action: {req.action}
+Action: {req.action}{attr_info}
 
 Story so far: {context_text[-1000:] if context_text else 'The adventure begins.'}
 
@@ -175,10 +182,14 @@ Answer no if:
 - There's no real tension or stakes
 - Failing would just slow down the story unnecessarily
 
+If a roll IS needed and attributes are available, pick the most relevant attribute.
+If no attribute fits well, leave attribute_used as null.
+
 Remember: we want the story to flow. Only roll when it makes the moment more exciting."""
 
             class NarrativeCheckAnalysis(BaseModel):
                 needs_roll: bool = False
+                attribute_used: Optional[str] = None
                 why: str = ""  # Brief reason for the decision
 
             try:
@@ -197,18 +208,35 @@ Remember: we want the story to flow. Only roll when it makes the moment more exc
                 check_analysis = NarrativeCheckAnalysis(needs_roll=False)
 
             if check_analysis.needs_roll:
-                # Roll 2d6 for PbtA-style outcome
-                d1, d2, total = roll_2d6()
+                # Roll 2d6 + attribute modifier for PbtA-style outcome
+                d1, d2, roll_total = roll_2d6()
+
+                # Get modifier from character's attribute
+                modifier = 0
+                attr_used = check_analysis.attribute_used
+                if attr_used and character and character.attributes:
+                    for attr in character.attributes:
+                        if attr.name.lower() == attr_used.lower():
+                            modifier = attr.value  # For narrative/hybrid, value IS the modifier
+                            break
+
+                total = roll_total + modifier
                 outcome_type, outcome_desc = get_pbta_outcome(total)
 
+                # Build description with attribute info
+                if attr_used and modifier != 0:
+                    desc = f"2d6({roll_total}) {'+' if modifier >= 0 else ''}{modifier} ({attr_used}) = {total} \u2192 {outcome_desc}"
+                else:
+                    desc = f"2d6({roll_total}) = {total} \u2192 {outcome_desc}"
+
                 action_results.append(RPGActionResult(
-                    check_type="Story Moment",
+                    check_type=attr_used or "Story Moment",
                     target_number=7,  # For reference
-                    roll_result=total,
-                    modifier=0,
+                    roll_result=roll_total,
+                    modifier=modifier,
                     total=total,
                     success=outcome_type != "miss",
-                    description=outcome_desc,  # Hide the numbers, show the drama
+                    description=desc,
                 ))
                 roll_outcome = outcome_type
         else:

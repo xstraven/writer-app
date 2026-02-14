@@ -19,6 +19,13 @@
       "system": "System",
       "turn": "Turn {number}"
     },
+    "attributeAllocator": {
+      "assignModifiers": "Assign these modifiers to your attributes:",
+      "assignScores": "Assign these scores to your attributes:",
+      "allModifiersAssigned": "All modifiers assigned!",
+      "allScoresAssigned": "All scores assigned!",
+      "change": "Change"
+    },
     "characterForm": {
       "playerName": "Your Name",
       "playerNamePlaceholder": "Your display name",
@@ -73,12 +80,19 @@
       "languageLabel": "Language",
       "languageDescription": "Language affects both UI and AI-generated content",
       "createButton": "Create Adventure",
+      "back": "Back",
       "cancel": "Cancel",
       "creating": "Creating Adventure...",
-      "generatingCharacters": "Generating characters for {count} friend{plural}...",
-      "pickGenre": "Pick a Genre (optional)",
-      "surpriseMe": "Surprise Me",
-      "generating": "Generating...",
+      "generatingCharacters": "Generating characters for {count} player{plural}...",
+      "characterAttributes": "Character Attributes",
+      "attributesGenerated": "These attributes were generated for your adventure. Each player will assign values to them.",
+      "regenerateAttributes": "Regenerate",
+      "addPlayer": "Add Player",
+      "addPlayerButton": "Add Player",
+      "attributeScores": "Attribute Scores",
+      "startAdventure": "Start Adventure",
+      "playedBy": "played by {playerName}",
+      "needOnePlayer": "Add at least one player to start",
       "adventureStyle": "Adventure Style",
       "yourCharacter": "Your Character",
       "characterConcept": "Who is your character?",
@@ -127,22 +141,6 @@
           "characterConcept": "An eager first-year student who got their acceptance letter by surprise",
           "characterSpecial": "Can talk to the school's magical creatures and understand their warnings"
         }
-      },
-      "genres": {
-        "fantasy": "Fantasy",
-        "scifi": "Sci-Fi",
-        "modern": "Modern",
-        "horror": "Horror",
-        "historical": "Historical",
-        "mashup": "Mashup"
-      },
-      "genrePrompts": {
-        "fantasy": "A magical realm of kingdoms, dragons, and ancient prophecies. Heroes wield swords and sorcery as they quest across enchanted lands.",
-        "scifi": "A vast galaxy of starships, alien civilizations, and advanced technology. Explorers chart unknown systems while interstellar politics simmer.",
-        "modern": "The modern world, but with a twist -- hidden supernatural forces lurk beneath the surface of everyday life. Those who know the truth must navigate both worlds.",
-        "horror": "A world where darkness creeps at the edges of reality. Something ancient and terrible has awakened, and ordinary people must face extraordinary terror.",
-        "historical": "A dramatized historical period where real events mix with adventure. Intrigue, exploration, and the clash of cultures define the era.",
-        "mashup": "A wild collision of genres -- maybe cowboys ride dinosaurs in space, or Victorian detectives solve crimes in a cyberpunk city. Anything goes!"
       },
       "toneLabel": "Who's Playing?",
       "tones": {
@@ -332,7 +330,11 @@
       "gameRules": "Game Rules",
       "system": "System:",
       "mechanic": "Mechanic:",
-      "skillChecks": "Skill Checks:"
+      "skillChecks": "Skill Checks:",
+      "turnBadge": "Turn",
+      "youBadgeShort": "You",
+      "noCharacterYet": "No character yet",
+      "selectCharacterHint": "Click a character to play as them"
     }
   },
   "toast": {
@@ -357,6 +359,8 @@
     "joinedAdventure": "Joined \"{adventureName}\"!",
     "joinFailed": "Failed to join adventure",
     "playerNameRequired": "Player name is required",
+    "characterNameRequired": "Character name is required",
+    "attributesRequired": "Please assign all attribute scores",
     "playerJoinedParty": "{playerName} joined the party!",
     "addPlayerFailed": "Failed to add player",
     "storiesLoadFailed": "Failed to load stories",
